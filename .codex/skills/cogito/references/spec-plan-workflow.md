@@ -6,6 +6,12 @@
 
 確認 ID 存在、不是 `withdrawn`、沒有其他 active Slice、必要依賴已完成，並讀取 Slice Brief 與 Source Reference。操作必須符合目前狀態；依賴未完成時設為或維持 `blocked`，說明恢復條件後停止。
 
+## Pre-Spec Grilling Gate
+
+建立或實質修訂 Spec 前，完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)。先使用需求來源、Slice Brief 與有效 Spec 避免重問已確定內容；修改舊功能或判斷 Bug 時，再以程式、測試與必要 Git 歷史調查現況和差異，不從這些證據發明需求。
+
+只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才能繼續 Pre-Spec Boundary Gate。`Readiness: blocked` 時停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容，不構成任何文件修改、核准、實作或 commit 授權。
+
 ## Pre-Spec Boundary Gate
 
 建立或修訂 Spec 前，根據 Slice Brief 與 Source Reference 先評估下列訊號：
@@ -32,7 +38,7 @@ Gate 未通過時：
 ## 建立 Spec 與 Plan
 
 1. 完整讀取 [spec-template.md](spec-template.md) 與 [plan-template.md](plan-template.md)。
-2. 僅根據需求來源、Slice Brief 與使用者已確認內容建立 Spec；Spec 定義「做什麼」，不分析程式碼。
+2. 僅根據需求來源、Slice Brief 與 Grilling 中使用者已確認的目前有效結論建立 Spec；Spec 定義「做什麼」，不分析程式碼。
 3. 完成 Spec 草稿後才分析程式碼、架構、整合點、測試、工具、落差與回歸風險。
 4. 根據 Spec 建立 Plan，定義「怎麼做」、必要檔案、風險、Verification Gates 與 Commit Plan。
 5. 讓新 Plan 使用 `Implementation Execution: continuous`，並依序列出 Approval、一個以上 implementation batches、Verification 與 Final。

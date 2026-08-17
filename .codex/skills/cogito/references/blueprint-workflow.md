@@ -6,6 +6,8 @@
 
 只使用 `docs/project/`、使用者明確確認的需求，以及可追溯至需求文件的既有 blueprint 內容。將 `AGENTS.md`、架構規範與程式碼視為限制或現況，不視為產品需求。
 
+使用者提出新的或實質改變既有的產品行為時，先完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)。只有 `Shared Understanding: confirmed` 且 `Readiness: ready`，才能用目前有效結論建立 Slice 或提出 Blueprint Slice Revision Proposal。摘要確認不構成修改 `docs/project/`、blueprint 或其他文件的授權。單純依清楚且未改變的權威需求 reconcile blueprint 時，不重做產品決策訪談。
+
 讓每個 Slice 對應一個可觀察、可獨立驗收且本身有價值的使用者目標，並能用一句話描述完成結果；Slice 包含完成該結果所需的前端各層工作。若內容包含兩個以上可獨立驗收的結果、可分階段交付且前一階段已有價值、需要多套獨立 Human Acceptance，或新 agent 難以在單一 context 中理解並完成，先提出拆分 Proposal。不要依元件、API client、type、store、tests、重構或 tooling 等技術層拆分。
 
 需求缺漏、矛盾或無法形成可驗收結果時，記錄 Open Questions，將 Slice 維持 `proposed` 或設為 `blocked`，並等待使用者決定。

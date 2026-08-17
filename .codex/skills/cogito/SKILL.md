@@ -1,6 +1,6 @@
 ---
 name: cogito
-description: Govern frontend work as Feature Slices from requirements and blueprint through Spec, Plan, implementation, AI verification, human acceptance, and scoped Git checkpoints. Use when creating or reconciling a frontend Feature Slice blueprint, changing requirements or Slice structure, or planning, approving, implementing, verifying, accepting, revising, or committing work identified by Feature Slice IDs.
+description: Use when creating or reconciling frontend Feature Slices, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, or planning, approving, implementing, verifying, accepting, revising, or committing Slice work.
 ---
 
 # Cogito
@@ -12,6 +12,8 @@ description: Govern frontend work as Feature Slices from requirements and bluepr
 - 使用中文撰寫專案文件；路徑、API、ID、slug、指令、程式識別字與狀態值使用英文。
 - 將 `docs/project/` 視為產品需求來源；將 `docs/blueprint/feature-slice-blueprint.md` 視為 Slice 狀態的唯一權威來源。
 - 只從需求文件與使用者明確確認的內容定義產品需求，不從程式碼、測試、TODO 或既有行為推論需求。
+- 建立或實質修訂任何 Spec 前先完成需求拷問（Grilling）；只有共同理解已確認且 Readiness 為 `ready`，才能進入 Feature Slice Boundary Gate。
+- Grilling 的完整問答只留在對話；共同理解摘要的確認不授權修改需求或工程文件、不核准實作，也不授權 commit。
 - 一次只處理一個 Feature Slice；已核准且本質上跨 Slice 的 Blueprint 操作除外。
 - 建立任何 Spec 前必須通過 Feature Slice Boundary Gate；若 Slice 包含多個可獨立驗收的使用者結果，先停止 Spec／Plan 並提出 Blueprint Slice Revision Proposal。
 - Slice 必須以垂直的使用者結果切分；不得依 component、API client、type、store、tests、重構或 tooling 等技術層切分。
@@ -40,10 +42,12 @@ description: Govern frontend work as Feature Slices from requirements and bluepr
 
 ## 操作路由
 
+建立或實質修訂 Spec，或判斷正確行為未明的 Bug 時，先完整讀取 [grilling-workflow.md](references/grilling-workflow.md)。使用者提出新的或改變既有的產品行為、且結果需要建立或修訂 Slice 時，也先完成該 workflow；共同理解確認後再依下表進入工程操作。
+
 | 操作 | 必須完整讀取 |
 |---|---|
 | 建立、同步或審查 blueprint；變更需求；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；需要產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
-| 建立、修訂或核准 Spec／Plan | [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要產出時再讀 [spec-template.md](references/spec-template.md) 與 [plan-template.md](references/plan-template.md) |
+| 建立、實質修訂或核准 Spec／Plan | [grilling-workflow.md](references/grilling-workflow.md) 與 [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要產出時再讀 [spec-template.md](references/spec-template.md) 與 [plan-template.md](references/plan-template.md) |
 | 開始、繼續或修正 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) |
 | 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md)；需要建立 verification 時再讀 [verification-template.md](references/verification-template.md) |
 | 任何會建立 commit 的操作 | [commit-workflow.md](references/commit-workflow.md)，每次操作或恢復中斷 sequence 時讀取一次 |
