@@ -13,6 +13,8 @@ description: Govern frontend work as Feature Slices from requirements and bluepr
 - 將 `docs/project/` 視為產品需求來源；將 `docs/blueprint/feature-slice-blueprint.md` 視為 Slice 狀態的唯一權威來源。
 - 只從需求文件與使用者明確確認的內容定義產品需求，不從程式碼、測試、TODO 或既有行為推論需求。
 - 一次只處理一個 Feature Slice；已核准且本質上跨 Slice 的 Blueprint 操作除外。
+- 建立任何 Spec 前必須通過 Feature Slice Boundary Gate；若 Slice 包含多個可獨立驗收的使用者結果，先停止 Spec／Plan 並提出 Blueprint Slice Revision Proposal。
+- Slice 必須以垂直的使用者結果切分；不得依 component、API client、type、store、tests、重構或 tooling 等技術層切分。
 - 先完成 Spec，再分析程式碼並建立 Plan；取得 Spec 與 Plan 明確核准前不修改實作程式碼。
 - 分開記錄 committed、AI verified 與 human accepted；只有使用者能確認 Human Integration 與 Human Acceptance。
 - AI Verification 負責可重複的技術檢查；Human Acceptance 不重跑 build、lint、typecheck、unit、integration、E2E、accessibility automation 或已自動覆蓋的狀態／viewport matrix。

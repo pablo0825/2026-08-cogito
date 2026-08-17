@@ -6,7 +6,7 @@
 
 只使用 `docs/project/`、使用者明確確認的需求，以及可追溯至需求文件的既有 blueprint 內容。將 `AGENTS.md`、架構規範與程式碼視為限制或現況，不視為產品需求。
 
-讓每個 Slice 對應一個可觀察、可獨立驗收的使用者目標，包含完成結果所需的前端各層工作。不要依元件、API client、type、store、tests、重構或 tooling 等技術層拆分。
+讓每個 Slice 對應一個可觀察、可獨立驗收且本身有價值的使用者目標，並能用一句話描述完成結果；Slice 包含完成該結果所需的前端各層工作。若內容包含兩個以上可獨立驗收的結果、可分階段交付且前一階段已有價值、需要多套獨立 Human Acceptance，或新 agent 難以在單一 context 中理解並完成，先提出拆分 Proposal。不要依元件、API client、type、store、tests、重構或 tooling 等技術層拆分。
 
 需求缺漏、矛盾或無法形成可驗收結果時，記錄 Open Questions，將 Slice 維持 `proposed` 或設為 `blocked`，並等待使用者決定。
 
@@ -58,6 +58,16 @@
 - Goal、Included／Excluded、Acceptance 與依賴差異。
 - 保留、新增與停止使用的 ID。
 - 文件清單、需求影響與 proposed commit。
+
+拆分 Proposal 必須採用垂直的使用者結果，且：
+
+- 每個候選 Slice 用一句話描述可觀察的完成結果，並能獨立產生價值與接受或拒絕。
+- 說明各候選 Slice 的 Included／Excluded、Human Acceptance 重點、依賴與 ID 影響。
+- 將原 Slice 的每項需求分派至候選 Slice、明確排除或列為 Open Question，不得在拆分時遺漏需求。
+- 將完成某個結果所必需的錯誤恢復保留在該 Slice；只有本身形成獨立使用者結果時才另成 Slice。
+- 不建立 component、API client、type、store、tests、重構或 tooling 等技術層 Slice。
+
+多步驟、多狀態、多檔案或多個 implementation batches 不會單獨構成拆分理由；若只有完整結果才有使用者價值，維持單一 Slice。
 
 核准後：
 
