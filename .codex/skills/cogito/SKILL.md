@@ -1,9 +1,9 @@
 ---
-name: frontend-feature-slice-workflow
+name: cogito
 description: Govern frontend work as Feature Slices from requirements and blueprint through Spec, Plan, implementation, AI verification, human acceptance, and scoped Git checkpoints. Use when creating or reconciling a frontend Feature Slice blueprint, changing requirements or Slice structure, or planning, approving, implementing, verifying, accepting, revising, or committing work identified by Feature Slice IDs.
 ---
 
-# Frontend Feature Slice Workflow
+# Cogito
 
 以需求文件定義產品行為，以 Feature Slice 管理規劃、實作、驗證與驗收。只載入目前操作需要的 reference。
 

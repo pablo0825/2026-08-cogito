@@ -1,4 +1,0 @@
-interface:
-  display_name: "Frontend Feature Slice Workflow"
-  short_description: "Create, revise, and execute frontend feature slices"
-  default_prompt: "Use $frontend-feature-slice-workflow to create, review, revise, or execute frontend Feature Slices with explicit approval gates."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cogito"
+  short_description: "Create, revise, and execute frontend feature slices"
+  default_prompt: "Use $cogito to create, review, revise, or execute frontend Feature Slices with explicit approval gates."
