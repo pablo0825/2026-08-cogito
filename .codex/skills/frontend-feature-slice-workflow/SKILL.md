@@ -18,6 +18,8 @@ description: Govern frontend work as Feature Slices from requirements and bluepr
 - 先完成 Spec，再分析程式碼並建立 Plan；取得 Spec 與 Plan 明確核准前不修改實作程式碼。
 - 分開記錄 committed、AI verified 與 human accepted；只有使用者能確認 Human Integration 與 Human Acceptance。
 - AI Verification 負責可重複的技術檢查；Human Acceptance 不重跑 build、lint、typecheck、unit、integration、E2E、accessibility automation 或已自動覆蓋的狀態／viewport matrix。
+- Plan 以 `required`、`advisory`、`human` 分級每項 Verification Gate；核准後不得因結果失敗或未執行而自行降級，改變 Gate 必須修訂並重新核准 Plan。
+- `required` 的 `failed` 或 `not-run` 阻止 Slice 進入 `awaiting-human`；`advisory` 的 `failed` 或 `not-run` 可前進但必須揭露原因、風險與 release impact；`human` 未完成時可進入 `awaiting-human`，不得進入 `accepted`。
 - Human Acceptance 原則上只提供 3–5 個高價值場景，聚焦真實環境與外部服務、視覺／文案／互動感受、代表性真實裝置、自動化無法可靠判斷的情境，以及產品是否符合使用者期待；沒有足夠獨立判斷時不湊數。
 - AI Verification 的 `not-run` 保持技術風險，不自動轉成人工測試；只有該結果本質上需要人類判斷或使用者明確要求人工補驗時，才納入 Human Acceptance。
 - 將未執行的檢查如實標示為 `not-run` 或 `not-applicable`，不得標示為 `passed`。
@@ -98,5 +100,6 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 - 不因 Skill 更新重寫既有 Spec、Plan、Verification、撤銷核准或改變已核准 Commit Plan。
 - 缺少 `Implementation Execution` 的已核准 Plan 視為 legacy `per-batch`，每個 batch 維持明確授權。
 - 已標示 `continuous` 的既有 Plan 依其核准 Commit Plan 執行。
+- 既有 Plan 沒有 Gate 欄位時，`AI Verification Requirements` 視為完整驗證的 `required`，每個尚未完成 batch 的 `Required Verification` 視為該 batch 的必要檢查，Human Integration／Acceptance 視為 `human`；額外補充檢查預設為 `advisory`，但專案指示明定的 release gate 仍為 `required`。
 - 新文件直接使用活文件規則。已授權操作需要更新既有 active Spec、Plan 或 Verification 時，同步移除其中被取代的 revision summary、完成紀錄與舊驗證結果；這項 housekeeping 不改變有效內容或核准狀態。
 - 已 `accepted` Slice 的產品內容是完成當時的不可變快照；後續需求或行為改變建立新的 `change` Slice，不覆寫舊內容。只有 change／correction workflow 要求的狀態與最小語義 lineage 可以更新。

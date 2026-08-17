@@ -34,13 +34,23 @@ Gate 未通過時：
 1. 完整讀取 [spec-template.md](spec-template.md) 與 [plan-template.md](plan-template.md)。
 2. 僅根據需求來源、Slice Brief 與使用者已確認內容建立 Spec；Spec 定義「做什麼」，不分析程式碼。
 3. 完成 Spec 草稿後才分析程式碼、架構、整合點、測試、工具、落差與回歸風險。
-4. 根據 Spec 建立 Plan，定義「怎麼做」、必要檔案、風險、驗證與 Commit Plan。
+4. 根據 Spec 建立 Plan，定義「怎麼做」、必要檔案、風險、Verification Gates 與 Commit Plan。
 5. 讓新 Plan 使用 `Implementation Execution: continuous`，並依序列出 Approval、一個以上 implementation batches、Verification 與 Final。
 6. Scope Delta 預設填寫 `None`；只有技術限制需要不同實作表達時才記錄差異，產品 Scope 改變則先修訂 Spec。
 7. 將 Spec／Plan 設為 `draft`，blueprint 設為 `awaiting-approval`，確認需求、Acceptance、檔案與 batch 一致。
 8. 建立 `docs(<ID>): draft <feature> specification` commit，回報 Scope、風險與 Open Questions，然後停止。
 
 每個 implementation batch 回答一個清楚的審查問題並對應一個 commit。不要為增加 commit 數量拆開不可分割的工作。
+
+### Verification Gate 分級
+
+Plan 必須在核准前為每項完整驗證指定 Gate：
+
+- `required`：AI 可重複執行且此 Slice 前進所必需的檢查。依專案與風險選擇適用的 typecheck、核心 unit／integration tests、production build、重要 API contract、資料完整性與安全檢查；不把不適用的固定套餐全部列入。
+- `advisory`：補充信心但不阻擋狀態前進的檢查，例如次要 browser smoke、非關鍵效能、bundle size 或特定瀏覽器補充驗證。
+- `human`：只有人類能可靠確認的真實環境、帳號、OAuth／權限、第三方服務、視覺互動、真實裝置或產品期待；對應 Human Integration 或 Human Acceptance，不用來承接自動化 `not-run`。
+
+`not-applicable` 是有證據支持的執行結果，不是 Gate。因環境、權限、依賴或工具限制無法執行時使用 `not-run`，不得改寫為 `not-applicable`。Batch 的 `Required Verification` 仍是建立該 batch commit 前的必要檢查；完整 Verification Gate 則控制 Slice 能否進入 `awaiting-human`。
 
 ### 變更類型
 
@@ -51,7 +61,7 @@ Gate 未通過時：
 
 ## 修訂
 
-Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance，或 Plan 的 Scope、主要方式、核心檔案發生實質變更時：
+Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance，或 Plan 的 Scope、主要方式、核心檔案、Verification check、Gate、command／method 發生實質變更時：
 
 1. 同步 Spec 與 Plan。
 2. 撤銷核准並設為 `draft`。

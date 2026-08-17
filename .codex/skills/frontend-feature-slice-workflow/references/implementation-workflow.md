@@ -19,6 +19,8 @@
 5. 依 commit workflow 在同一 commit 從 Plan 移除已完成 batch；只在對話回報 Commit ID 與結果，不在 Plan 或 Verification 建立 execution record。
 6. 直接進入 Plan 中下一個已核准 batch。
 
+Batch Required Verification 是該 commit 的必要條件；結果為 `failed` 或 `not-run` 時不建立該 batch commit。不要因期限、已投入工作或後續完整驗證而略過。
+
 不得擴張 Scope、處理其他 Slice、自行回答需求問題、擴大重構、修改未核准檔案或建立隱藏 commit。範圍內問題可修正並重跑驗證；需要新增或重組 batch、修改 Spec／Plan／Integration Contract、處理範圍外失敗、分離重疊變更或取得人類決策時停止。
 
 ## Risk-based Required Verification
@@ -41,6 +43,6 @@
 
 ## Sequence 完成
 
-最後一個 implementation commit 完成後直接進入完整 AI Verification。完整驗證依專案指示與核准 Plan 執行 typecheck、lint、tests、build、相關 E2E，以及適用的 accessibility、browser 或 responsive checks。
+最後一個 implementation commit 完成後直接進入完整 AI Verification。依核准 Plan 的 Verification Gates 執行 `required` 與 `advisory` checks；`human` 留給 Human Integration／Acceptance。驗證開始後不得依 `failed` 或 `not-run` 結果自行降低 Gate。發現 Plan 遺漏專案明定的 release gate 時先修訂並重新核准 Plan；額外的非必要補充檢查記為 `advisory`。
 
 缺少 `Implementation Execution` 的 legacy `per-batch` Plan 維持每批明確授權，commit 後停止。恢復時以 Plan 中第一個尚未完成 batch 為下一步，並用 Git history 確認已提交工作，不重做已提交 batch。

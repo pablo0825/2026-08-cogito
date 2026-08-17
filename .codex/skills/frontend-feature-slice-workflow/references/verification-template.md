@@ -24,12 +24,13 @@
 
 ## AI Verification
 
-| Check | Command / Method | Result | Evidence | Notes |
-|---|---|---|---|---|
-| Build | `<command>` | passed | exit code 0 | <notes> |
-| Tests | `<command>` | not-run | <reason> | <risk or release impact> |
+| Check | Gate | Command / Method | Result | Evidence | Notes |
+|---|---|---|---|---|---|
+| Build | `required` | `<command>` | passed | exit code 0 | <notes> |
+| Browser smoke | `advisory` | `<method>` | not-run | <reason> | <risk or release impact> |
 
 Result 只使用 `passed`、`failed`、`not-run`、`not-applicable`。
+Gate 在此表只使用 `required` 或 `advisory`；`human` 項目記錄於 Human Integration／Acceptance。`required` 的 `failed` 或 `not-run` 必須列入 Remaining Issues 並阻止進入 `awaiting-human`；`advisory` 的 `failed` 或 `not-run` 不阻擋，但必須揭露風險與 release impact。
 
 同一 check 只保留一列目前結果。重跑後直接取代先前列；已解決的 `failed` 不移入其他章節。
 

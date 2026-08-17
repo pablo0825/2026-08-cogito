@@ -75,11 +75,15 @@
 
 若沒有，填寫 `None`。
 
-## AI Verification Requirements
+## Verification Gates
 
-- [ ] 執行 `<full verification command or method>`
-- [ ] 驗證 Spec Target Behavior
-- [ ] 回歸驗證 Preserved Behavior
+| Check | Gate | Command / Method |
+|---|---|---|
+| Typecheck | `required` | `<full verification command>` |
+| <補充檢查> | `advisory` | `<command or method>` |
+| <真實環境或產品判斷> | `human` | `Human Integration` 或 `Human Acceptance` |
+
+Gate 只使用 `required`、`advisory`、`human`。依 Slice 風險列出最小充分組合，不複製固定 command 套餐。`required` 與 `advisory` 必須是 AI 可執行或可取得客觀證據的檢查；`human` 必須對應下方 Human Integration 或 Human Acceptance。
 
 ## Human Integration
 
@@ -107,6 +111,8 @@ Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 p
 | Final | 記錄最終驗收與狀態 | Spec、Plan、Verification、blueprint、必要 lineage | 文件一致性 | `docs(<ID>): record <feature> acceptance` |
 
 表格只列尚未完成的 checkpoints。Approval、implementation、Verification 或 Final checkpoint 完成並提交時，在同一 commit 移除對應 row；沒有未完成 checkpoint 時以 `None` 取代表格。單純移除已完成 row 不將 Commit Plan Approval 設為 `pending`；修改任何尚未完成 row 仍依實質性重新核准。
+
+Commit Plan 的 `Required Verification` 是 batch commit gate，不取代上方控制 Slice 狀態的完整 Verification Gates。
 
 ## Approval
 
