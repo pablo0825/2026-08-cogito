@@ -1,6 +1,6 @@
 ---
 name: cogito
-description: Use when creating or reconciling frontend Feature Slices, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, or planning, approving, implementing, verifying, accepting, revising, or committing Slice work.
+description: Use when creating or reconciling frontend Feature Slices, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, performing narrow non-product maintenance, or planning, approving, implementing, verifying, accepting, revising, or committing frontend work.
 ---
 
 # Cogito
@@ -13,8 +13,10 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 - 將 `docs/project/` 視為產品需求來源；將 `docs/blueprint/feature-slice-blueprint.md` 視為 Slice 狀態的唯一權威來源。
 - 只從需求文件與使用者明確確認的內容定義產品需求，不從程式碼、測試、TODO 或既有行為推論需求。
 - 建立或實質修訂任何 Spec 前先完成需求拷問（Grilling）；只有共同理解已確認且 Readiness 為 `ready`，才能進入 Feature Slice Boundary Gate。
+- Grilling 完成後立即執行 Boundary Gate；Gate 通過前不得提出或套用產品需求文件修改、建立或修訂 Blueprint、Spec 或 Plan。
 - Grilling 的完整問答只留在對話；共同理解摘要的確認不授權修改需求或工程文件、不核准實作，也不授權 commit。
-- 一次只處理一個 Feature Slice；已核准且本質上跨 Slice 的 Blueprint 操作除外。
+- 同一時間只處理一個工作流：一個 active Feature Slice 或一個 Maintenance；已核准且本質上跨 Slice 的 Blueprint 操作除外。
+- Maintenance 只處理可用自動化證明行為不變的窄範圍內部修改；不建立 Slice 或產品文件，且存在 active Slice 時不得執行無關 Maintenance。
 - 建立任何 Spec 前必須通過 Feature Slice Boundary Gate；若 Slice 包含多個可獨立驗收的使用者結果，先停止 Spec／Plan 並提出 Blueprint Slice Revision Proposal。
 - Slice 必須以垂直的使用者結果切分；不得依 component、API client、type、store、tests、重構或 tooling 等技術層切分。
 - 先完成 Spec，再分析程式碼並建立 Plan；取得 Spec 與 Plan 明確核准前不修改實作程式碼。
@@ -34,7 +36,7 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 ## 開始操作
 
 1. 確認專案根目錄並讀取適用的 `AGENTS.md` 與專案指示。
-2. 確認 `docs/project/` 與 blueprint；缺少需求來源時停止並詢問位置。
+2. Feature Slice 或產品行為操作必須確認 `docs/project/` 與 blueprint；缺少需求來源時停止並詢問位置。Maintenance 不要求產品文件，但 blueprint 存在時必須讀取並確認沒有 active Slice。
 3. 記錄 working tree、staged 狀態與目標檔案既有修改。
 4. 從使用者要求辨識單一操作，讀取下表指定的 reference，不載入其他分支。
 
@@ -48,6 +50,7 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 |---|---|
 | 建立、同步或審查 blueprint；變更需求；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；需要產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
 | 建立、實質修訂或核准 Spec／Plan | [grilling-workflow.md](references/grilling-workflow.md) 與 [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要產出時再讀 [spec-template.md](references/spec-template.md) 與 [plan-template.md](references/plan-template.md) |
+| 執行不改產品行為的小型內部 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 開始、繼續或修正 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) |
 | 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md)；需要建立 verification 時再讀 [verification-template.md](references/verification-template.md) |
 | 任何會建立 commit 的操作 | [commit-workflow.md](references/commit-workflow.md)，每次操作或恢復中斷 sequence 時讀取一次 |
@@ -95,6 +98,7 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 - Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，但單獨核准不授權實作。
 - 若使用者在同一訊息明確要求「核准並開始實作」，完成 Approval commit 後直接進入 implementation sequence，不增加第二次確認。
 - `continuous` implementation 授權涵蓋所有已核准 implementation batches、各 batch 驗證、完整 AI Verification 與 Verification Documentation commit。
+- Maintenance Proposal 核准涵蓋列出的修改、全部 Required Verification 與單一 commit；不授權擴張 Files、Purpose、Invariants 或 push。
 - 每個步驟以已授權產出完成、必要檢查實際執行且狀態與文件一致為完成條件。
 - 遇到 Scope、需求、Integration Contract、未核准檔案、重疊修改或需要人類決策的變更時停止。
 - 完成目前授權的操作後停止；不因某個 checkpoint 完成而推論下一項授權。

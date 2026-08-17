@@ -12,6 +12,8 @@
 
 只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才能繼續 Pre-Spec Boundary Gate。`Readiness: blocked` 時停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容，不構成任何文件修改、核准、實作或 commit 授權。
 
+Boundary Gate 必須是共同理解確認後的下一個產品工作步驟。Gate 通過前不得提出或套用 `docs/project/` 修改、建立或修訂 Blueprint、Spec 或 Plan。若同一份 confirmed 摘要與 Scope 已通過 Gate，後續建立 Spec 時沿用該結果；不要重複執行。需求文件或 Proposal 超出該摘要時，原結果失效並回到 Grilling。
+
 ## Pre-Spec Boundary Gate
 
 建立或修訂 Spec 前，根據 Slice Brief 與 Source Reference 先評估下列訊號：
@@ -28,7 +30,7 @@
 
 Gate 未通過時：
 
-1. 不建立或修訂 Spec、Plan，也不建立 Draft Documentation commit。
+1. 不提出或套用產品需求文件修改，不建立或修訂 Blueprint、Spec、Plan，也不建立 Documentation commit。
 2. 完整讀取 [blueprint-workflow.md](blueprint-workflow.md) 的 Blueprint Slice Revision 規則。
 3. 提出垂直拆分的 Blueprint Slice Revision Proposal；每個候選 Slice 都必須有一句話的使用者可見結果、本身可獨立驗收且有價值，並說明 Included／Excluded、Human Acceptance 重點、依賴與 ID 影響。
 4. 確認原 Slice 的每項需求都已分派、明確排除或列為 Open Question，然後等待使用者明確核准。

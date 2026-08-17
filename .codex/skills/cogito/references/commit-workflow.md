@@ -14,6 +14,7 @@
 | 開始 `continuous` implementation | 所有尚未完成的 implementation batches＋完整 AI Verification＋Verification Documentation |
 | 開始或繼續 legacy `per-batch` Plan | 下一個 implementation batch |
 | 提供 Human Acceptance 結果 | Final 或 Acceptance Feedback Documentation |
+| 核准 Maintenance Proposal | Proposal 指定的單一 Maintenance commit |
 
 核准 Spec／Plan本身不授權實作；但同一訊息若也明確要求開始實作，Approval commit 後直接進入 sequence。取得工作授權後不再另問是否 commit。模糊回覆不構成授權。
 
@@ -39,13 +40,24 @@ Commit message 使用：
 <type>(<scope>): <English summary>
 ```
 
-Type 只使用 `docs`、`chore`、`build`、`feat`、`test`、`fix`、`refactor`。Implementation scope 使用穩定英文模組名，body 加入：
+Type 只使用 `docs`、`chore`、`build`、`feat`、`test`、`fix`、`refactor`。Feature Slice implementation scope 使用穩定英文模組名，body 加入：
 
 ```text
 Feature-Slice: <ID>
 ```
 
 文件 checkpoint 的 scope 使用 Slice ID；跨 Slice blueprint 使用 `blueprint`。
+
+Maintenance 使用 `refactor`、`test` 或 `chore` 等符合實際目的的 type 與穩定英文模組 scope，不加入 `Feature-Slice` trailer。
+
+## Maintenance commit
+
+Maintenance Proposal 必須列出 Purpose、Files、Invariants、Required Verification 與 message。核准後依 [maintenance-workflow.md](maintenance-workflow.md) 執行一個 commit，不建立或更新 Plan row。
+
+- 所有 Required Verification 必須 `passed`；`failed` 或 `not-run` 都阻止 commit。
+- 只 stage Proposal 的 Files，不納入產品文件、Feature Slice 文件或無關變更。
+- 實際 diff 超出 Purpose、Files 或 Invariants 時停止，不以 Maintenance 核准擴張 Scope。
+- commit 後回報結果並停止；不進入 AI Verification、Human Acceptance 或其他 sequence。
 
 ## 建立 commit
 

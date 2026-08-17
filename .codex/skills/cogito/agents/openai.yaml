@@ -1,4 +1,4 @@
 interface:
   display_name: "Cogito"
-  short_description: "Clarify, plan, and execute frontend feature slices"
-  default_prompt: "Use $cogito to clarify product decisions and govern frontend Feature Slices through approval, implementation, verification, and acceptance."
+  short_description: "Clarify, maintain, and execute frontend work"
+  default_prompt: "Use $cogito to clarify product decisions, govern frontend Feature Slices, or perform narrow non-product maintenance with explicit approval and verification."
