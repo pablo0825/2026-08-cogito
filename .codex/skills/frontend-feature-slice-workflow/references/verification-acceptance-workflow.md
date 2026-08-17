@@ -22,7 +22,7 @@
 3. 建立 Verification Documentation commit；`failed` 或 `not-run` 可如實提交，但不得誤標通過。
 4. 回報 Commit ID、未解決項目與 Human Integration／Acceptance 步驟，然後停止。
 
-部分檢查 `not-run` 時可以進入 `awaiting-human`，但必須提供原因與人類補充驗證方式。
+部分檢查 `not-run` 時可以進入 `awaiting-human`，但必須說明原因、風險與 release 影響。不要預設將 `not-run` 技術檢查改寫成人工步驟；若它是必要 release gate，維持未解決狀態或取得正式例外。
 
 ## Human Integration
 
@@ -30,7 +30,19 @@
 
 ## Human Acceptance
 
-提供 Preconditions、Test Data、Browser／Device／Viewport、Steps、Expected Results 與 Known Limitations。只有使用者能回報 `passed`、`failed` 或 `changes-requested`；含糊回覆必須先詢問。
+Human Acceptance 只評估自動化無法可靠判斷的產品結果：
+
+- 真實環境、真實資料或外部服務的使用者旅程。
+- 視覺、文案、資訊層級與互動感受。
+- 代表性真實裝置上的實際體驗。
+- 需要人類語意、信任或整體品質判斷的情境。
+- 產品是否符合使用者期待。
+
+從上述類型選擇原則上 3–5 個最高價值場景；只有較少獨立人類判斷時可以少於 3 個，不為達到數量拆分同一旅程。Human Acceptance Instructions 必須使用 verification template 的單一 `High-Value Scenarios` 三欄表；每個場景只描述一個使用者目標與一個人類判斷，不改成逐場景章節、操作步驟、Expected Results 清單或時間規劃。
+
+不要重跑 AI Verification、逐項映射所有 Spec criteria，或展開 browser／viewport／state matrix。自動化 `not-run` 不自動成為 Human Acceptance；只有本質上需要人類判斷或使用者明確要求人工補驗時才加入，且人工結果不改寫 AI Verification status。
+
+只有使用者能回報 `passed`、`failed` 或 `changes-requested`；含糊回覆必須先詢問。
 
 ### Passed
 

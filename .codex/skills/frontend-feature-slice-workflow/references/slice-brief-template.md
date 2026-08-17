@@ -48,7 +48,7 @@
 
 ## Human Acceptance
 
-- <必須由使用者確認的結果>
+- <需要人類判斷的高價值產品結果；不重複 AI Acceptance>
 
 ## Blueprint Revision
 

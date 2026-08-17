@@ -27,7 +27,7 @@
 | Check | Command / Method | Result | Evidence | Notes |
 |---|---|---|---|---|
 | Build | `<command>` | passed | exit code 0 | <notes> |
-| Tests | `<command>` | not-run | <reason> | <human follow-up> |
+| Tests | `<command>` | not-run | <reason> | <risk or release impact> |
 
 Result 只使用 `passed`、`failed`、`not-run`、`not-applicable`。
 
@@ -39,6 +39,8 @@ Result 只使用 `passed`、`failed`、`not-run`、`not-applicable`。
 |---|---|---|
 | <Target or Preserved Behavior> | <result> | <evidence> |
 
+此表記錄目前證據，不是要求使用者逐項重跑的 Human Acceptance checklist。
+
 ## Human Integration
 
 - Status: `pending | passed | failed | not-applicable`
@@ -48,19 +50,23 @@ Result 只使用 `passed`、`failed`、`not-run`、`not-applicable`。
 
 ## Human Acceptance Instructions
 
-### Preconditions and Test Data
+原則上只列 3–5 個最高價值場景；只有較少獨立人類判斷時可以少於 3 個。不要複製 AI Verification、技術 assertions 或 browser／viewport／state matrix。
 
-- <環境、帳號及測試資料>
+### Context
 
-### Browser / Device / Viewport
+- Environment / Service: <只有需要真實環境或外部服務時填寫>
+- Account / Test Data: <完成場景所需的最少資料>
+- Representative Device: <只有裝置體驗需要人類判斷時填寫>
 
-- <建議驗收環境>
+每項 Context 最多一句；不加入準備流程或技術檢查清單。
 
-### Steps and Expected Results
+### High-Value Scenarios
 
-| Step | Action | Expected Result |
+| Scenario | User Goal | Human Judgment |
 |---|---|---|
-| 1 | <操作> | <預期結果> |
+| <高價值場景> | <以一句話描述要完成的使用者目標> | <以一句話描述自動化無法可靠判斷的產品結果> |
+
+只使用此表呈現場景。每格使用一句簡短文字；不要改成逐場景章節，也不要加入操作步驟、Expected Results 清單、時間預算、技術檢查或多組排列組合。
 
 ### Known Limitations
 

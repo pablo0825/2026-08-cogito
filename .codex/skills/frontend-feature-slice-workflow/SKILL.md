@@ -15,6 +15,9 @@ description: Govern frontend work as Feature Slices from requirements and bluepr
 - 一次只處理一個 Feature Slice；已核准且本質上跨 Slice 的 Blueprint 操作除外。
 - 先完成 Spec，再分析程式碼並建立 Plan；取得 Spec 與 Plan 明確核准前不修改實作程式碼。
 - 分開記錄 committed、AI verified 與 human accepted；只有使用者能確認 Human Integration 與 Human Acceptance。
+- AI Verification 負責可重複的技術檢查；Human Acceptance 不重跑 build、lint、typecheck、unit、integration、E2E、accessibility automation 或已自動覆蓋的狀態／viewport matrix。
+- Human Acceptance 原則上只提供 3–5 個高價值場景，聚焦真實環境與外部服務、視覺／文案／互動感受、代表性真實裝置、自動化無法可靠判斷的情境，以及產品是否符合使用者期待；沒有足夠獨立判斷時不湊數。
+- AI Verification 的 `not-run` 保持技術風險，不自動轉成人工測試；只有該結果本質上需要人類判斷或使用者明確要求人工補驗時，才納入 Human Acceptance。
 - 將未執行的檢查如實標示為 `not-run` 或 `not-applicable`，不得標示為 `passed`。
 - 將 Spec、Plan 與 Verification 視為活文件：只保存目前有效內容，不追加 revision summary、已完成 batch、被取代的驗證結果或 commit record；詳細歷史由 Git 保存。
 - Spec 保存目前提出或核准的產品行為；Plan 保存目前有效的實作方式與尚未完成的工作；Verification 保存每項檢查的最新結果、人工驗收與未解決問題。

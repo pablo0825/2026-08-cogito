@@ -87,7 +87,7 @@
 
 ## Human Acceptance
 
-- [ ] <使用者驗收結果>
+- [ ] <需要人類判斷的高價值產品結果；不重複 AI Verification Requirements>
 
 ## Commit Plan
 

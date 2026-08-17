@@ -82,7 +82,9 @@ Document Status 使用 `draft`、`approved`、`completed`、`superseded`。
 
 ## Human Acceptance
 
-- [ ] <必須由使用者在實際瀏覽器或裝置確認的結果>
+只列必須由人類判斷的高價值產品結果，例如真實環境／外部服務、視覺與文案、互動感受、代表性真實裝置或整體產品期待。不要複製 AI Acceptance 或列出技術測試步驟。
+
+- [ ] <需要人類判斷的產品結果>
 
 ## Open Questions
 
