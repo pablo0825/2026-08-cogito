@@ -1,6 +1,6 @@
 ---
 name: cogito
-description: Use when creating or reconciling frontend Feature Slices, adopting changes in shipped frontend projects without complete canonical requirements, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, performing narrow non-product maintenance, or planning, approving, implementing, verifying, accepting, revising, or committing frontend work.
+description: Use when creating or reconciling Feature Slices in frontend, backend, or full-stack projects; adopting changes in shipped software without complete canonical requirements; clarifying new or changed product behavior; handling behaviorally ambiguous bugs; performing narrow non-product maintenance; or planning, approving, implementing, verifying, accepting, revising, or committing governed software work.
 ---
 
 # Cogito
