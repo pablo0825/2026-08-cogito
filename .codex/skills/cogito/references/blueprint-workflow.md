@@ -4,7 +4,7 @@
 
 ## 需求來源與 Slice 邊界
 
-只使用 `docs/project/`、使用者明確確認的需求，以及可追溯至需求文件的既有 blueprint 內容。將 `AGENTS.md`、架構規範與程式碼視為限制或現況，不視為產品需求。
+一般模式只使用 `docs/project/`、使用者明確確認的需求，以及可追溯至需求文件的既有 blueprint 內容。Rolling Adoption 依 [rolling-adoption-workflow.md](rolling-adoption-workflow.md) 將相關舊文件、程式、測試與 Git history 視為 Legacy Baseline 證據，只有使用者確認且寫入 `docs/project/` 的內容才成為權威需求。將 `AGENTS.md`、架構規範與程式碼視為限制或現況，不視為產品需求。
 
 使用者提出新的或實質改變既有的產品行為時，先完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)，再依 [spec-plan-workflow.md](spec-plan-workflow.md) 執行 Feature Slice Boundary Gate。`Shared Understanding: confirmed` 且 `Readiness: ready` 後，Gate 通過才可提出產品需求文件修改 Proposal、建立 Slice 或提出一般 Blueprint Slice Revision Proposal；Gate 未通過時只可提出 Boundary Gate 要求的垂直拆分 Proposal，不修改任何文件。摘要確認與 Gate 通過都不構成修改 `docs/project/`、blueprint 或其他文件的授權。單純依清楚且未改變的權威需求 reconcile blueprint 時，不重做產品決策訪談或 Boundary Gate。
 
@@ -14,6 +14,8 @@
 
 ## 建立 blueprint
 
+完整建立只適用於已有完整 canonical 需求、且目標是建立完整產品 Slice 地圖的專案。已上線但 canonical coverage 不完整的專案不得掃描所有舊文件後建立一批 `proposed` Slice；改走 Rolling Adoption，建立 `Coverage: partial` 的最小 blueprint。
+
 1. 完整讀取 [blueprint-template.md](blueprint-template.md) 與 [slice-brief-template.md](slice-brief-template.md)。
 2. 讀取需求文件並建立可追溯的需求清單。
 3. 建立 Slice、Type、`Depends On`、`Revises` 與 `Corrects`；所有新 Slice 設為 `proposed`。
@@ -21,6 +23,15 @@
 5. 確認每項需求有歸屬或 Open Question、每個 Source Reference 有效、ID 唯一且文件連結正確。
 6. 依 commit workflow 建立 `docs(blueprint): create feature slice blueprint` commit。
 7. 回報 Commit ID、Slice 摘要與 Open Questions，然後停止。
+
+## Rolling Adoption
+
+依 [rolling-adoption-workflow.md](rolling-adoption-workflow.md) 只收編本次能力。Gate 通過與 Proposal 核准後，在同一 Documentation Batch 建立或更新 canonical requirement、退役舊章節、建立或更新 partial blueprint，並新增一個 `proposed` Slice 與 Brief。
+
+- 第一次修改既有行為：`Type: change`、`Revises: none`，Brief 記錄 `Legacy Baseline`。
+- 後續修改已 accepted 的相同行為：使用一般 `Revises`，不得再次建立 Legacy Baseline。
+- 未收編能力不建立 placeholder Slice，也不列為 Open Question；blueprint 必須揭露 Coverage 為 `partial`。
+- `docs/project/` 寫入與舊章節退役必須同批，避免兩份權威內容。
 
 ## 同步 blueprint
 

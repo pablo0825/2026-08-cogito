@@ -4,7 +4,7 @@
 
 ## 進入 Feature Slice
 
-確認 ID 存在、不是 `withdrawn`、沒有其他 active Slice、必要依賴已完成，並讀取 Slice Brief 與 Source Reference。操作必須符合目前狀態；依賴未完成時設為或維持 `blocked`，說明恢復條件後停止。
+確認 ID 存在、不是 `withdrawn`、沒有其他 active Slice、必要依賴已完成，並讀取 Slice Brief 與 Source Reference。Rolling Adoption 在建立 Slice 前執行 Boundary Gate 時，改用 confirmed summary、Legacy Sources 與目標使用者結果；Adoption Documentation commit 完成後，建立 Spec 前仍必須有 Brief 與 canonical Source Reference。操作必須符合目前狀態；依賴未完成時設為或維持 `blocked`，說明恢復條件後停止。
 
 ## Pre-Spec Grilling Gate
 
@@ -62,8 +62,11 @@ Plan 必須在核准前為每項完整驗證指定 Gate：
 
 ### 變更類型
 
-- `change`：記錄 Previous Spec、Current Behavior、Target Behavior 與 Preserved Behavior。
+- 一般 `change`：記錄 Previous Spec、Current Behavior、Target Behavior 與 Preserved Behavior，並以 `Revises` 指向原 accepted Slice。
+- Rolling Adoption 第一次 `change`：`Previous Spec` 與 `Revises` 為 `none`，引用 Brief 的 `Legacy Baseline`，記錄 Current／Target／Preserved Behavior；本次 Spec 是收編後的第一份 Authoritative Spec。
 - `correction`：引用 Authoritative Spec 與必須恢復的 Acceptance，不修改原 Spec。
+
+第一次收編不得補造 Previous Spec 或 accepted Slice，也不得將既有 change 誤記為 feature。沒有 Cogito Authoritative Spec 的舊問題不能使用 `correction`。
 
 現有程式碼與 Spec 不一致時，以 Spec 為準並在 assessment 記錄差異。若差異會改變 Scope、使用者行為或 Integration Contract，停止並詢問使用者。
 

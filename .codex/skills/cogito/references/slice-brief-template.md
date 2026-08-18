@@ -26,6 +26,16 @@
 
 - `docs/project/<file>`, section `<section>`
 
+## Legacy Baseline
+
+只在第一次收編既有行為的 `change` 使用；其他 Slice 省略本節。此時 `Revises` 必須為 `none`。
+
+- Legacy Sources: `<legacy document sections or none>`
+- Observed Evidence: `<code, tests, reproducible behavior, Git history, or none>`
+- Confirmed Current Behavior: `<concise baseline>`
+- Confirmed By: `<user>`
+- Confirmed At: `<YYYY-MM-DD>`
+
 ## Included
 
 - <本 Slice 包含的需求>

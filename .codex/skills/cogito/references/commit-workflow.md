@@ -9,6 +9,7 @@
 | 建立或同步 blueprint | Blueprint Creation／Reconcile |
 | 核准 Blueprint Revision Proposal | Proposal 指定的 Blueprint Revision |
 | 核准 `docs/project/` 變更 | 已說明的下一個 Documentation Batch |
+| 核准 Rolling Adoption Proposal | Proposal 指定的 Adoption Documentation commit |
 | 建立 Spec／Plan | Draft Documentation |
 | 核准 Spec／Plan | Commit Plan approval＋Approval Documentation |
 | 開始 `continuous` implementation | 所有尚未完成的 implementation batches＋完整 AI Verification＋Verification Documentation |
@@ -82,6 +83,7 @@ Maintenance Proposal 必須列出 Purpose、Files、Invariants、Required Verifi
 |---|---|---|
 | Blueprint Creation | `docs(blueprint): create feature slice blueprint` | 主 blueprint 與 Brief；回報後停止 |
 | Blueprint Reconcile | `docs(blueprint): reconcile feature slice blueprint` | 實際 reconcile 差異；無差異不 commit |
+| Rolling Adoption | `docs(<ID>): adopt <capability> requirements` | canonical requirement、舊文件退役、partial blueprint 與 Brief；回報後停止，不建立 Spec |
 | Blueprint Revision | `docs(<ID>): revise feature slice structure` 或 `docs(blueprint): revise feature slice structure` | 核准 Proposal 的 blueprint、Brief 與直接相關需求文件；回報後停止 |
 | Draft | `docs(<ID>): draft <feature> specification` | draft Spec／Plan、必要 Brief 與 blueprint 狀態；回報後停止 |
 | Approval | `docs(<ID>): approve <feature> specification` | approved Spec／Plan、必要 Brief 與 blueprint 狀態；沒有複合實作授權時停止 |

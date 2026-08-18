@@ -1,6 +1,6 @@
 ---
 name: cogito
-description: Use when creating or reconciling frontend Feature Slices, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, performing narrow non-product maintenance, or planning, approving, implementing, verifying, accepting, revising, or committing frontend work.
+description: Use when creating or reconciling frontend Feature Slices, adopting changes in shipped frontend projects without complete canonical requirements, clarifying new or changed product behavior, handling behaviorally ambiguous bugs, performing narrow non-product maintenance, or planning, approving, implementing, verifying, accepting, revising, or committing frontend work.
 ---
 
 # Cogito
@@ -10,7 +10,9 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 ## 核心不變量
 
 - 使用中文撰寫專案文件；路徑、API、ID、slug、指令、程式識別字與狀態值使用英文。
-- 將 `docs/project/` 視為產品需求來源；將 `docs/blueprint/feature-slice-blueprint.md` 視為 Slice 狀態的唯一權威來源。
+- 將 `docs/project/` 視為已收編產品需求的唯一權威來源；將 `docs/blueprint/feature-slice-blueprint.md` 視為 Slice 狀態與目前收編範圍的唯一權威來源。
+- 已上線但尚未完整收編的專案使用 Rolling Adoption：只收編本次使用者結果需要的規則，不先掃描或重建整個產品。`docs/project/` 之外的舊文件、程式碼、測試與 Git history 只提供 Legacy Baseline 證據，必須經使用者確認後才成為需求。
+- 同一項產品規則只能有一個權威位置；規則寫入 `docs/project/` 的同一 Documentation Batch 必須讓舊章節退役為 canonical link 或刪除，不長期保留重複全文。
 - 只從需求文件與使用者明確確認的內容定義產品需求，不從程式碼、測試、TODO 或既有行為推論需求。
 - 建立或實質修訂任何 Spec 前先完成需求拷問（Grilling）；只有共同理解已確認且 Readiness 為 `ready`，才能進入 Feature Slice Boundary Gate。
 - Grilling 完成後立即執行 Boundary Gate；Gate 通過前不得提出或套用產品需求文件修改、建立或修訂 Blueprint、Spec 或 Plan。
@@ -29,14 +31,14 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 - 將未執行的檢查如實標示為 `not-run` 或 `not-applicable`，不得標示為 `passed`。
 - 將 Spec、Plan 與 Verification 視為活文件：只保存目前有效內容，不追加 revision summary、已完成 batch、被取代的驗證結果或 commit record；詳細歷史由 Git 保存。
 - Spec 保存目前提出或核准的產品行為；Plan 保存目前有效的實作方式與尚未完成的工作；Verification 保存每項檢查的最新結果、人工驗收與未解決問題。
-- 只保留理解目前需求所需的語義 lineage，例如 `Revises`、`Corrects`、`Previous Spec`、`Authoritative Spec` 與 replacement link；不以文件重建 commit lineage。
+- 只保留理解目前需求所需的語義 lineage，例如 `Revises`、`Legacy Baseline`、`Corrects`、`Previous Spec`、`Authoritative Spec` 與 replacement link；不以文件重建 commit lineage。
 - 保留無關的既有變更；不覆寫、還原、stage 或提交操作開始前的使用者修改。
 - 不擴張核准 Scope、不自行處理下一個 Slice、不 push、不改寫 Git history。
 
 ## 開始操作
 
 1. 確認專案根目錄並讀取適用的 `AGENTS.md` 與專案指示。
-2. Feature Slice 或產品行為操作必須確認 `docs/project/` 與 blueprint；缺少需求來源時停止並詢問位置。Maintenance 不要求產品文件，但 blueprint 存在時必須讀取並確認沒有 active Slice。
+2. Feature Slice 或產品行為操作先確認 `docs/project/`、blueprint 與目標能力的實際 canonical coverage。已上線專案缺少 canonical requirement、blueprint 或 accepted lineage，或目標能力尚未收編時，改走 Rolling Adoption；新專案缺少需求來源時停止並詢問位置。Maintenance 不要求產品文件，但 blueprint 存在時必須讀取並確認沒有 active Slice。
 3. 記錄 working tree、staged 狀態與目標檔案既有修改。
 4. 從使用者要求辨識單一操作，讀取下表指定的 reference，不載入其他分支。
 
@@ -48,6 +50,7 @@ description: Use when creating or reconciling frontend Feature Slices, clarifyin
 
 | 操作 | 必須完整讀取 |
 |---|---|
+| 已上線專案缺少完整 `docs/project/`／blueprint，或修改尚未收編的既有行為 | [rolling-adoption-workflow.md](references/rolling-adoption-workflow.md)、[grilling-workflow.md](references/grilling-workflow.md) 與 [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要建立文件時再讀 blueprint 與 Slice templates |
 | 建立、同步或審查 blueprint；變更需求；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；需要產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
 | 建立、實質修訂或核准 Spec／Plan | [grilling-workflow.md](references/grilling-workflow.md) 與 [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要產出時再讀 [spec-template.md](references/spec-template.md) 與 [plan-template.md](references/plan-template.md) |
 | 執行不改產品行為的小型內部 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
@@ -74,10 +77,10 @@ docs/verification/<ID>/<ID>-<name>-verification.md
 Type 只使用：
 
 - `feature`：新增使用者可見功能。
-- `change`：改變已 `accepted` 功能的需求或行為，以 `Revises` 指向原 Slice。
+- `change`：改變既有需求或行為。已收編行為以 `Revises` 指向原 `accepted` Slice；第一次收編的既有行為以已確認的 `Legacy Baseline` 取代 `Revises`。
 - `correction`：修正不符合有效 Spec 的實作，以 `Corrects` 指向原 Slice。
 
-`Depends On` 只表示實作依賴，不代替 `Revises` 或 `Corrects`。已 `accepted` 的需求或 Acceptance 改變時建立新 ID；未 `accepted` 時更新原文件並依實質性撤銷核准。純文字修正不建立新 ID。
+`change` 必須恰好具有 `Revises` 或 `Legacy Baseline` 其中一種 lineage，不得同時存在，也不得為第一次收編補造 Slice、Spec 或 accepted 歷史。`Depends On` 只表示實作依賴，不代替 `Revises`、`Legacy Baseline` 或 `Corrects`。已 `accepted` 的需求或 Acceptance 改變時建立新 ID；未 `accepted` 時更新原文件並依實質性撤銷核准。純文字修正不建立新 ID。
 
 ## 狀態機
 
@@ -98,6 +101,7 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 - Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，但單獨核准不授權實作。
 - 若使用者在同一訊息明確要求「核准並開始實作」，完成 Approval commit 後直接進入 implementation sequence，不增加第二次確認。
 - `continuous` implementation 授權涵蓋所有已核准 implementation batches、各 batch 驗證、完整 AI Verification 與 Verification Documentation commit。
+- Rolling Adoption Proposal 核准涵蓋列出的 canonicalization、舊文件退役、blueprint／Brief 與單一 Adoption Documentation commit；不授權建立 Spec、實作或擴張收編範圍。
 - Maintenance Proposal 核准涵蓋列出的修改、全部 Required Verification 與單一 commit；不授權擴張 Files、Purpose、Invariants 或 push。
 - 每個步驟以已授權產出完成、必要檢查實際執行且狀態與文件一致為完成條件。
 - 遇到 Scope、需求、Integration Contract、未核准檔案、重疊修改或需要人類決策的變更時停止。
@@ -106,6 +110,7 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 ## 既有文件相容性
 
 - 不因 Skill 更新重寫既有 Spec、Plan、Verification、撤銷核准或改變已核准 Commit Plan。
+- 舊 blueprint 缺少 `Adoption Mode` 或 `Coverage` 欄位時，不因 schema 欄位缺漏自動進入 Rolling Adoption；若目標能力已有 canonical requirement、accepted Slice 與有效 Spec，視為已收編並走一般 workflow。只有實際 canonical coverage 或 lineage 缺漏時才逐區收編。
 - 缺少 `Implementation Execution` 的已核准 Plan 視為 legacy `per-batch`，每個 batch 維持明確授權。
 - 已標示 `continuous` 的既有 Plan 依其核准 Commit Plan 執行。
 - 既有 Plan 沒有 Gate 欄位時，`AI Verification Requirements` 視為完整驗證的 `required`，每個尚未完成 batch 的 `Required Verification` 視為該 batch 的必要檢查，Human Integration／Acceptance 視為 `human`；額外補充檢查預設為 `advisory`，但專案指示明定的 release gate 仍為 `required`。

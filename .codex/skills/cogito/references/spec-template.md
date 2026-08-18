@@ -1,6 +1,6 @@
 # Feature Slice Spec Template
 
-建立 `docs/specs/<ID>/<ID>-<name>-spec.md`。Spec 只定義目前提出或核准的產品行為，不加入 implementation steps、從程式碼推論的需求、revision summary 或 commit record；修訂時直接取代失效內容。`feature` 以本文件為 Authoritative Spec；`change` 填寫 Previous Spec；`correction` 以舊 Spec 為 Authoritative Spec。只輸出下列第二個 H1 起的文件內容，並將 placeholder 換成實際值。
+建立 `docs/specs/<ID>/<ID>-<name>-spec.md`。Spec 只定義目前提出或核准的產品行為，不加入 implementation steps、從程式碼推論的需求、revision summary 或 commit record；修訂時直接取代失效內容。`feature` 以本文件為 Authoritative Spec；一般 `change` 填寫 Previous Spec；Rolling Adoption 第一次 `change` 使用 Legacy Baseline、Previous Spec 填 `none`，並以本文件為第一份 Authoritative Spec；`correction` 以舊 Spec 為 Authoritative Spec。只輸出下列第二個 H1 起的文件內容，並將 placeholder 換成實際值。
 
 # <ID> — <Feature Name> Spec
 
@@ -20,6 +20,7 @@ Document Status 使用 `draft`、`approved`、`completed`、`superseded`。
 - Revises Feature Slice: `<ID or none>`
 - Corrects Feature Slice: `<ID or none>`
 - Previous Spec: `<path or none>`
+- Legacy Baseline: `<Slice Brief Legacy Baseline section or none>`
 - Authoritative Spec: `<path or this document>`
 
 ## Source Reference

@@ -6,9 +6,11 @@
 
 ## Document Information
 
-- Schema Version: `1`
+- Schema Version: `2`
 - Document Status: `active`
 - Requirements Root: `docs/project/`
+- Adoption Mode: `complete | rolling`
+- Coverage: `complete | partial`
 - Last Reconciled: `<YYYY-MM-DD>`
 - Active Feature Slice: `<ID or none>`
 
@@ -16,11 +18,21 @@
 
 <簡明說明目的、需求來源及使用方式>
 
+Rolling Adoption 且 Coverage 為 `partial` 時，明確寫出：Feature Slice Index 只列已收編或正在收編的能力；未列出不代表產品不存在該功能。完整模式省略此警示。
+
 ## Requirement Sources
 
 | Source | Relevant Sections | Notes |
 |---|---|---|
 | `docs/project/<file>` | <section> | <notes> |
+
+## Adoption Coverage
+
+完整模式只填寫 `Complete` 並省略下表。Rolling Adoption 使用下表，只列目前已收編或正在收編的能力，不建立未收編功能清單。
+
+| Capability | Canonical Source | First Adopted By |
+|---|---|---|
+| `<capability>` | `docs/project/<file>#<section>` | `<FS-ID>` |
 
 ## Open Questions
 

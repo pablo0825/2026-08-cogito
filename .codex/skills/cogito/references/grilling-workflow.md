@@ -14,13 +14,15 @@
 
 ## 事實與決策責任
 
-提問前先讀取適用的需求來源、blueprint、Slice Brief 與有效 Spec。修改舊功能或判斷 Bug 時，再調查實際程式、測試與必要的 Git 歷史，建立下列基準：
+提問前先讀取適用的需求來源、blueprint、Slice Brief 與有效 Spec。Rolling Adoption 第一次收編時這些 canonical 文件可能不存在；依 [rolling-adoption-workflow.md](rolling-adoption-workflow.md) 只讀取本次能力相關的 Legacy Sources，再調查實際程式、測試與必要的 Git 歷史，建立下列基準：
 
 - 目前核准行為。
 - 實際觀察行為。
 - 使用者要求的目標行為。
 - 必須保留的行為。
 - 尚未決定的影響。
+
+Rolling Adoption 必須由使用者確認 Current、Target 與 Preserved Behavior；不要為了補完整產品地圖詢問無關功能。Legacy Source 或 observed behavior 只能成為 `Verified Fact`，不能自行升格為產品決策。
 
 將程式碼與測試只視為現況、限制或差異證據，不用它們發明產品需求。AI 負責查找可取得的事實；只有外部資訊確實無法取得且會影響決策時，才請使用者補充。清楚區分：
 
