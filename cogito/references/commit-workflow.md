@@ -12,12 +12,13 @@
 | 核准 Rolling Adoption Proposal | Proposal 指定的 Adoption Documentation commit |
 | 建立 Spec／Plan | Draft Documentation |
 | 核准 Spec／Plan | Commit Plan approval＋Approval Documentation |
-| 開始 `continuous` implementation | 所有尚未完成的 implementation batches＋完整 AI Verification＋Verification Documentation |
+| 開始 `continuous` implementation | 所有尚未完成的 implementation batches與各 batch Required Verification |
+| 開始 AI Verification | 完整 AI Verification＋Verification Documentation |
 | 開始或繼續 legacy `per-batch` Plan | 下一個 implementation batch |
 | 提供 Human Acceptance 結果 | Final 或 Acceptance Feedback Documentation |
 | 核准 Maintenance Proposal | Proposal 指定的單一 Maintenance commit |
 
-核准 Spec／Plan本身不授權實作；但同一訊息若也明確要求開始實作，Approval commit 後直接進入 sequence。取得工作授權後不再另問是否 commit。模糊回覆不構成授權。
+核准 Spec／Plan 本身不授權實作；Approval commit 後停止，Implementation 必須由新的 `$cogito` 訊息啟動。取得目前階段的工作授權後不再另問是否 commit。模糊回覆不構成授權。
 
 ## Working tree 邊界
 
@@ -68,7 +69,7 @@ Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [m
 7. 檢查 staged file list、staged diff 與排除項目。
 8. 使用核准 message 建立 commit。
 9. 在對話回報 Commit ID、message、檔案、排除項目與驗證結果；不寫入 Spec、Plan 或 Verification。
-10. continuous sequence 直接進入 Plan 中下一個 batch；最後一個 implementation batch 後直接執行完整 AI Verification。
+10. continuous sequence 直接進入 Plan 中下一個 implementation batch；最後一個 implementation batch 後停止，提示以新的 `$cogito` 訊息開始 AI Verification。
 
 若 stage 後發現異常，只撤銷本次新增的 staging，不改 working tree 或操作開始前狀態。範圍內問題可修正並重跑驗證；需要新增／重組 batch、修改未核准檔案、改變 Spec／Plan／Integration Contract、處理範圍外失敗、分離重疊修改或取得人類決策時停止。
 
@@ -81,7 +82,7 @@ Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [m
 | Rolling Adoption | `docs(<ID>): adopt <capability> requirements` | canonical requirement、舊文件退役、partial blueprint 與 Brief；回報後停止，不建立 Spec |
 | Blueprint Revision | `docs(<ID>): revise feature slice structure` 或 `docs(blueprint): revise feature slice structure` | 核准 Proposal 的 blueprint、Brief 與直接相關需求文件；回報後停止 |
 | Draft | `docs(<ID>): draft <feature> specification` | draft Spec／Plan、必要 Brief 與 blueprint 狀態；回報後停止 |
-| Approval | `docs(<ID>): approve <feature> specification` | approved Spec／Plan、必要 Brief 與 blueprint 狀態；沒有複合實作授權時停止 |
+| Approval | `docs(<ID>): approve <feature> specification` | approved Spec／Plan、必要 Brief 與 blueprint 狀態；回報後停止 |
 | Specification Revision | `docs(<ID>): revise <feature> specification` | 已授權修訂；實質變更回到 `awaiting-approval` |
 | Verification | `docs(<ID>): record <feature> verification` | Verification 最新結果、Plan housekeeping 與 blueprint 狀態；回報後停止 |
 | Final | `docs(<ID>): record <feature> acceptance` | completed 文件、accepted 狀態與必要 lineage；回報後停止 |
@@ -89,12 +90,12 @@ Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [m
 
 建立完成的 checkpoint commit 前，從 Plan 移除對應的 Approval、Verification 或 Final row。Verification 有 `required: failed/not-run` 或未完成 `AI-*` closure 時屬於 attempt／blocker record，不完成 checkpoint，也不移除 row。合法 housekeeping 不建立額外 commit，也不將 Commit Plan Approval 改為 `pending`。
 
-已核准但尚未提交的 `docs/project/` 變更，只納入最接近且已授權的 Documentation Batch，不重複提交。Approval 後出現新的產品語義 delta 時停止實作；下一輪以 `$cogito` 回到 Grilling 與 Boundary Gate，取得適用的文件 revision 授權後才更新 requirements、Spec／Plan 與 Commit Plan。Commit workflow 不直接建立未經該流程核准的 requirements revision。
+已核准但尚未提交的 `docs/project/` 變更，只納入最接近且已授權的 Documentation Batch，不重複提交。Approval 後出現新的產品語義 delta 時停止實作；下一輪以新的 `$cogito` 回到 Grilling，確認後停止，再以另一個新的 `$cogito` 啟動 Boundary Gate。取得適用的文件 revision 授權後才更新 requirements、Spec／Plan 與 Commit Plan。Commit workflow 不直接建立未經該流程核准的 requirements revision。
 
 ## Commit Plan 變更
 
 在同一 commit 移除完成的 checkpoint row 不算 Commit Plan 變更。若改變任何尚未完成 batch 的分組、順序、Files、Required Verification 或 message，更新 Plan 並將 Commit Plan Approval 設為 `pending`，等待重新核准後才執行受影響 batch。
 
-若同時改變 Scope、主要實作方式、核心檔案、Integration Contract 或 Acceptance，撤銷 Spec／Plan 核准並回到 `awaiting-approval`。已提交實作需要修正時先提出 Plan revision proposal；取得明確 revision 授權後新增 `fix` batch，不改寫歷史。
+若同時改變 Scope、主要實作方式、核心檔案、Integration Contract 或 Acceptance，停止目前階段，不撤銷核准或修改 Plan，提示使用者以新的 `$cogito` 訊息啟動適用的 Grilling 或 Spec／Plan revision。已提交實作需要修正時也先停止；只有在新的 Spec／Plan 階段取得 revision 授權後才新增 `fix` batch，不改寫歷史。
 
 Git history 是 Commit ID、已完成 batches、過去修訂、被取代驗證結果、已解決 failure 與詳細變更歷史的權威來源。Spec、Plan 與 Verification 不保存 commit ID、execution result、revision summary 或其他形式的 commit history；當次 commit 資訊只在對話回報。

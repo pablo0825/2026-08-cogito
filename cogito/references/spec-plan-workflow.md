@@ -8,7 +8,7 @@
 
 | Delta | 路徑 |
 |---|---|
-| 建立 Spec，或改變 Goal、Scope、Rules、Input／Output、Integration Contract、Acceptance、canonical requirement 或 Slice boundary | 完整 Grilling → Boundary Gate → Spec／Plan revision |
+| 建立 Spec，或改變 Goal、Scope、Rules、Input／Output、Integration Contract、Acceptance、canonical requirement 或 Slice boundary | 完整 Grilling 後停止；新的 `$cogito` 訊息啟動 Boundary Gate，Gate 通過後再以另一個新的 `$cogito` 訊息啟動 Spec／Plan 階段 |
 | 只改變實作方法、主要 Files、batch 分組／順序、commands、Verification checks／Gates／Applicability | Plan revision 與重新核准；產品 contract 不變時不進 Grilling |
 | 只修正文字、格式、失效 reference 或可證明語義不變的 active-document schema | housekeeping；依下方相容性規則決定是否保持核准 |
 | 核准完全未變更的 draft | Pure Approval Gate 通過後直接進入核准；不載入 Grilling |
@@ -31,15 +31,15 @@
 - 使用者核准的是目前 exact draft，且同一訊息沒有附帶產品或技術內容變更。
 - Commit Plan、Files、Verification mappings 與 approvals 仍內部一致。
 
-全部成立時直接進入「核准與複合授權」。任一條件不成立時依入口分類轉入適當 revision；證據不足時停止並指出缺少的核准資格，不以重新 Grilling 代替可查證的 Git／文件事實。
+全部成立時直接進入「核准」。任一條件不成立時依入口分類轉入適當 revision；證據不足時停止並指出缺少的核准資格，不以重新 Grilling 代替可查證的 Git／文件事實。
 
 ## Pre-Spec Grilling Gate
 
 建立或實質修訂 Spec 前，完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)。先使用需求來源、Slice Brief 與有效 Spec 避免重問已確定內容；修改舊功能或判斷 Bug 時，再以程式、測試與必要 Git 歷史調查現況和差異，不從這些證據發明需求。
 
-只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才能繼續 Pre-Spec Boundary Gate。`Readiness: blocked` 時停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容，不構成任何文件修改、核准、實作或 commit 授權。
+只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才具備 Pre-Spec Boundary Gate 資格。Grilling 確認後必須停止；Boundary Gate 必須由新的 `$cogito` 訊息啟動。`Readiness: blocked` 時停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容，不構成任何文件修改、核准、實作或 commit 授權。
 
-Boundary Gate 必須是共同理解確認後的下一個產品工作步驟。Gate 通過前不得提出或套用 `docs/project/` 修改、建立或修訂 Blueprint、Spec 或 Plan。若同一份 confirmed 摘要與 Scope 已通過 Gate，後續建立 Spec 時沿用該結果；不要重複執行。需求文件或 Proposal 超出該摘要時，原結果失效並回到 Grilling。
+Boundary Gate 必須是共同理解確認後的下一個產品工作步驟。Gate 通過前不得提出或套用 `docs/project/` 修改、建立或修訂 Blueprint、Spec 或 Plan。若同一份 confirmed 摘要與 Scope 已通過 Gate，後續建立 Spec 時沿用該結果；不要重複執行。需求文件或 Proposal 超出該摘要時，原結果失效；以新的 `$cogito` 訊息回到 Grilling，確認後停止，再以另一個新的 `$cogito` 訊息啟動 Boundary Gate。
 
 ## Pre-Spec Boundary Gate
 
@@ -63,6 +63,8 @@ Gate 未通過時：
 4. 確認原 Slice 的每項需求都已分派、明確排除或列為 Open Question，然後等待使用者明確核准。
 
 多個畫面、步驟、狀態、檔案、測試或 implementation batches 本身不是拆分理由。若它們共同完成一個不可分割、只有整體才有價值的使用者結果，維持單一 Slice。拆分只能依使用者結果，不得依技術層或為降低檔案數而切分。
+
+Boundary Gate 通過後停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。回報 Gate basis 與結果，提示使用者以新的 `$cogito` 訊息啟動 Spec／Plan 階段。
 
 ## 建立 Spec 與 Plan
 
@@ -103,20 +105,20 @@ Plan 必須在核准前為每項完整驗證配置 stable `V-*` Check ID、對�
 
 ## 修訂
 
-Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance 發生實質變更時，原 Shared Understanding 與 Boundary Gate 失效；先回到 Grilling 與 Boundary Gate，再依新的明確授權修訂 Spec／Plan。
+Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance 發生實質變更時，原 Shared Understanding 與 Boundary Gate 失效；先以新的 `$cogito` 訊息回到 Grilling，確認後停止，再由另一個新的 `$cogito` 訊息啟動 Boundary Gate。
 
 產品 contract 不變，而 Plan 的主要方式、核心檔案、Verification check、Gate、Applicability 或 command／method 發生實質變更時：
 
 1. 更新 Plan 與受影響 mappings，不重寫 Spec criteria。
 2. 將 Plan 與 Commit Plan Approval 設為 `pending`；需要 Scope Delta 時記錄技術表達差異，產品 Scope delta 改走 Grilling。
 3. 將 blueprint 設為 `awaiting-approval`。
-4. 若使用者已授權套用修訂，建立 `docs(<ID>): revise <feature> specification` commit，然後提示以 `$cogito 核准 <ID> Plan` 繼續。
+4. 若使用者已授權套用修訂，建立 `docs(<ID>): revise <feature> specification` commit，然後在同一 Spec／Plan 階段直接請使用者核准 `<ID>` Plan，不要求重複 `$cogito`。
 
 純文字修正、證據補充與移除已完成 Commit Plan row 不撤銷核准。active Spec／Plan／目前 Verification 可在已授權 Documentation Batch 中原子補上 ID、exact mappings 與 `Applicability: always`，但只有文字、Gate、commands、results、evidence 與 coverage 全部語義相同且 mapping 無歧義時才是 housekeeping。任何推論、合併／拆分 criterion、coverage 改變或 predicate 新增都屬實質 revision。accepted snapshots 不做 schema migration。
 
 直接更新 canonical sections：Spec 只呈現目前提出或核准的產品行為；Plan 只呈現目前有效的實作方式與尚未完成的工作。移除 revision summary、已完成 batch、execution result、commit ID 與被取代的 assessment。詳細歷史由 Git 保存；文件只保留模板定義的語義 lineage 欄位。
 
-## 核准與複合授權
+## 核准
 
 只接受明確核准。核准 Spec／Plan 同時核准 Commit Plan、核准者與時間，並授權 Approval Documentation commit；單獨核准不授權實作。
 
@@ -126,9 +128,8 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
 2. 將 Commit Plan Approval 設為 `approved`。
 3. `change` 只在新 Slice、blueprint 與新 Spec 保存 `Revises`／Previous Spec lineage；`correction` 只在新 Slice 保存 `Corrects`／Authoritative Spec lineage。兩者都不修改舊 accepted Spec。
 4. 建立 `docs(<ID>): approve <feature> specification` commit。
-5. 若使用者只核准，回報 Commit ID 並詢問是否開始實作，然後停止。
-6. 若使用者同一訊息明確要求核准並開始實作，Approval commit 後直接依 implementation workflow 執行，不再次詢問。
+5. 回報 Commit ID，提供新的 `$cogito` Implementation 階段啟動句，然後停止。即使核准訊息同時要求開始實作，也不得跨階段執行。
 
 完成條件是文件狀態、Commit Plan 核准、blueprint 狀態與 Approval commit 全部一致。
 
-停止時使用明確續接句：`請以 $cogito 開始 <ID> implementation`。若同一訊息已明確核准並開始，直接依 implementation workflow 執行，不再次詢問。
+停止時使用明確階段啟動句：`請以 $cogito 開始 <ID> implementation`。Plan 核准不跨階段授權 Implementation；只有新的 `$cogito` 訊息才能開始 implementation workflow。

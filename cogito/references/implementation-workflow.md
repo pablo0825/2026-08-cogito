@@ -6,7 +6,7 @@
 
 確認 blueprint、Spec、Plan 與 Commit Plan 皆已核准，工作樹沒有無法安全分離的重疊變更。完整讀取 [commit-workflow.md](commit-workflow.md) 一次；同一 continuous sequence 的每個 batch 不重讀，只有中斷恢復時以 `$cogito` 重新讀取。Blueprint 的 `approved -> in-progress` 在第一個成功的 implementation commit 中作為 lifecycle housekeeping 保存；第一個 commit 前中斷時，以 working tree 識別未提交工作，不留下單獨的狀態修改。
 
-使用者明確要求開始 `continuous` Plan 時，授權涵蓋所有尚未完成的已核准 implementation batches、各 batch Required Verification、完整 AI Verification 與 Verification Documentation commit。授權不涵蓋 Plan 未列出的 remediation code；完整驗證發現程式問題時，先提出 Plan revision proposal，取得 revision 授權後才新增 fix batch，並重新核准。依 I1、I2、…、In 執行，不在 batches 間詢問。
+使用者明確要求開始 `continuous` Plan 時，授權只涵蓋所有尚未完成的已核准 implementation batches 與各 batch Required Verification。授權不涵蓋完整 AI Verification、Verification Documentation 或 Plan 未列出的 remediation code。依 I1、I2、…、In 執行，不在 batches 間詢問。
 
 ## Batch 執行
 
@@ -43,6 +43,6 @@ Batch Required Verification 是該 commit 的必要條件；結果為 `failed` �
 
 ## Sequence 完成
 
-最後一個 implementation commit 完成後完整讀取 [verification-acceptance-workflow.md](verification-acceptance-workflow.md) 並直接進入完整 AI Verification。依核准 Plan 的 `V-*` mappings 執行 `required` 與 `advisory` checks；`human` 留給 Human Integration／Acceptance。驗證開始後維持核准的 mapping、Gate 與 Applicability；發現 Plan 遺漏專案明定的 release gate 時，先提出 revision proposal，取得授權後修訂並重新核准 Plan；額外的非必要補充檢查記為 `advisory`。
+最後一個 implementation commit 完成後停止，不讀取或執行 verification workflow。回報 implementation 結果，並提示：`請以 $cogito 開始 <ID> AI Verification`。AI Verification 是新的階段，只有該明確訊息才能載入 [verification-acceptance-workflow.md](verification-acceptance-workflow.md) 並執行核准 Plan 的 `V-*` mappings。
 
 缺少 `Implementation Execution` 的 legacy `per-batch` Plan 維持每批明確授權，commit 後停止。恢復時以 Plan 中第一個尚未完成 batch 為下一步，並用 Git history 確認已提交工作，不重做已提交 batch。

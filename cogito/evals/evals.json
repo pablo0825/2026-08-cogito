@@ -3,12 +3,14 @@
   "evals": [
     {
       "id": 1,
+      "scenario": "ordinary-request-does-not-start-cogito",
       "prompt": "在 Codex 中送出一般開發請求：『請幫我修正登入頁面的型別錯誤』，不要明確提及或呼叫 $cogito。檢查 Cogito 是否會被隱式啟動。",
-      "expected_output": "Codex 不應隱式啟動 Cogito；此案例以 agents/openai.yaml policy 與實際 host smoke test 判定。",
+      "expected_output": "即使允許 contextual injection，Codex 也不應把一般開發請求當成 active Cogito 階段或套用治理流程。",
       "files": [],
       "expectations": [
-        "agents/openai.yaml sets policy.allow_implicit_invocation to false",
-        "Explicit $cogito invocation remains available"
+        "Does not start or resume a Cogito stage",
+        "Does not demand Cogito approvals or stage transitions",
+        "Explicit $cogito invocation remains available for a later request"
       ]
     },
     {
@@ -42,7 +44,7 @@
       "files": [],
       "expectations": [
         "Does not treat the message as pure approval",
-        "Returns to Grilling and then Boundary Gate",
+        "Returns to Grilling and requires a separate later $cogito start for Boundary Gate",
         "Does not directly edit or approve Spec, Plan, or implementation"
       ]
     },
@@ -106,13 +108,14 @@
     {
       "id": 10,
       "prompt": "$cogito 執行完整 AI Verification。所有 implementation batches 已提交，但 required V-001 failed，修正需要改程式碼；Plan 目前沒有 fix batch。",
-      "expected_output": "記錄失敗並保留 Verification row；提出 fix batch 並等待重新核准，不直接修改程式碼。",
+      "expected_output": "記錄失敗並保留 Verification row 後停止；不提出或套用 fix batch，要求以新的 $cogito 訊息啟動 Spec／Plan revision。",
       "files": [],
       "expectations": [
         "Records current failure evidence and blocked or non-advancing state",
         "Keeps the Verification checkpoint row pending",
         "Does not edit code under verification authorization",
-        "Requires an approved fix batch and a later explicit $cogito start"
+        "Does not propose or apply a fix batch in AI Verification",
+        "Requires a new explicit $cogito start for Spec/Plan revision"
       ]
     },
     {
@@ -135,7 +138,151 @@
         "Does not accept git diff --check as sufficient behavior proof",
         "Maps every Maintenance invariant to behavior-relevant automated evidence",
         "Keeps Maintenance limited to one purpose and one commit",
-        "Requests Proposal approval continuation using explicit $cogito wording"
+        "Requests same-stage Proposal approval without requiring repeated $cogito"
+      ]
+    },
+    {
+      "id": 13,
+      "scenario": "same-stage-direct-answer",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 Grilling；assistant 問『失敗時採 A 自動重試或 B 顯示錯誤讓使用者重試？』。目前使用者只回覆：『選 B。』",
+      "expected_output": "將 B 記入目前決策樹並繼續同一 Grilling 階段，不要求重送 $cogito。",
+      "files": [],
+      "expectations": [
+        "Treats the message as a direct answer to the unresolved question",
+        "Continues the active Grilling stage without requiring $cogito",
+        "Does not start a different stage or operation"
+      ]
+    },
+    {
+      "id": 14,
+      "scenario": "same-stage-clarification",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 Grilling；assistant 問『資料刪除採 A 軟刪除或 B 永久刪除？』。目前使用者回覆：『A 跟 B 對使用者有什麼差異？』",
+      "expected_output": "直接說明目前選項的差異並留在同一題，不要求重送 $cogito，也不替使用者選擇。",
+      "files": [],
+      "expectations": [
+        "Treats the clarification request as part of the current question chain",
+        "Explains the options without requiring $cogito",
+        "Keeps the product decision unresolved"
+      ]
+    },
+    {
+      "id": 15,
+      "scenario": "same-stage-approval",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 Maintenance；assistant 已提出範圍、Invariant、Required Verification 與單一 commit 的 Proposal，正在等待核准。目前使用者只回覆：『核准。』",
+      "expected_output": "把這則明確回覆視為目前 Maintenance Proposal 的授權，不要求重送 $cogito。",
+      "files": [],
+      "expectations": [
+        "Accepts explicit approval for the current same-stage Proposal",
+        "Does not treat $cogito itself as the approval",
+        "Keeps authorization limited to the proposed scope and commit"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "stage-handoff-requires-explicit-invocation",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 Grilling；Shared Understanding 為 awaiting-confirmation 且 Readiness ready，assistant 正在等待摘要確認。目前使用者回覆：『摘要正確，請直接進入 Boundary Gate。』",
+      "expected_output": "確認摘要，但不執行 Boundary Gate；停止並要求以新的 $cogito 訊息啟動下一階段。",
+      "files": [],
+      "expectations": [
+        "Accepts summary confirmation without repeated $cogito",
+        "Does not cross into Boundary Gate implicitly",
+        "Provides an explicit $cogito stage-start prompt"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "scope-expansion-requires-explicit-invocation",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 Grilling；assistant 正在等待重試行為的 A/B 決策。目前使用者回覆：『選 B，另外順便重構 payments 模組。』",
+      "expected_output": "處理 B 作為目前答案，但不啟動無關 Maintenance；提示新要求必須另以 $cogito 啟動。",
+      "files": [],
+      "expectations": [
+        "Records the direct answer for the current question",
+        "Does not start the unrelated refactor",
+        "Requires a new explicit $cogito invocation for the added operation"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "explicit-invocation-is-not-approval",
+      "prompt": "對話前文：Cogito 已提出一個 Maintenance Proposal 並等待明確核准。使用者目前只回覆：『$cogito』。",
+      "expected_output": "恢復目前階段但不把 invocation 當成 Proposal 核准；繼續等待明確同意或拒絕。",
+      "files": [],
+      "expectations": [
+        "Does not treat $cogito itself as approval",
+        "Does not execute or commit the Maintenance Proposal",
+        "Requests an explicit approval decision in the same stage"
+      ]
+    },
+    {
+      "id": 19,
+      "scenario": "implementation-to-verification-handoff",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-050 Implementation，最後一個核准 batch 與其 Required Verification 剛成功提交。",
+      "expected_output": "回報 Implementation 結果並停止，不執行完整 AI Verification；提供新的 $cogito AI Verification 啟動句。",
+      "files": [],
+      "expectations": [
+        "Stops after the final implementation commit",
+        "Does not run full AI Verification under implementation authorization",
+        "Provides a new explicit $cogito start for AI Verification"
+      ]
+    },
+    {
+      "id": 20,
+      "scenario": "interruption-requires-explicit-invocation",
+      "prompt": "對話前文：Cogito Grilling 問答曾進行到一半，之後使用者與 assistant 已改談部署問題數輪。使用者現在只說：『回到剛才那題，我選 B。』，沒有 $cogito。",
+      "expected_output": "不隱式恢復先前已中斷的 Grilling；要求使用者以 $cogito 明確恢復該階段。",
+      "files": [],
+      "expectations": [
+        "Recognizes that the immediately preceding prompt is not the old Grilling question",
+        "Does not record B as a governed decision",
+        "Requires explicit $cogito to resume"
+      ]
+    },
+    {
+      "id": 21,
+      "scenario": "grilling-to-boundary-handoff",
+      "prompt": "對話前文：Rolling Adoption 的 Grilling 摘要剛由使用者直接確認，Readiness ready；目前沒有新的 $cogito 訊息。",
+      "expected_output": "停止 Rolling Adoption 的 Grilling，不執行 Boundary Gate 或建立 Proposal；提示以新的 $cogito 訊息啟動 Boundary Gate。",
+      "files": [],
+      "expectations": [
+        "Stops after Grilling confirmation",
+        "Does not run Boundary Gate or produce a Rolling Adoption Proposal",
+        "Requires a new explicit $cogito stage start"
+      ]
+    },
+    {
+      "id": 22,
+      "scenario": "boundary-to-spec-plan-handoff",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-060 Boundary Gate，Gate 剛判定 passed；目前沒有另一則新的 $cogito 訊息。",
+      "expected_output": "回報 Gate basis 與 passed 結果後停止，不建立 Spec／Plan；提示以新的 $cogito 訊息啟動 Spec／Plan 階段。",
+      "files": [],
+      "expectations": [
+        "Stops after Boundary Gate passes",
+        "Does not create or revise Spec or Plan",
+        "Requires a new explicit $cogito start for the Spec/Plan stage"
+      ]
+    },
+    {
+      "id": 23,
+      "scenario": "acceptance-feedback-to-grilling-handoff",
+      "prompt": "對話前文：使用者已在 Human Acceptance 階段回報 changes-requested，feedback 會改變產品 Scope；目前沒有新的 $cogito 訊息。",
+      "expected_output": "保存 feedback 後停止，不修改 Spec、不執行 Grilling 或 Boundary Gate；提示先以新的 $cogito 啟動 Grilling。",
+      "files": [],
+      "expectations": [
+        "Records the actual acceptance feedback",
+        "Does not enter Grilling or Boundary Gate implicitly",
+        "Requires separate explicit starts for Grilling and later Boundary Gate"
+      ]
+    },
+    {
+      "id": 24,
+      "scenario": "verification-to-plan-revision-handoff",
+      "prompt": "對話前文：FS-070 正在 AI Verification；核准 Plan 的 mapping 缺少專案明定的 required release gate，因此必須修訂 Plan。使用者尚未送出新的 $cogito 訊息。",
+      "expected_output": "記錄需要 revision 的原因後停止，不提出或套用 Plan revision；提示以新的 $cogito 訊息啟動 Spec／Plan revision。",
+      "files": [],
+      "expectations": [
+        "Does not revise or reapprove Plan under AI Verification authorization",
+        "Does not add a fix batch in the current stage",
+        "Requires a new explicit $cogito start for Spec/Plan revision"
       ]
     }
   ]

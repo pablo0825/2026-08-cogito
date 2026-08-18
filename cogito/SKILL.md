@@ -1,11 +1,11 @@
 ---
 name: cogito
-description: End-to-end Feature Slice governance for software work in Codex.
+description: Use when a user explicitly invokes $cogito, or directly responds to the immediately preceding unresolved prompt in an uninterrupted active Cogito stage.
 ---
 
 # Cogito
 
-以 canonical requirements 定義產品行為，以 Feature Slice 管理規劃、實作、驗證與驗收。Cogito 只由使用者以 `$cogito` 明確啟動；每則要繼續治理流程的使用者訊息都必須再次包含 `$cogito`。
+以 canonical requirements 定義產品行為，以 Feature Slice 管理規劃、實作、驗證與驗收。Cogito 由使用者以 `$cogito` 明確啟動或恢復一個階段；同一階段內可依下列續接閘門直接回答，不必逐則重複 invocation。
 
 ## 核心模型
 
@@ -20,6 +20,20 @@ description: End-to-end Feature Slice governance for software work in Codex.
 - 使用者授權只涵蓋明確指定的 Proposal、文件 checkpoint、implementation sequence 或驗收結果。完成目前授權後停止；下一階段等待新的明確授權。
 - 保留操作開始前的使用者變更；不擴張核准 Scope、不修改未核准檔案、不把未執行檢查標成通過、不 push、不改寫 Git history。
 
+## 啟動與續接閘門
+
+在讀取專案或執行操作前，先依序判斷：
+
+1. 訊息包含 `$cogito`：明確啟動或恢復該訊息指定的一個階段，再進行操作路由。
+2. 訊息沒有 `$cogito`，但直接回應 active Cogito 階段中上一個未決問題、摘要或 Proposal：只續接該階段。
+3. 其他訊息：不得啟動、恢復或推進 Cogito；依一般對話處理，或在使用者要求新 Cogito 操作時提示明確 invocation。
+
+直接回應包括回答、修正、反問、要求解釋、表示不知道、採用建議，以及對目前明確 Proposal 的核准或拒絕。只有在 immediately preceding unresolved prompt 正在等待該輸入、對話未中斷，且訊息確實包含該輸入時，才可隱式續接目前答案。含糊回覆留在同階段澄清。
+
+若訊息同時直接回答目前問題並要求新操作、擴張無關 Scope 或跨階段，只處理目前答案；不得執行新增部分，並提示以新的 `$cogito` 訊息啟動。改談其他主題後、工作中斷後或另開 Feature Slice／Maintenance，也必須明確恢復。
+
+階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。進入每個新階段都必須有新的 `$cogito` 訊息；階段內的明確「同意／核准」可以授權目前 Proposal。`$cogito` 只啟動階段，不自行構成核准。
+
 ## 開始操作
 
 1. 確認專案根目錄並讀取適用的 `AGENTS.md` 與專案指示。
@@ -33,16 +47,16 @@ description: End-to-end Feature Slice governance for software work in Codex.
 
 | 操作 | 必須完整讀取 |
 |---|---|
-| 已上線能力缺少完整 canonical coverage 或 accepted lineage，需要第一次收編或修改 | [rolling-adoption-workflow.md](references/rolling-adoption-workflow.md)、[grilling-workflow.md](references/grilling-workflow.md)、[spec-plan-workflow.md](references/spec-plan-workflow.md)；產出時再讀 blueprint、Brief、Spec 與 Plan templates |
+| 已上線能力缺少完整 canonical coverage 或 accepted lineage，需要第一次收編或修改 | Grilling 階段讀取 [rolling-adoption-workflow.md](references/rolling-adoption-workflow.md) 與 [grilling-workflow.md](references/grilling-workflow.md)，完成後停止；Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
 | 建立、同步或審查 blueprint；依既有清楚需求調整 Slice；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
-| 建立 Spec、修改產品語義，或 Bug 的正確行為未由有效 Spec 唯一決定 | [grilling-workflow.md](references/grilling-workflow.md)，共同理解確認後接 [spec-plan-workflow.md](references/spec-plan-workflow.md)；產出時再讀 Spec／Plan templates |
+| 建立 Spec、修改產品語義，或 Bug 的正確行為未由有效 Spec 唯一決定 | Grilling 階段只讀 [grilling-workflow.md](references/grilling-workflow.md) 並在確認後停止；新的 Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
 | 核准完全未變更的 draft Spec／Plan | [spec-plan-workflow.md](references/spec-plan-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；不載入 Grilling |
 | 只修訂實作方法、Files、batches、commands 或 Verification Gates，產品 Scope、行為、Acceptance 與 Integration Contract 不變 | [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要 commit 時再讀 [commit-workflow.md](references/commit-workflow.md) |
 | 執行不改產品行為且可用自動化證明的小型 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 開始、繼續或修正已核准 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；建立 Verification 時再讀 [verification-template.md](references/verification-template.md) |
 
-同一 continuous sequence 只需讀取 commit workflow 一次；中斷後以 `$cogito` 恢復時重新讀取。Workflow 只有在實際 sequence handoff 時才載入下一個 workflow，不預載其他分支。
+同一 continuous sequence 只需讀取 commit workflow 一次；中斷後以 `$cogito` 恢復時重新讀取。只有新的 `$cogito` 訊息明確啟動下一階段時才載入其 workflow，不預載或自動 handoff。
 
 ## Feature Slice 與文件識別
 
@@ -77,11 +91,11 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 
 - Shared Understanding confirmation 只確認摘要正確；Boundary Gate pass 只確認 Slice 邊界；兩者都不授權文件修改、實作或 commit。
 - Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，單獨核准不授權實作。
-- 同一訊息明確要求「核准並開始實作」時，Approval commit 後可直接進入已核准 sequence。
-- `continuous` implementation 授權涵蓋尚未完成的已核准 batches、其 Required Verification、完整 AI Verification 與 Verification Documentation；不涵蓋未列入 Plan 的 remediation code。
+- Spec／Plan 核准完成後停止；Implementation 是新階段，必須由新的 `$cogito` 訊息啟動。
+- `continuous` implementation 授權只涵蓋尚未完成的已核准 batches 與各 batch Required Verification；完整 AI Verification 與 Verification Documentation 屬於新的 AI Verification 階段。
 - Rolling Adoption 與 Maintenance 的授權只涵蓋各自 Proposal 列出的 batch、檔案、證明與 commit。
 - 每個步驟以已授權產出完成、必要檢查實際執行、狀態與文件一致為完成條件。
-- 每次等待使用者時，提供包含 `$cogito` 的明確續接句，例如：`請以 $cogito 核准目前的 FS-001 Spec／Plan`。
+- 同階段等待回答、修正、說明或核准時，直接提出要求，不要求 `$cogito`。跨階段或中斷恢復時，提供包含 `$cogito` 的精確啟動句，例如：`請以 $cogito 開始 FS-001 implementation`。
 
 ## 相容性入口
 

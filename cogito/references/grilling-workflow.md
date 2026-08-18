@@ -57,6 +57,8 @@ Rolling Adoption 必須由使用者確認 Current、Target 與 Preserved Behavio
 3. 收到回答後更新決策樹，重新排序或移除剩餘題目，再展開下一題。
 4. 本輪 frontier 處理完畢後，才公布下一輪題目。
 
+使用者直接回答、修正、反問或要求解釋目前題目時，不需要重複 `$cogito`；依主 skill 的續接閘門維持同一 Grilling 階段。
+
 問題優先級依序為：阻塞 Spec 的決策、Slice 邊界、使用者可見行為、Acceptance、必須保留的行為、外部整合與重大風險。
 
 ## 提問、建議與挑戰
@@ -116,12 +118,12 @@ Shared Understanding: awaiting-confirmation | confirmed
 Readiness: ready | blocked
 ```
 
-等待使用者明確確認摘要。修正摘要時直接取代失效結論，不累積 revision history。
+等待使用者明確確認摘要。摘要確認屬於同一 Grilling 階段，不需要重複 `$cogito`；修正摘要時直接取代失效結論，不累積 revision history。
 
-- `confirmed + ready`：要求使用者在下一則訊息包含 `$cogito`，再完整讀取 [spec-plan-workflow.md](spec-plan-workflow.md) 並執行 Feature Slice Boundary Gate；Gate 是產品需求文件 Proposal、Blueprint、Spec 與 Plan 前的下一個步驟。
+- `confirmed + ready`：確認摘要後停止；Boundary Gate 是新階段，要求使用者以新的 `$cogito` 訊息啟動，再完整讀取 [spec-plan-workflow.md](spec-plan-workflow.md) 並執行 Gate。Gate 是產品需求文件 Proposal、Blueprint、Spec 與 Plan 前的下一個步驟。
 - `confirmed + blocked`：共同理解可以正確，但不得建立或修訂 Spec。
 - 摘要確認只表示內容正確，不授權修改 `docs/project/`、Blueprint、Spec 或 Plan，不核准實作，也不授權 commit。
 
-Boundary Gate 通過前不得提出或套用產品需求文件修改，也不得建立或修訂 Blueprint、Spec 或 Plan。Gate 未通過時先提出垂直拆分 Proposal。若後續核准的文件內容超出已確認摘要，原 Gate 結果失效；要求使用者以 `$cogito` 重新進入 Grilling 並重跑 Gate。
+Boundary Gate 通過前不得提出或套用產品需求文件修改，也不得建立或修訂 Blueprint、Spec 或 Plan。Gate 未通過時先提出垂直拆分 Proposal。若後續核准的文件內容超出已確認摘要，原 Gate 結果失效；要求使用者以新的 `$cogito` 訊息重新進入 Grilling，確認後停止，再以另一個新的 `$cogito` 訊息重跑 Boundary Gate。
 
 完整問答留在對話中。Canonical 文件只在取得適用授權後保存目前有效的結論，不建立 Requirement Interview history 文件。

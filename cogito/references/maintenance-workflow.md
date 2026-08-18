@@ -51,7 +51,7 @@ Commit:
 
 Maintenance 不接受 `advisory`、`human` 或 `N/A` 檢查。若原定證據實際上不適用或不足，必須修訂 Proposal 並重新取得核准，不得在執行中自行替換。
 
-等待使用者以包含 `$cogito` 的下一則訊息明確核准。核准涵蓋 Proposal 內的修改、Required Verification 與單一 commit；不另問是否 commit，也不授權 push。模糊回覆不構成核准。
+等待使用者在同一 Maintenance 階段明確核准，不要求重複 `$cogito`。核准涵蓋 Proposal 內的修改、Required Verification 與單一 commit；不另問是否 commit，也不授權 push。模糊回覆不構成核准。
 
 ## 執行
 

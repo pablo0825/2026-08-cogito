@@ -26,8 +26,8 @@ Legacy Source、Observed Behavior 互相衝突，或無法唯一決定應保留�
 
 ## 決策與邊界
 
-1. 完整執行 [grilling-workflow.md](grilling-workflow.md)，只詢問本次 change 的必要產品決策。
-2. 使用者確認共同理解且 Readiness 為 `ready` 後，依 [spec-plan-workflow.md](spec-plan-workflow.md) 執行 Boundary Gate。第一次收編尚無 Slice Brief／canonical Source Reference 時，以 confirmed summary、Legacy Sources 與目標使用者結果判斷。
+1. 完整執行 [grilling-workflow.md](grilling-workflow.md)，只詢問本次 change 的必要產品決策；共同理解確認後停止。
+2. 使用者以新的 `$cogito` 訊息啟動 Boundary Gate 後，才依 [spec-plan-workflow.md](spec-plan-workflow.md) 執行 Gate。第一次收編尚無 Slice Brief／canonical Source Reference 時，以 confirmed summary、Legacy Sources 與目標使用者結果判斷。
 3. Gate 未通過時只提出垂直拆分 Proposal；不建立 `docs/project/`、blueprint、Spec 或 Plan。
 4. Gate 通過後提出 Rolling Adoption Proposal，等待明確核准。
 
