@@ -1,6 +1,6 @@
 # Feature Slice Spec Template
 
-建立 `docs/specs/<ID>/<ID>-<name>-spec.md`。Spec 只定義目前提出或核准的產品行為，不加入 implementation steps、從程式碼推論的需求、revision summary 或 commit record；修訂時直接取代失效內容。`feature` 以本文件為 Authoritative Spec；一般 `change` 填寫 Previous Spec；Rolling Adoption 第一次 `change` 使用 Legacy Baseline、Previous Spec 填 `none`，並以本文件為第一份 Authoritative Spec；`correction` 以舊 Spec 為 Authoritative Spec。只輸出下列第二個 H1 起的文件內容，並將 placeholder 換成實際值。
+建立 `docs/specs/<ID>/<ID>-<name>-spec.md`。`docs/project/` 保存 canonical product requirements；Spec 將其整理成目前 Slice 的可實作、可驗收 contract，不建立衝突的第二套產品規則。不要加入 implementation steps、從程式碼推論的需求、revision summary 或 commit record；修訂時直接取代失效內容。`feature` 以本文件為 Authoritative Spec；一般 `change` 填寫 Previous Spec；Rolling Adoption 第一次 `change` 使用 Legacy Baseline、Previous Spec 填 `none`，並以本文件為第一份 Authoritative Spec；`correction` 以舊 Spec 為 Authoritative Spec。只輸出下列第二個 H1 起的文件內容，並將 placeholder 換成實際值。
 
 # <ID> — <Feature Name> Spec
 
@@ -12,8 +12,11 @@
 - Feature Slice Status: See `docs/blueprint/feature-slice-blueprint.md`
 - Created: `<YYYY-MM-DD>`
 - Last Updated: `<YYYY-MM-DD>`
+- Shared Understanding: `confirmed`
+- Boundary Gate: `passed`
+- Boundary Basis: `Slice Brief and Source References at Draft commit`
 
-Document Status 使用 `draft`、`approved`、`completed`、`superseded`。
+Document Status 使用 `draft`、`approved`、`completed`。accepted Slice 的 completed Spec 是不可變快照；後續 change 的取代關係只記錄於新 Slice、blueprint 與新 Spec。
 
 ## Change Information
 
@@ -79,13 +82,19 @@ Document Status 使用 `draft`、`approved`、`completed`、`superseded`。
 
 ## AI Acceptance
 
-- [ ] <可透過 build、test、lint、typecheck 或自動化操作驗證的條件>
+| ID | Criterion |
+|---|---|
+| AI-001 | <可透過客觀、自動化證據驗證的產品結果> |
 
 ## Human Acceptance
 
 只列必須由人類判斷的高價值產品結果，例如真實環境／外部服務、視覺與文案、互動感受、代表性真實裝置或整體產品期待。不要複製 AI Acceptance 或列出技術測試步驟。
 
-- [ ] <需要人類判斷的產品結果>
+| ID | Criterion |
+|---|---|
+| HA-001 | <需要人類判斷的產品結果> |
+
+Acceptance ID 以本 Feature Slice 為 namespace，使用三位數且保持語義穩定。新增 criterion 使用從未用過的下一個 ID；不重新編號或重用 Git history 中已停止使用的 ID。criterion 語義實質改變時配置新 ID，並讓舊 evidence 失效；純文字修正保留原 ID。
 
 ## Open Questions
 

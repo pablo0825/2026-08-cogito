@@ -4,7 +4,7 @@
 
 ## Maintenance Gate
 
-先確認沒有 active Feature Slice。若已有 active Slice：
+先確認沒有 active Feature Slice。`blocked` 仍占用 active slot。若已有 active Slice：
 
 - 修改是完成該 Slice 所需：納入其核准 Plan／batch；若尚未核准則先修訂 Plan。
 - 修改與該 Slice 無關：停止，等待 active Slice 結束，不平行執行 Maintenance。
@@ -38,26 +38,30 @@ Files:
 - <明確檔案>
 
 Invariants:
-- <不得改變的行為、型別、輸出或契約>
+- M-I01: <不得改變的行為、型別、輸出或契約>
 
 Required Verification:
-- <command or method>
+- M-V01: <command or method> -> M-I01
 
 Commit:
 - <type>(<scope>): <English summary>
 ```
 
-等待使用者明確核准。核准涵蓋 Proposal 內的修改、Required Verification 與單一 commit；不另問是否 commit，也不授權 push。模糊回覆不構成核准。
+每個 Invariant 必須由至少一項能觀察該行為的自動化證據覆蓋；一項檢查可覆蓋多個 Invariant。優先在修改前後執行相同證據，證明沒有回歸；若只能執行修改後檢查，Proposal 必須解釋它為何仍足以證明行為不變。格式、lint、型別或 `git diff --check` 只有在對應 Invariant 本身就是該性質時才算證據；`git diff --check` 單獨不能證明產品或程式行為不變。
+
+Maintenance 不接受 `advisory`、`human` 或 `N/A` 檢查。若原定證據實際上不適用或不足，必須修訂 Proposal 並重新取得核准，不得在執行中自行替換。
+
+等待使用者以包含 `$cogito` 的下一則訊息明確核准。核准涵蓋 Proposal 內的修改、Required Verification 與單一 commit；不另問是否 commit，也不授權 push。模糊回覆不構成核准。
 
 ## 執行
 
-1. 完整讀取 [commit-workflow.md](commit-workflow.md)，檢查 working tree、staged 狀態與目標檔案既有修改。
+1. 檢查 working tree、staged 狀態與目標檔案既有修改；若 Proposal 要求前後對照，先執行修改前證據並保存結果。
 2. 只修改 Proposal 的 Files 與 Purpose，不建立產品文件或 Feature Slice 文件。
-3. 執行全部 Required Verification。Maintenance 不使用 `advisory` 或 `human` Gate。
-4. 任一檢查為 `failed` 或 `not-run` 時不得 commit；範圍內問題可修正後重跑。
-5. 檢查實際 diff、untracked files、`git diff --check`、staged file list、message 與排除項目。
-6. 所有檢查 `passed` 後，只 stage 核准檔案並建立 Proposal 指定的 commit。
-7. 在對話回報 Commit ID、message、檔案、排除項目與每項驗證結果，然後停止。
+3. 執行全部 Required Verification，逐項回報結果與覆蓋的 Invariant。
+4. 任一檢查為 `failed` 或 `not-run` 時不得 commit。只有 Proposal 已明確授權且不擴大 Purpose、Files 或 Invariants 的修正才能繼續；其餘情況停止並提出新版 Proposal。
+5. 完整讀取 [commit-workflow.md](commit-workflow.md)，由它負責 diff、untracked files、`git diff --check`、staging、message 與 commit 的機械性檢查。
+6. 所有 Invariant 都有充分且 `passed` 的自動化證據後，只 stage 核准檔案並建立 Proposal 指定的 commit。
+7. 在對話回報 Commit ID、message、檔案、排除項目，以及每個 Invariant 對應的驗證結果，然後停止。
 
 若需要新增未核准檔案、改變 Invariants、擴大 Purpose、修改產品或 Feature Slice 文件，或發現無法以自動化證明行為不變，立即停止。原 Proposal 不授權重新分類後的工作。
 

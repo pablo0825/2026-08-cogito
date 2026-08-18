@@ -2,9 +2,36 @@
 
 用於建立、修訂與核准指定 Feature Slice 的 Spec 和 Plan。
 
+## 入口分類
+
+先依實際 delta 選擇一條入口，不按使用者訊息中的「核准」或「修改」字樣猜測：
+
+| Delta | 路徑 |
+|---|---|
+| 建立 Spec，或改變 Goal、Scope、Rules、Input／Output、Integration Contract、Acceptance、canonical requirement 或 Slice boundary | 完整 Grilling → Boundary Gate → Spec／Plan revision |
+| 只改變實作方法、主要 Files、batch 分組／順序、commands、Verification checks／Gates／Applicability | Plan revision 與重新核准；產品 contract 不變時不進 Grilling |
+| 只修正文字、格式、失效 reference 或可證明語義不變的 active-document schema | housekeeping；依下方相容性規則決定是否保持核准 |
+| 核准完全未變更的 draft | Pure Approval Gate 通過後直接進入核准；不載入 Grilling |
+
+任何 review、implementation、Verification、Human Acceptance、requirements reconciliation 或 commit 前檢查發現的產品語義 delta 都回到第一條，不在其他 workflow 直接修改 Spec。
+
 ## 進入 Feature Slice
 
 確認 ID 存在、不是 `withdrawn`、沒有其他 active Slice、必要依賴已完成，並讀取 Slice Brief 與 Source Reference。Rolling Adoption 在建立 Slice 前執行 Boundary Gate 時，改用 confirmed summary、Legacy Sources 與目標使用者結果；Adoption Documentation commit 完成後，建立 Spec 前仍必須有 Brief 與 canonical Source Reference。操作必須符合目前狀態；依賴未完成時設為或維持 `blocked`，說明恢復條件後停止。
+
+`blocked` 的阻礙前狀態若為 active，該 Slice 仍占用 active slot；不要把它當成可開始另一個 Slice 或無關 Maintenance 的空位。
+
+## Pure Approval Gate
+
+直接核准 draft 前確認全部條件：
+
+- Spec metadata 記錄 `Shared Understanding: confirmed`、`Boundary Gate: passed` 與 Boundary Basis。
+- Spec／Plan 與相關 Brief、blueprint 自 Draft commit 後沒有未授權變更。
+- Draft commit 之後 canonical sources 與 Brief 沒有產品語義漂移。
+- 使用者核准的是目前 exact draft，且同一訊息沒有附帶產品或技術內容變更。
+- Commit Plan、Files、Verification mappings 與 approvals 仍內部一致。
+
+全部成立時直接進入「核准與複合授權」。任一條件不成立時依入口分類轉入適當 revision；證據不足時停止並指出缺少的核准資格，不以重新 Grilling 代替可查證的 Git／文件事實。
 
 ## Pre-Spec Grilling Gate
 
@@ -42,23 +69,27 @@ Gate 未通過時：
 1. 完整讀取 [spec-template.md](spec-template.md) 與 [plan-template.md](plan-template.md)。
 2. 僅根據需求來源、Slice Brief 與 Grilling 中使用者已確認的目前有效結論建立 Spec；Spec 定義「做什麼」，不分析程式碼。
 3. 完成 Spec 草稿後才分析程式碼、架構、整合點、測試、工具、落差與回歸風險。
-4. 根據 Spec 建立 Plan，定義「怎麼做」、必要檔案、風險、Verification Gates 與 Commit Plan。
+4. 為 Spec 的 `AI-*`／`HA-*` 配置 Slice-scoped stable IDs；根據 Spec 建立 Plan，定義「怎麼做」、必要檔案、風險、`V-*` Verification mappings、`HI-*` Human Integration 與 Commit Plan。
 5. 讓新 Plan 使用 `Implementation Execution: continuous`，並依序列出 Approval、一個以上 implementation batches、Verification 與 Final。
 6. Scope Delta 預設填寫 `None`；只有技術限制需要不同實作表達時才記錄差異，產品 Scope 改變則先修訂 Spec。
-7. 將 Spec／Plan 設為 `draft`，blueprint 設為 `awaiting-approval`，確認需求、Acceptance、檔案與 batch 一致。
+7. 將 Spec／Plan 設為 `draft`，在 Spec 保存 Shared Understanding 與 Boundary Gate provenance，blueprint 設為 `awaiting-approval`，確認 canonical sources、Brief boundary、Acceptance IDs、Verification mappings、檔案與 batch 一致。
 8. 建立 `docs(<ID>): draft <feature> specification` commit，回報 Scope、風險與 Open Questions，然後停止。
 
 每個 implementation batch 回答一個清楚的審查問題並對應一個 commit。不要為增加 commit 數量拆開不可分割的工作。
 
+Plan 建立時可依 verification template 設計未來 Verification schema 與 ID 關係，但不要建立帶有虛構結果或佔位 `not-run` 的 Verification artifact；新 Slice 的 Verification 文件在第一次保存實際驗證證據時建立。active legacy 文件的原子 schema migration 依下方相容性規則處理。
+
 ### Verification Gate 分級
 
-Plan 必須在核准前為每項完整驗證指定 Gate：
+Plan 必須在核准前為每項完整驗證配置 stable `V-*` Check ID、對應的 Acceptance IDs、Gate、Applicability 與 command／method：
 
 - `required`：AI 可重複執行且此 Slice 前進所必需的檢查。依專案與風險選擇適用的 typecheck、核心 unit／integration tests、production build、重要 API contract、資料完整性與安全檢查；不把不適用的固定套餐全部列入。
 - `advisory`：補充信心但不阻擋狀態前進的檢查，例如次要 browser smoke、非關鍵效能、bundle size 或特定瀏覽器補充驗證。
 - `human`：只有人類能可靠確認的真實環境、帳號、OAuth／權限、第三方服務、視覺互動、真實裝置或產品期待；對應 Human Integration 或 Human Acceptance，不用來承接自動化 `not-run`。
 
-`not-applicable` 是有證據支持的執行結果，不是 Gate。因環境、權限、依賴或工具限制無法執行時使用 `not-run`，不得改寫為 `not-applicable`。Batch 的 `Required Verification` 仍是建立該 batch commit 前的必要檢查；完整 Verification Gate 則控制 Slice 能否進入 `awaiting-human`。
+`Applicability` 使用 `always` 或 Plan 核准時即可客觀判定的 predicate。Predicate 只控制 mapped check，不縮小 Spec criterion，不依賴 Agent 可操控的實作選擇；不同 applicability 的 mappings 使用不同 rows。每個 `AI-*` 必須具有足以完成 criterion 的客觀 coverage，原則上至少一個 `required` mapping；每個 `HA-*` 必須具有 `human` mapping。孤立、未知、重複使用或已停止使用的 ID 阻止核准。
+
+`not-applicable` 是 approved predicate 為 false 時的執行結果，不是 Gate。因環境、權限、依賴、期限或工具限制無法執行時使用 `not-run`。Batch 的 `Required Verification` 仍是建立該 batch commit 前的必要檢查；完整 Verification Gate 則控制 Slice 能否進入 `awaiting-human`。
 
 ### 變更類型
 
@@ -72,14 +103,16 @@ Plan 必須在核准前為每項完整驗證指定 Gate：
 
 ## 修訂
 
-Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance，或 Plan 的 Scope、主要方式、核心檔案、Verification check、Gate、command／method 發生實質變更時：
+Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contract 或 Acceptance 發生實質變更時，原 Shared Understanding 與 Boundary Gate 失效；先回到 Grilling 與 Boundary Gate，再依新的明確授權修訂 Spec／Plan。
 
-1. 同步 Spec 與 Plan。
-2. 撤銷核准並設為 `draft`。
+產品 contract 不變，而 Plan 的主要方式、核心檔案、Verification check、Gate、Applicability 或 command／method 發生實質變更時：
+
+1. 更新 Plan 與受影響 mappings，不重寫 Spec criteria。
+2. 將 Plan 與 Commit Plan Approval 設為 `pending`；需要 Scope Delta 時記錄技術表達差異，產品 Scope delta 改走 Grilling。
 3. 將 blueprint 設為 `awaiting-approval`。
-4. 若使用者已授權套用修訂，建立 `docs(<ID>): revise <feature> specification` commit 後停止。
+4. 若使用者已授權套用修訂，建立 `docs(<ID>): revise <feature> specification` commit，然後提示以 `$cogito 核准 <ID> Plan` 繼續。
 
-純文字修正、證據補充與 checkbox 更新不撤銷核准。移除已完成並提交的 Commit Plan row 是 housekeeping，不撤銷核准；只要改變尚未完成 batch 的分組、順序、Files、Required Verification 或 message，才將 Commit Plan Approval 設為 `pending`。不得藉此隱藏 Scope 變更。
+純文字修正、證據補充與移除已完成 Commit Plan row 不撤銷核准。active Spec／Plan／目前 Verification 可在已授權 Documentation Batch 中原子補上 ID、exact mappings 與 `Applicability: always`，但只有文字、Gate、commands、results、evidence 與 coverage 全部語義相同且 mapping 無歧義時才是 housekeeping。任何推論、合併／拆分 criterion、coverage 改變或 predicate 新增都屬實質 revision。accepted snapshots 不做 schema migration。
 
 直接更新 canonical sections：Spec 只呈現目前提出或核准的產品行為；Plan 只呈現目前有效的實作方式與尚未完成的工作。移除 revision summary、已完成 batch、execution result、commit ID 與被取代的 assessment。詳細歷史由 Git 保存；文件只保留模板定義的語義 lineage 欄位。
 
@@ -91,9 +124,11 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
 
 1. 將 Spec／Plan 與 blueprint 設為 `approved`。
 2. 將 Commit Plan Approval 設為 `approved`。
-3. `change` 在舊 Spec 加入 `Supersession Pending`，維持舊 Spec `completed`；`correction` 不修改原 Spec。
+3. `change` 只在新 Slice、blueprint 與新 Spec 保存 `Revises`／Previous Spec lineage；`correction` 只在新 Slice 保存 `Corrects`／Authoritative Spec lineage。兩者都不修改舊 accepted Spec。
 4. 建立 `docs(<ID>): approve <feature> specification` commit。
 5. 若使用者只核准，回報 Commit ID 並詢問是否開始實作，然後停止。
 6. 若使用者同一訊息明確要求核准並開始實作，Approval commit 後直接依 implementation workflow 執行，不再次詢問。
 
 完成條件是文件狀態、Commit Plan 核准、blueprint 狀態與 Approval commit 全部一致。
+
+停止時使用明確續接句：`請以 $cogito 開始 <ID> implementation`。若同一訊息已明確核准並開始，直接依 implementation workflow 執行，不再次詢問。

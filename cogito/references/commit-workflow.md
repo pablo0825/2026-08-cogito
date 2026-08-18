@@ -53,12 +53,7 @@ Maintenance 使用 `refactor`、`test` 或 `chore` 等符合實際目的的 type
 
 ## Maintenance commit
 
-Maintenance Proposal 必須列出 Purpose、Files、Invariants、Required Verification 與 message。核准後依 [maintenance-workflow.md](maintenance-workflow.md) 執行一個 commit，不建立或更新 Plan row。
-
-- 所有 Required Verification 必須 `passed`；`failed` 或 `not-run` 都阻止 commit。
-- 只 stage Proposal 的 Files，不納入產品文件、Feature Slice 文件或無關變更。
-- 實際 diff 超出 Purpose、Files 或 Invariants 時停止，不以 Maintenance 核准擴張 Scope。
-- commit 後回報結果並停止；不進入 AI Verification、Human Acceptance 或其他 sequence。
+Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [maintenance-workflow.md](maintenance-workflow.md) 唯一定義。本文件只負責 working-tree 邊界、exact staging、staged diff、message 與 commit creation。核准後建立一個 commit，不建立或更新 Plan row；commit 後回報並停止。
 
 ## 建立 commit
 
@@ -68,8 +63,8 @@ Maintenance Proposal 必須列出 Purpose、Files、Invariants、Required Verifi
 2. 檢查 working tree、實際 diff、untracked files 與 staged 狀態。
 3. 確認 Files、Purpose、Scope、message 與 batch 順序符合授權。
 4. 執行適用的 diff 檢查，包括 `git diff --check`。
-5. 若本 batch 對應 Plan checkpoint，從 Commit Plan 移除該 row；只允許這項 housekeeping，不改變其他尚未完成 row。Plan 視為本 batch 的授權文件之一，即使 Files 欄未重複列出。
-6. 只 stage 本 batch 的明確檔案與上述 Plan housekeeping。
+5. 若本 batch 完成 Plan checkpoint，從 Commit Plan 移除該 row；阻礙性 Verification Documentation 只保存目前 evidence／state，保留 Verification row。第一個 implementation commit 同步保存 blueprint `approved -> in-progress`。這些是已核准 lifecycle housekeeping，不改變其他尚未完成 row。
+6. 只 stage 本 batch 的明確檔案、Plan housekeeping，以及上一步允許的 blueprint lifecycle housekeeping。
 7. 檢查 staged file list、staged diff 與排除項目。
 8. 使用核准 message 建立 commit。
 9. 在對話回報 Commit ID、message、檔案、排除項目與驗證結果；不寫入 Spec、Plan 或 Verification。
@@ -92,14 +87,14 @@ Maintenance Proposal 必須列出 Purpose、Files、Invariants、Required Verifi
 | Final | `docs(<ID>): record <feature> acceptance` | completed 文件、accepted 狀態與必要 lineage；回報後停止 |
 | Acceptance Feedback | `docs(<ID>): record <feature> acceptance feedback` | failed／changes-requested 的實際結果與狀態；回報後停止 |
 
-建立 checkpoint commit 前先從 Plan 移除對應的 Approval、Verification 或 Final row。這是既有授權的完成 housekeeping，不建立額外 commit，也不將 Commit Plan Approval 改為 `pending`。
+建立完成的 checkpoint commit 前，從 Plan 移除對應的 Approval、Verification 或 Final row。Verification 有 `required: failed/not-run` 或未完成 `AI-*` closure 時屬於 attempt／blocker record，不完成 checkpoint，也不移除 row。合法 housekeeping 不建立額外 commit，也不將 Commit Plan Approval 改為 `pending`。
 
-已核准但尚未提交的 `docs/project/` 變更，只納入最接近且已授權的 Documentation Batch，不重複提交。Approval 後才核准需求變更時停止實作，更新需求、Spec／Plan 與 Commit Plan approval，建立新的 requirements revision commit 後等待重新核准。
+已核准但尚未提交的 `docs/project/` 變更，只納入最接近且已授權的 Documentation Batch，不重複提交。Approval 後出現新的產品語義 delta 時停止實作；下一輪以 `$cogito` 回到 Grilling 與 Boundary Gate，取得適用的文件 revision 授權後才更新 requirements、Spec／Plan 與 Commit Plan。Commit workflow 不直接建立未經該流程核准的 requirements revision。
 
 ## Commit Plan 變更
 
 在同一 commit 移除完成的 checkpoint row 不算 Commit Plan 變更。若改變任何尚未完成 batch 的分組、順序、Files、Required Verification 或 message，更新 Plan 並將 Commit Plan Approval 設為 `pending`，等待重新核准後才執行受影響 batch。
 
-若同時改變 Scope、主要實作方式、核心檔案、Integration Contract 或 Acceptance，撤銷 Spec／Plan 核准並回到 `awaiting-approval`。已提交實作需要修正時新增 `fix` batch，不改寫歷史。
+若同時改變 Scope、主要實作方式、核心檔案、Integration Contract 或 Acceptance，撤銷 Spec／Plan 核准並回到 `awaiting-approval`。已提交實作需要修正時先提出 Plan revision proposal；取得明確 revision 授權後新增 `fix` batch，不改寫歷史。
 
 Git history 是 Commit ID、已完成 batches、過去修訂、被取代驗證結果、已解決 failure 與詳細變更歷史的權威來源。Spec、Plan 與 Verification 不保存 commit ID、execution result、revision summary 或其他形式的 commit history；當次 commit 資訊只在對話回報。

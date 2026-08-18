@@ -4,9 +4,9 @@
 
 ## 開始條件
 
-確認 blueprint、Spec、Plan 與 Commit Plan 皆已核准，工作樹沒有無法安全分離的重疊變更，然後將 blueprint 設為 `in-progress`。完整讀取 [commit-workflow.md](commit-workflow.md) 一次；同一 continuous sequence 的每個 batch 不重讀，只有中斷恢復時重新讀取。
+確認 blueprint、Spec、Plan 與 Commit Plan 皆已核准，工作樹沒有無法安全分離的重疊變更。完整讀取 [commit-workflow.md](commit-workflow.md) 一次；同一 continuous sequence 的每個 batch 不重讀，只有中斷恢復時以 `$cogito` 重新讀取。Blueprint 的 `approved -> in-progress` 在第一個成功的 implementation commit 中作為 lifecycle housekeeping 保存；第一個 commit 前中斷時，以 working tree 識別未提交工作，不留下單獨的狀態修改。
 
-使用者明確要求開始 `continuous` Plan 時，授權涵蓋所有尚未完成的 implementation batches、各 batch Required Verification、完整 AI Verification 與 Verification Documentation commit。依 I1、I2、…、In 執行，不在 batches 間詢問。
+使用者明確要求開始 `continuous` Plan 時，授權涵蓋所有尚未完成的已核准 implementation batches、各 batch Required Verification、完整 AI Verification 與 Verification Documentation commit。授權不涵蓋 Plan 未列出的 remediation code；完整驗證發現程式問題時，先提出 Plan revision proposal，取得 revision 授權後才新增 fix batch，並重新核准。依 I1、I2、…、In 執行，不在 batches 間詢問。
 
 ## Batch 執行
 
@@ -15,7 +15,7 @@
 1. 檢查 working tree 與目前 batch 的核准 Files。
 2. 只實作 Purpose 與 Scope 需要的變更。
 3. 執行該 batch 的最小充分 Required Verification。
-4. 檢查 diff、message、檔案與排除項目後建立一個 commit。
+4. 檢查 diff、message、檔案與排除項目後建立一個 commit；第一個 implementation commit 同步包含 blueprint `in-progress` lifecycle housekeeping。
 5. 依 commit workflow 在同一 commit 從 Plan 移除已完成 batch；只在對話回報 Commit ID 與結果，不在 Plan 或 Verification 建立 execution record。
 6. 直接進入 Plan 中下一個已核准 batch。
 
@@ -43,6 +43,6 @@ Batch Required Verification 是該 commit 的必要條件；結果為 `failed` �
 
 ## Sequence 完成
 
-最後一個 implementation commit 完成後直接進入完整 AI Verification。依核准 Plan 的 Verification Gates 執行 `required` 與 `advisory` checks；`human` 留給 Human Integration／Acceptance。驗證開始後不得依 `failed` 或 `not-run` 結果自行降低 Gate。發現 Plan 遺漏專案明定的 release gate 時先修訂並重新核准 Plan；額外的非必要補充檢查記為 `advisory`。
+最後一個 implementation commit 完成後完整讀取 [verification-acceptance-workflow.md](verification-acceptance-workflow.md) 並直接進入完整 AI Verification。依核准 Plan 的 `V-*` mappings 執行 `required` 與 `advisory` checks；`human` 留給 Human Integration／Acceptance。驗證開始後維持核准的 mapping、Gate 與 Applicability；發現 Plan 遺漏專案明定的 release gate 時，先提出 revision proposal，取得授權後修訂並重新核准 Plan；額外的非必要補充檢查記為 `advisory`。
 
 缺少 `Implementation Execution` 的 legacy `per-batch` Plan 維持每批明確授權，commit 後停止。恢復時以 Plan 中第一個尚未完成 batch 為下一步，並用 Git history 確認已提交工作，不重做已提交 batch。

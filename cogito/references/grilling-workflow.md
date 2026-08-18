@@ -118,10 +118,10 @@ Readiness: ready | blocked
 
 等待使用者明確確認摘要。修正摘要時直接取代失效結論，不累積 revision history。
 
-- `confirmed + ready`：立即完整讀取 [spec-plan-workflow.md](spec-plan-workflow.md) 並執行 Feature Slice Boundary Gate；Gate 是產品需求文件 Proposal、Blueprint、Spec 與 Plan 前的下一個步驟。
+- `confirmed + ready`：要求使用者在下一則訊息包含 `$cogito`，再完整讀取 [spec-plan-workflow.md](spec-plan-workflow.md) 並執行 Feature Slice Boundary Gate；Gate 是產品需求文件 Proposal、Blueprint、Spec 與 Plan 前的下一個步驟。
 - `confirmed + blocked`：共同理解可以正確，但不得建立或修訂 Spec。
 - 摘要確認只表示內容正確，不授權修改 `docs/project/`、Blueprint、Spec 或 Plan，不核准實作，也不授權 commit。
 
-Boundary Gate 通過前不得提出或套用產品需求文件修改，也不得建立或修訂 Blueprint、Spec 或 Plan。Gate 未通過時先提出垂直拆分 Proposal。若後續核准的文件內容超出已確認摘要，原 Gate 結果失效，回到 Grilling 並重新執行 Gate。
+Boundary Gate 通過前不得提出或套用產品需求文件修改，也不得建立或修訂 Blueprint、Spec 或 Plan。Gate 未通過時先提出垂直拆分 Proposal。若後續核准的文件內容超出已確認摘要，原 Gate 結果失效；要求使用者以 `$cogito` 重新進入 Grilling 並重跑 Gate。
 
 完整問答留在對話中。Canonical 文件只在取得適用授權後保存目前有效的結論，不建立 Requirement Interview history 文件。

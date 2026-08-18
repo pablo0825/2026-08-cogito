@@ -1,0 +1,142 @@
+{
+  "skill_name": "cogito",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "在 Codex 中送出一般開發請求：『請幫我修正登入頁面的型別錯誤』，不要明確提及或呼叫 $cogito。檢查 Cogito 是否會被隱式啟動。",
+      "expected_output": "Codex 不應隱式啟動 Cogito；此案例以 agents/openai.yaml policy 與實際 host smoke test 判定。",
+      "files": [],
+      "expectations": [
+        "agents/openai.yaml sets policy.allow_implicit_invocation to false",
+        "Explicit $cogito invocation remains available"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "$cogito 我核准目前的 FS-012 Spec 和 Plan。已知 draft 自 Draft commit 後未變更，Shared Understanding 已 confirmed，Boundary Gate 已 passed，canonical sources 與 Brief 沒有語義漂移。請處理這次要求。",
+      "expected_output": "直接走 Spec/Plan approval，不重跑 Grilling，也不自行開始 implementation。",
+      "files": [],
+      "expectations": [
+        "Selects the unchanged-draft approval branch",
+        "Does not load or restart Grilling",
+        "Creates only the authorized Approval checkpoint and then stops",
+        "Requests the next continuation using explicit $cogito wording"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "$cogito 我同意 FS-012 的產品需求，但請把 Plan 的 browser verification 從 Playwright 改成現有 integration test；Scope、行為、Acceptance 與 Integration Contract 都不變。",
+      "expected_output": "視為 technical Plan-only revision，修訂 Plan 並重新核准，不進入 Grilling。",
+      "files": [],
+      "expectations": [
+        "Classifies the request as a technical Plan-only revision",
+        "Does not restart Grilling or Boundary Gate",
+        "Marks the affected Plan or Commit Plan approval pending as required",
+        "Does not implement before reapproval"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "$cogito 我核准 FS-012，但把登入失敗鎖定門檻從 5 次改成 3 次。",
+      "expected_output": "辨識產品語義變更，使原共同理解與 Boundary Gate 失效，回到 Grilling。",
+      "files": [],
+      "expectations": [
+        "Does not treat the message as pure approval",
+        "Returns to Grilling and then Boundary Gate",
+        "Does not directly edit or approve Spec, Plan, or implementation"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "$cogito 執行 FS-020 AI Verification。Plan 的 V-002 是 required，Applicability 為『only when schema changes』；本 Slice 的 diff 與 approved Files 證明 schema 沒有變更。",
+      "expected_output": "V-002 可依預先核准且客觀為假的 predicate 記為 not-applicable，同時保留 Acceptance closure。",
+      "files": [],
+      "expectations": [
+        "Records V-002 as not-applicable with the approved predicate and objective evidence",
+        "Does not mark mapped Acceptance satisfied unless other sufficient evidence exists",
+        "Rechecks applicability before final acceptance if the relevant state can change"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "$cogito 執行 FS-020 AI Verification。Plan 的 V-001 是 required 且 Applicability 為 always，但測試服務目前無法連線。",
+      "expected_output": "V-001 記為 not-run 並阻止 awaiting-human，不得改寫成 not-applicable。",
+      "files": [],
+      "expectations": [
+        "Records V-001 as not-run rather than not-applicable",
+        "Prevents transition to awaiting-human",
+        "Keeps the Verification checkpoint pending"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "$cogito 為 FS-030 建立 Plan 與 Verification schema。假設 canonical requirements、blueprint、Slice Brief、Grilling、Boundary Gate 與 Spec 都已有效完成，FS-030 是唯一 active Slice，且這次只需設計已授權文件的 schema，不需重新確認前置條件。AI-001 需要 unit 與 integration checks；V-003 同時支持 AI-001 與 AI-002；HA-001 與 HA-002 可由同一個高價值人工場景涵蓋。",
+      "expected_output": "以 Slice-scoped Acceptance IDs、V-* checks 與兩層 Verification evidence 表達多對多關係。",
+      "files": [],
+      "expectations": [
+        "Plan rows use V-* Check IDs and Acceptance ID sets",
+        "Verification records execution by Check ID and closure by Acceptance ID",
+        "Every AI-* has sufficient required objective coverage",
+        "Every HA-* is covered without asking humans to rerun AI-* checks"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "$cogito 繼續一個已核准的 active legacy Slice。舊 Spec 沒有 Acceptance IDs，Plan 沒有 Gate 或 Applicability。這次只需要將目前有效文件遷移到新 schema，文字、commands、Gate 意義與 Scope 都不能改變。",
+      "expected_output": "執行原子且純結構的 active-document migration，保留核准；缺少 Applicability 視為 always。",
+      "files": [],
+      "expectations": [
+        "Migrates active Spec, Plan, and current Verification atomically when all mappings are unambiguous",
+        "Treats missing Applicability as always and missing Gate by the legacy fallback",
+        "Preserves approval only when semantics and coverage are identical",
+        "Stops for revision instead of guessing when mapping is ambiguous"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "$cogito 建立一個 correction Slice，Authoritative Spec 是舊版且已 accepted、沒有 Acceptance IDs。請為 correction 建立新文件。",
+      "expected_output": "保留舊 accepted snapshot，不為補 ID 而改寫；新 active Slice 使用自己的 ID namespace。",
+      "files": [],
+      "expectations": [
+        "Does not modify the accepted legacy Spec",
+        "Creates IDs only in the new active Slice namespace",
+        "References the legacy authoritative behavior by path or section"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "$cogito 執行完整 AI Verification。所有 implementation batches 已提交，但 required V-001 failed，修正需要改程式碼；Plan 目前沒有 fix batch。",
+      "expected_output": "記錄失敗並保留 Verification row；提出 fix batch 並等待重新核准，不直接修改程式碼。",
+      "files": [],
+      "expectations": [
+        "Records current failure evidence and blocked or non-advancing state",
+        "Keeps the Verification checkpoint row pending",
+        "Does not edit code under verification authorization",
+        "Requires an approved fix batch and a later explicit $cogito start"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "$cogito 請重構 payments 模組。FS-040 因缺少外部測試帳號而 blocked，阻礙前狀態是 in-progress；這次重構與 FS-040 無關。",
+      "expected_output": "blocked Slice 保留 active lock，因此停止無關 Maintenance。",
+      "files": [],
+      "expectations": [
+        "Treats blocked with pre-block active state as occupying the active slot",
+        "Does not start unrelated Maintenance",
+        "Reports the recovery condition or required disposition of FS-040"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "$cogito 提議將 auth 內部 identifier rename。Proposal 的 Invariant 是登入成功、失敗與錯誤輸出不變；目前只列 git diff --check 作為 Required Verification。",
+      "expected_output": "拒絕把格式檢查當成行為證明，要求每項 Invariant 對應充分的自動化證據，最好修改前後使用相同檢查。",
+      "files": [],
+      "expectations": [
+        "Does not accept git diff --check as sufficient behavior proof",
+        "Maps every Maintenance invariant to behavior-relevant automated evidence",
+        "Keeps Maintenance limited to one purpose and one commit",
+        "Requests Proposal approval continuation using explicit $cogito wording"
+      ]
+    }
+  ]
+}

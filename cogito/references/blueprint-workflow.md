@@ -22,7 +22,7 @@
 4. 建立主 blueprint 與每個 Slice Brief。
 5. 確認每項需求有歸屬或 Open Question、每個 Source Reference 有效、ID 唯一且文件連結正確。
 6. 依 commit workflow 建立 `docs(blueprint): create feature slice blueprint` commit。
-7. 回報 Commit ID、Slice 摘要與 Open Questions，然後停止。
+7. 回報 Commit ID、Slice 摘要與 Open Questions，提供下一步的精確 `$cogito` 指令，然後停止。
 
 ## Rolling Adoption
 
@@ -57,7 +57,7 @@
 
 等待明確核准後只修改核准內容，重新 reconcile，更新 Source Reference、Slice Brief 與目前 Slice 已存在的 Spec／Plan，並確認所有文件一致。
 
-實際核准內容若超出已確認摘要或改變已通過的 Slice 邊界，停止文件修改，讓原 Boundary Gate 結果失效並回到 Grilling。
+實際核准內容若超出已確認摘要或改變已通過的 Slice 邊界，停止文件修改，讓原 Boundary Gate 結果失效，並要求使用者以 `$cogito` 回到 Grilling。
 
 - 未 `accepted`：保留 ID；實質變更時將既有 Spec／Plan 改為 `draft`，blueprint 改為 `awaiting-approval`。
 - 已 `accepted`：保留歷史，建立新 ID 的 `change` Slice。
@@ -94,4 +94,4 @@
 
 只對 `proposed` Slice 直接調整結構。已有 Spec／Plan 時依實質變更規則撤銷核准；已 `accepted` 時保留歷史並在需求改變時建立 `change` Slice。
 
-更新主索引與受影響 Brief；詳細 lineage 只放在 Brief 的簡短 Blueprint Revision 區段。確認所有受影響文件一致後建立核准的 Blueprint Revision commit，回報 Commit ID 並停止。
+更新主索引與受影響 Brief；詳細 lineage 只放在 Brief 的簡短 Blueprint Revision 區段。確認所有受影響文件一致後建立核准的 Blueprint Revision commit，回報 Commit ID、提供下一步的精確 `$cogito` 指令並停止。

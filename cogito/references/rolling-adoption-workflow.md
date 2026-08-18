@@ -80,6 +80,6 @@ Documentation Batch:
 
 blueprint 不存在時，以 [blueprint-template.md](blueprint-template.md) 建立 `Adoption Mode: rolling`、`Coverage: partial` 的最小入口；存在時只新增本次能力。Feature Slice Index 不是完整產品清單，未列出不代表功能不存在。
 
-建立本次 `proposed` Slice 與 Brief；Brief 的 Legacy Baseline 記錄 sources 與使用者確認，不重建歷史 Spec／Plan／Verification。依 [commit-workflow.md](commit-workflow.md) 建立 Adoption Documentation commit，回報後停止。使用者之後明確要求建立 Spec／Plan時，才進入一般 workflow。
+建立本次 `proposed` Slice 與 Brief；Brief 的 Legacy Baseline 記錄 sources 與使用者確認，不重建歷史 Spec／Plan／Verification。依 [commit-workflow.md](commit-workflow.md) 建立 Adoption Documentation commit，回報後提供建立 Spec／Plan 的精確 `$cogito` 指令並停止。只有使用者以包含 `$cogito` 的後續訊息明確要求時，才進入一般 workflow。
 
 本次 Slice accepted 後，相同行為的後續 change 使用正常 `Revises`，不再使用新的 Legacy Baseline。blueprint Coverage 只有在所有產品能力確實完成收編並經使用者確認後才能改為 `complete`。
