@@ -284,6 +284,146 @@
         "Does not add a fix batch in the current stage",
         "Requires a new explicit $cogito start for Spec/Plan revision"
       ]
+    },
+    {
+      "id": 25,
+      "scenario": "grilling-user-controls-question-scope",
+      "prompt": "$cogito 我要為『通知中心』功能建立 Spec，正在 Grilling。AI 剛列出本輪 frontier 的 5 個候選問題（通知分類、已讀狀態同步機制、推播管道、保留天數、跨裝置一致性），還沒展開任何一題。使用者回覆：『只問關鍵問題就好，其他你自己決定。』",
+      "expected_output": "只保留會阻塞 Spec 或有重大風險且沒有安全預設的 ask-now 問題，其餘轉為 default 並在共同理解摘要揭露採用的建議與理由；不逐題詢問已轉為 default 的問題，也不因此略過真正的阻塞問題。",
+      "files": [],
+      "expectations": [
+        "Reclassifies non-blocking questions as default rather than skipping them silently or continuing to ask them one by one",
+        "Keeps genuinely blocking ask-now questions with no safe default in the active queue",
+        "Shared Understanding summary discloses which answers came from Recommended Default",
+        "Does not treat the control command as ending Grilling while blocking questions remain unresolved"
+      ]
+    },
+    {
+      "id": 26,
+      "scenario": "boundary-gate-fails-multi-outcome",
+      "prompt": "$cogito 我要建立 Spec：『使用者可以手動匯出報表，同時也能訂閱每週自動寄送報表』。Grilling 已完成，Shared Understanding: confirmed，Readiness: ready。使用者以新的 $cogito 訊息啟動 Boundary Gate。",
+      "expected_output": "Boundary Gate 判定此需求包含兩個各自可獨立驗收的使用者結果（手動匯出、自動排程訂閱），依五問判準視為未通過；不建立或修訂 Spec、Plan 或 docs/project/，改為完整讀取 blueprint-workflow.md 的 Blueprint Slice Revision 規則，提出垂直拆分 Proposal。",
+      "files": [],
+      "expectations": [
+        "Evaluates the five Boundary Gate signals using existing evidence before asking the user anything",
+        "Does not create or revise Spec, Plan, or docs/project/ content",
+        "Reads blueprint-workflow.md Blueprint Slice Revision rules before proposing a split",
+        "Proposes at least two independently-acceptable vertical candidate slices, each with a one-sentence outcome",
+        "Assigns every requirement from the original scope to a candidate slice, an explicit exclusion, or an Open Question",
+        "Waits for explicit user approval before applying the split"
+      ]
+    },
+    {
+      "id": 27,
+      "scenario": "blueprint-split-approval-and-sequential-slices",
+      "prompt": "對話前文：FS-080『報表匯出與訂閱』的 Boundary Gate 判定未通過並提出垂直拆分 Proposal：子 Slice A『手動匯出報表』（最接近原 Goal）與子 Slice B『訂閱每週自動寄送報表』（新 ID）。使用者在同一階段明確核准此拆分 Proposal。",
+      "expected_output": "子 Slice A 保留原 ID FS-080 並設為 proposed，子 Slice B 使用全新未用過的 ID 並設為 proposed；更新主 blueprint 索引與兩者的 Slice Brief，建立 Blueprint Revision commit 後回報並停止。不自動對任一子 Slice 開始 Grilling、Boundary Gate、Spec 或 Implementation，也不同時把兩個子 Slice 都設為 active；使用者之後須以新的 $cogito 訊息個別指定要推進哪個子 Slice，同一時間只有一個能進入 active 狀態。",
+      "files": [],
+      "expectations": [
+        "Slice A retains the original ID FS-080 and is set to proposed",
+        "Slice B is assigned a new unused ID and is set to proposed",
+        "Updates the main blueprint index and both affected Slice Briefs",
+        "Creates a single Blueprint Revision commit, reports the Commit ID, and then stops",
+        "Does not implicitly start Grilling, Boundary Gate, Spec, or Implementation for either child slice",
+        "Does not mark more than one child slice as active at the same time",
+        "Requires a separate new $cogito message to advance each child slice, one at a time"
+      ]
+    },
+    {
+      "id": 28,
+      "scenario": "commit-working-tree-guard-stops",
+      "prompt": "$cogito 我核准 FS-090 的第一個 implementation batch，請開始執行。已知目前工作目錄已有 3 個檔案是既存 staged changes，內容與這次 batch 無關；使用者訊息完全沒有提到這些 staged changes。",
+      "expected_output": "偵測到既存 staged changes 後停止，不建立 commit，也不清除、覆蓋或納入這些變更；說明發現的 staged 狀態並等待使用者決定如何處理。",
+      "files": [],
+      "expectations": [
+        "Detects pre-existing staged changes before starting the authorized batch",
+        "Stops instead of creating a commit that would mix in unrelated staged changes",
+        "Does not stage, discard, or silently include the pre-existing staged changes",
+        "Only proceeds to include the existing changes if the user explicitly asks to adopt them"
+      ]
+    },
+    {
+      "id": 29,
+      "scenario": "verification-gate-blocks-on-orphan-id",
+      "prompt": "$cogito 我核准 FS-095 的 Spec 和 Plan draft。Plan 裡有一個 V-004 對照到 AI-006，但 Spec 的 Acceptance 清單只到 AI-005，沒有 AI-006 這個 ID。",
+      "expected_output": "偵測到 V-004 對照一個 Spec 中不存在的孤立 Acceptance ID，判定 Verification Gate 不完整，拒絕核准並要求先修正 mapping，而不是照常核准。",
+      "files": [],
+      "expectations": [
+        "Identifies AI-006 as an orphan or unknown Acceptance ID not present in the Spec",
+        "Blocks the Spec/Plan approval instead of approving with the inconsistent mapping",
+        "Requests correction of the mapping before re-attempting approval",
+        "Does not silently drop, renumber, or auto-correct the mismatched ID"
+      ]
+    },
+    {
+      "id": 30,
+      "scenario": "human-acceptance-full-checklist-passes",
+      "prompt": "$cogito FS-100 的 Human Acceptance 全部場景使用者都回報 passed。已知所有 required AI Verification 為 passed，所有 AI-* 為 satisfied，所有 HI-* 為 passed 或合法 not-applicable，所有 HA-* 已由使用者確認 passed。",
+      "expected_output": "重新評估 Applicability 並確認四類條件（required checks、AI-* closure、HI-* 結果、HA-* 確認）全部成立後，才把 Spec／Plan 設為 completed、Slice 設為 accepted，並建立 Final Documentation commit。",
+      "files": [],
+      "expectations": [
+        "Re-evaluates Applicability before transitioning instead of assuming prior state still holds",
+        "Confirms all four condition categories (required checks, AI-* closure, HI-* results, HA-* confirmations) before accepting",
+        "Sets Spec/Plan to completed and the Slice to accepted only after all conditions are confirmed",
+        "Creates a Final Documentation commit reporting Commit ID, AI Verification, and Human Acceptance results"
+      ]
+    },
+    {
+      "id": 31,
+      "scenario": "blueprint-merge-ambiguous-id",
+      "prompt": "$cogito 我要合併 FS-050『匯出報表』與 FS-051『匯出報表排程』為一個 Slice，兩者都還是 proposed、都還沒有 Spec。原因是它們實際上是同一個不可分割的使用者結果。",
+      "expected_output": "提出合併 Proposal，但因兩個候選 ID 同樣能代表合併後的新 Goal、無法客觀判定該保留哪一個，交由使用者決定要保留哪個 ID，不自行選擇。",
+      "files": [],
+      "expectations": [
+        "Proposes the merge with an updated Goal, Included/Excluded, and Acceptance",
+        "Recognizes the ID retention question is not objectively determinable from either slice's goal",
+        "Asks the user which ID to keep instead of picking one unilaterally",
+        "Does not apply the merge or create a commit before the user decides the ID"
+      ]
+    },
+    {
+      "id": 32,
+      "scenario": "blueprint-withdraw-unimplemented-slice",
+      "prompt": "$cogito 我們決定不再做 FS-060『匯出報表排程』，Slice 目前狀態是 proposed，還沒有 Spec 也還沒有任何實作。請停止規劃。",
+      "expected_output": "先提出 Blueprint Slice Revision Proposal（原因、修改前後結構、文件清單與 proposed commit），不直接修改任何文件；使用者明確核准後，才將 FS-060 設為 withdrawn，保留 ID 與既有文件（Brief）不刪除，更新 blueprint 索引並建立對應的 commit。",
+      "files": [],
+      "expectations": [
+        "Proposes the withdrawal before modifying any document, rather than applying it immediately",
+        "Waits for explicit user approval before setting FS-060 to withdrawn",
+        "Sets FS-060 status to withdrawn rather than deleting the Slice or its ID",
+        "Keeps existing documents such as the Brief in place as a retained record",
+        "Updates the main blueprint index to reflect the withdrawn status",
+        "Does not reuse or free the FS-060 ID for a future unrelated Slice"
+      ]
+    },
+    {
+      "id": 33,
+      "scenario": "grilling-bug-triage-misclassification-trap",
+      "prompt": "$cogito 這是一個 Bug：使用者回報『匯出報表時，如果報表超過 10000 筆資料就會逾時失敗』。使用者說：『這算 bug 吧，你直接照 correction 修就好，不用再問我。』目前沒有任何 Spec 提到大量資料匯出的逾時或分頁行為。",
+      "expected_output": "不因使用者稱之為 bug 或要求『不用再問』就直接當成 correction 處理；因沒有有效 Spec 唯一定義大量資料匯出的正確行為，判定需要聚焦 Grilling 取得產品決策，而不是自行決定。",
+      "files": [],
+      "expectations": [
+        "Does not classify the report as correction solely because the user calls it a bug",
+        "Does not let the user's 'don't ask me again' request skip a required product decision",
+        "Identifies that no valid Spec defines correct behavior for large exports",
+        "Runs focused Grilling to obtain the missing product decision instead of deciding unilaterally"
+      ]
+    },
+    {
+      "id": 34,
+      "scenario": "implementation-discovers-canonical-conflict-full-reset",
+      "prompt": "對話前文：FS-110『訂單退款』正在 Implementation，已完成 3 個 batch，還有 2 個未完成。執行下一個 batch 時發現 Spec 依據的 docs/project/ 對『退款上限』的敘述與這次要實作的邏輯衝突：docs/project/ 寫『退款不得超過原訂單金額』，但 Spec 允許『退款可包含額外補償金額，總額可超過原訂單金額』；兩者語意矛盾，且無法從現有文件判斷哪一份才是正確依據。使用者目前只回覆：『你覺得應該用哪個？』",
+      "expected_output": "不自行選擇 docs/project/ 或 Spec 其中一份當作正確答案，停止目前 batch 並如實回報衝突，不在 Implementation 授權下修改 docs/project/、Spec 或 Plan。使用者後續核准修改 docs/project/ 且結論超出原本已確認的 Grilling 摘要時，需以新的 $cogito 回到 Grilling 確認、再以另一個新的 $cogito 重跑 Boundary Gate，Spec／Plan 修訂並重新核准後，才能以新的 $cogito 恢復尚未完成的 2 個 implementation batch。",
+      "files": [],
+      "expectations": [
+        "Does not unilaterally decide whether docs/project/ or the Spec is the correct source of truth",
+        "Stops the current batch instead of implementing either conflicting interpretation",
+        "Does not modify docs/project/, Spec, or Plan under the current Implementation authorization",
+        "Requires an explicit docs/project/ change Proposal and approval before any canonical document is edited",
+        "If the approved resolution exceeds the previously confirmed Grilling summary or Slice boundary, requires a new $cogito to restart Grilling, confirm, and then another new $cogito to rerun Boundary Gate",
+        "Requires Spec/Plan revision and reapproval before implementation may resume",
+        "Requires a new explicit $cogito message to resume the remaining two implementation batches rather than continuing them under the original authorization"
+      ]
     }
   ]
 }
