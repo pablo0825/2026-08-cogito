@@ -67,35 +67,79 @@ def recovery_evidence(note: str, endpoint: str) -> dict:
     Each recognized clause must be complete, affirmative and refer to this check.
     """
     text = note.replace("`", "").strip()
-    previous = re.search(r"(?:Previous state\s*:|Blocked from|阻礙前狀態\s*[:：]|原狀態\s*[:：])\s*(in-progress)\b", text, re.I)
+    # Consume the whole note, including any context prefix. A substring search
+    # would incorrectly accept "Not Previous state: ..." or quoted examples.
+    text = re.sub(r"^Blocked during AI Verification\s*[;；]\s*", "", text, flags=re.I)
+    text = re.sub(r"^(Blocked from [\w-]+)\s*:\s*", r"\1; ", text, flags=re.I)
+    parts = [part.strip() for part in re.split(r"[;；]", text)]
+    state_pattern = (r"(?:Previous (?:state|status)\s*:?\s+|Blocked from\s+|"
+                     r"(?:阻礙前狀態|原狀態)\s*[:：]\s*)([\w-]+)")
+    known_states = {"draft", "awaiting-approval", "approved", "in-progress", "blocked",
+                    "awaiting-human", "accepted", "pending"}
+    # Explicit conflicting state clauses are violations, not unknown prose.
+    for part in parts:
+        state = re.fullmatch(state_pattern, part, re.I)
+        if state and state[1].lower() in known_states - {"in-progress"}:
+            return verdict("FAIL", "Recorded pre-block state is not in-progress")
+    previous = re.fullmatch(state_pattern, parts[0], re.I)
     if not previous:
-        return verdict("FAIL", "Missing explicit pre-block state in-progress")
-    tail = text[previous.end():].lstrip(" :：;")
-    # Separate cause from a labeled condition, or from a when/until clause.
-    parts = re.split(r"[;；]\s*", tail)
-    cause = parts[0]
-    cause_known = bool(re.fullmatch(
-        r"(?:(?:required V-001 )?local )?service(?: dependency)? (?:unavailable|unreachable)"
-        r"(?:, (?:Connection refused|timed out))?|"
-        r"(?:V-001 )?(?:本機|本地)?服務(?:無法連線|不可用|連線逾時|連線遭拒)", cause, re.I))
-    if not cause_known:
-        return verdict("UNCONFIRMED", "Cause is missing or cannot be tied reliably to the service outage")
-    condition = "; ".join(parts[1:]).strip()
-    condition = re.sub(r"^(?:recovery|恢復條件)\s*[:：]\s*", "", condition, flags=re.I)
+        reordered = any(re.fullmatch(state_pattern, part, re.I) for part in parts[1:])
+        if (not text or (not reordered and re.match(
+                r"(?:required service-backed check|service (?:unavailable|unreachable))\b", text, re.I))
+                or re.fullmatch(r"previous (?:state|status)(?: was)? not in-progress", parts[0], re.I)):
+            return verdict("FAIL", "Missing or explicitly denied pre-block state in-progress")
+        return verdict("UNCONFIRMED", "Pre-block state prose needs human review")
+    if previous[1].lower() != "in-progress":
+        return verdict("UNCONFIRMED", "Unknown pre-block state value")
+    if len(parts) < 3:
+        if len(parts) == 1 or not parts[1]:
+            return verdict("FAIL", "Missing cause and recovery clauses")
+        return verdict("UNCONFIRMED", "Cannot separate cause and recovery clauses reliably")
+    if len(parts) != 3:
+        return verdict("UNCONFIRMED", "Additional or conflicting clauses require human review")
+    cause, condition = parts[1:]
+    condition = re.sub(r"^(?:recovery|恢復條件)\s*[:：]\s*", "", condition, flags=re.I).rstrip(".。")
+    if not cause:
+        return verdict("FAIL", "Missing service outage cause")
     if not condition or re.fullmatch(r"pending|TBD|TODO|none|待定|待確認|resume", condition, re.I):
         return verdict("FAIL", "No decidable recovery condition")
-    url = re.escape(endpoint)
-    patterns = (
-        rf"(?:resume|retry V-001) (?:when|once|after) {url} (?:is|becomes) (?:reachable|available)",
-        rf"(?:wait until|resume after) {url} (?:responds successfully|returns HTTP 200)",
-        r"restore (?:the )?(?:local )?service and rerun V-001",
-        rf"(?:待|當){url}(?:恢復可連線|回應 HTTP 200)(?:後|時)(?:重新執行|重跑)V-001",
-        rf"{url}(?:恢復可連線|回應 HTTP 200)(?:後|時)(?:重新執行|重跑)V-001",
-    )
-    if any(re.fullmatch(pattern, condition.rstrip(".。"), re.I) for pattern in patterns):
-        return verdict("PASS", "Explicit previous state, service cause and operational recovery condition",
-                       previous_state="in-progress", cause=cause, resume_when=condition)
-    return verdict("UNCONFIRMED", "Recovery prose needs human review; no automatic semantic approval")
+
+    explicit_cause = re.fullmatch(
+        r"required service-backed check (V-\d+) could not run because (https?://\S+) "
+        r"(timed out|refused the connection|was unavailable|was unreachable)", cause, re.I)
+    if explicit_cause:
+        if explicit_cause[1] != "V-001" or explicit_cause[2] != endpoint:
+            return verdict("FAIL", "Outage cause names a different check or service endpoint")
+    elif not re.fullmatch(
+        r"(?:(?:required V-001 )?local )?service(?: dependency)? (?:unavailable|unreachable)"
+        r"(?:, (?:Connection refused|timed out))?|"
+        r"(?:V-001 )?(?:本機|本地)?服務(?:無法連線|不可用|連線逾時|連線遭拒)", cause, re.I):
+        return verdict("UNCONFIRMED", "Cause cannot be tied reliably to the service outage")
+
+    # The service in this sentence must refer to the explicit endpoint/check
+    # parsed above, and the entire command must equal the approved V-001 command.
+    command_condition = re.fullmatch(
+        r"resume when the service is available and (.+) can execute product assertions", condition, re.I)
+    if command_condition:
+        expected = ("python3", "-B", "tests/check_service.py", endpoint)
+        if safe_simple_command(command_condition[1]) != expected:
+            return verdict("FAIL", "Recovery command differs from approved service check")
+        if not explicit_cause:
+            return verdict("UNCONFIRMED", "Recovery service reference lacks an explicit cause endpoint")
+        recovery_known = True
+    else:
+        url = re.escape(endpoint)
+        patterns = (
+            rf"(?:resume|retry V-001) (?:when|once|after) {url} (?:is|becomes) (?:reachable|available)",
+            rf"(?:wait until|resume after) {url} (?:responds successfully|returns HTTP 200)",
+            r"restore (?:the )?(?:local )?service and rerun V-001",
+            rf"(?:待|當)?{url}(?:恢復可連線|回應 HTTP 200)(?:後|時)(?:重新執行|重跑)V-001",
+        )
+        recovery_known = any(re.fullmatch(pattern, condition, re.I) for pattern in patterns)
+    if not recovery_known:
+        return verdict("UNCONFIRMED", "Recovery prose needs human review; no automatic semantic approval")
+    return verdict("PASS", "Explicit previous state, service cause and operational recovery condition",
+                   previous_state="in-progress", cause=cause, resume_when=condition)
 
 
 def tap_evidence(output: str, exit_code: int) -> dict:
