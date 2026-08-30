@@ -566,6 +566,20 @@
         "Renders the corrected summary with all seven bold titles outside code fences, preserves known decisions and evidence, and marks actually empty fields 無",
         "Outputs awaiting-confirmation + ready without treating the user's correction as whole-summary confirmation or changing stage authorization"
       ]
+    },
+    {
+      "id": 45,
+      "scenario": "readiness-contract-loaded-before-mid-grilling-assessment",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-123『手動匯出報表』的 Grilling，對話未中斷。專案指示、來源、working tree 與初步調查已完成，無 staged changes 或其他 active Slice；本案只處理目前對話。尚未做過 Readiness 判定，也尚未讀取共同理解 contract。已確定使用者目標、權限與欄位沿用既有行為、只做手動匯出且不含排程；提供的測試證據已確認完整匯出能力。剩餘必要決策是格式，以及是否允許部分結果。assistant 正在詢問格式，使用者目前回覆：『選 UTF-8 CSV。部分結果會讓我們的分析工具誤判資料是否完整，我還不確定該怎麼處理。』部分結果目前沒有核准規則或安全預設，但使用者可以在理解取捨後決定。沒有其他必要的事實調查。請處理目前回答並繼續這個階段。",
+      "expected_output": "在第一次 Readiness 判定前讀取 contract，記錄 CSV 選擇，依 contract 評估後繼續釐清部分結果的必要決策；不等到摘要產出才載入判準，也不把不知道視為立即停止的指令。",
+      "files": [],
+      "expectations": [
+        "Reads shared-understanding-contract.md before its first Readiness assessment even though no summary is due yet",
+        "Records the CSV selection and keeps the partial-result product decision unresolved rather than inventing a safe default",
+        "Explains the relevant partial-result tradeoff and asks one actionable question in the current Grilling stage",
+        "Does not close with a blocked summary while this necessary decision remains actionable, and does not announce ready",
+        "Does not require repeated $cogito, enter Boundary Gate, modify documents, or commit"
+      ]
     }
   ]
 }

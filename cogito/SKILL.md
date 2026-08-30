@@ -49,7 +49,7 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 |---|---|
 | 已上線能力缺少完整 canonical coverage 或 accepted lineage，需要第一次收編或修改 | Grilling 階段讀取 [rolling-adoption-workflow.md](references/rolling-adoption-workflow.md) 與 [grilling-workflow.md](references/grilling-workflow.md)，完成後停止；Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
 | 建立、同步或審查 blueprint；依既有清楚需求調整 Slice；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
-| 建立 Spec、修改產品語義，或 Bug 的正確行為未由有效 Spec 唯一決定 | Grilling 階段讀取 [grilling-workflow.md](references/grilling-workflow.md)，停止提問時依其指示讀取共同理解 contract，並在確認後停止；新的 Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
+| 建立 Spec、修改產品語義，或 Bug 的正確行為未由有效 Spec 唯一決定 | Grilling 階段讀取 [grilling-workflow.md](references/grilling-workflow.md)，首次判定 Readiness 前依其指示讀取共同理解 contract，並在摘要確認後停止；新的 Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
 | 核准完全未變更的 draft Spec／Plan | [spec-plan-workflow.md](references/spec-plan-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；不載入 Grilling |
 | 只修訂實作方法、Files、batches、commands 或 Verification Gates，產品 Scope、行為、Acceptance 與 Integration Contract 不變 | [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要 commit 時再讀 [commit-workflow.md](references/commit-workflow.md) |
 | 執行不改產品行為且可用自動化證明的小型 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
