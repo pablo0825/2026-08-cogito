@@ -510,6 +510,62 @@
         "Does not repeat unavailable fact questions, demand a premature row-limit decision, or invent unrelated questions to keep Grilling going",
         "Asks only for summary confirmation, does not imply confirmation makes readiness ready, and does not start Boundary Gate or modify documents"
       ]
+    },
+    {
+      "id": 41,
+      "scenario": "summary-seven-fields-and-provenance",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122『手動匯出報表』的 Grilling，對話未中斷；專案來源、指示、Brief 與 working tree 已查，沒有 staged changes 或其他 active Slice。本案只處理目前對話。使用者明確決定：分析人員手動匯出目前有權限的資料、UTF-8 CSV、既有欄位順序、最多 10000 筆、成功時全部匯出、30 秒逾時則顯示錯誤並允許手動重試、不自動重試。必要可行性事實均有給定證據：整合測試證實可完整取出 10000 筆，故障測試證實 30 秒中止及錯誤行為，程式調查發現現有檔名固定為 report.csv。AI 建議檔名包含日期以方便辨識，這是已判定低風險、可逆且不影響產品邊界的預設，使用者沒有逐項選定。CSV 函式的模組位置未定，但程式調查證實不影響介面、效能或驗收，可留給 Plan。適用且未被新要求推翻的 docs/project/reporting.md 已明確寫『本 Slice 不包含排程匯出』；沒有未決重大風險，也沒有任何其他必要決策或待查證據。assistant 正在等待最後的保留行為確認，使用者回覆：『保留既有查詢與權限行為。』請輸出目前共同理解摘要。",
+      "expected_output": "以七個粗體欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無，狀態為 awaiting-confirmation + ready。",
+      "files": [],
+      "expectations": [
+        "Renders all seven field titles in bold Markdown outside code fences, with blank lines before their bodies; multiple independent decisions use bullets",
+        "Keeps the AI date-in-filename suggestion and reason in Recommended Defaults, not Confirmed Decisions; does not turn the observed report.csv filename into a product requirement",
+        "Verified Facts cites the supplied tests and code evidence; Deferred Decisions explains why module placement does not block Spec",
+        "Explicitly Excluded records the scheduling exclusion with its applicable requirements-source basis, without inventing additional exclusions",
+        "Remaining Risks and Blocking Questions both remain present with 無 rather than being omitted; outputs awaiting-confirmation + ready and waits without advancing stages or modifying files"
+      ]
+    },
+    {
+      "id": 42,
+      "scenario": "summary-confirmation-preserves-ai-default-source",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122 的 Grilling，對話未中斷。assistant 剛產出 awaiting-confirmation + ready 摘要並等待確認。摘要的 Confirmed Decisions 是使用者逐項確定的手動 UTF-8 CSV 匯出與逾時手動重試；Verified Facts 是本案給定且已確認的整合與逾時測試證據；Recommended Defaults 是 AI 建議『檔名包含日期，方便辨識』，使用者尚未逐項選定；Explicitly Excluded 是使用者明確排除的排程；Deferred Decisions、Remaining Risks 與 Blocking Questions 皆無事項。所有必要調查與產品決策已完成。使用者目前回覆：『整份摘要正確，請再列出確認後的摘要給我。』",
+      "expected_output": "確認摘要並重列七欄，狀態改為 confirmed + ready，但檔名預設仍留在 Recommended Defaults；不把整份摘要確認改寫為使用者逐項指定 AI 預設，也不啟動 Boundary Gate。",
+      "files": [],
+      "expectations": [
+        "Outputs Shared Understanding: confirmed and Readiness: ready without demanding repeated $cogito for summary confirmation",
+        "Retains the filename recommendation and its AI source in Recommended Defaults rather than moving or duplicating it into Confirmed Decisions",
+        "Renders all seven bold field titles outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
+        "Preserves the explicit scheduling exclusion and does not add unmentioned scope exclusions",
+        "Stops after confirmation, keeps document and implementation authorization unchanged, and provides a separate explicit Boundary Gate start rather than executing it"
+      ]
+    },
+    {
+      "id": 43,
+      "scenario": "summary-explicit-selection-reclassifies-one-default",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122 的 Grilling，對話未中斷。assistant 剛列出 awaiting-confirmation + ready 摘要並等待確認。使用者已明確決定手動 UTF-8 CSV 匯出、最多 10000 筆與 30 秒逾時顯示錯誤；必要可行性均已查證，排程由使用者明確排除。Recommended Defaults 有兩項低風險且不影響產品邊界的 AI 建議：『檔名包含日期，方便辨識』與『成功提示採用文字「匯出完成」，使文案簡潔』。Deferred Decisions、Remaining Risks 與 Blocking Questions 均無事項。使用者現在回覆：『我決定檔名一定要包含日期；成功提示那項仍保留為你的建議。請更新摘要讓我核對。』",
+      "expected_output": "僅將檔名日期移入 Confirmed Decisions，保留成功提示及理由在 Recommended Defaults，更新 awaiting-confirmation + ready 摘要，不要求重新核准未變的產品決策或擴張授權。",
+      "files": [],
+      "expectations": [
+        "Moves the explicitly selected filename rule into Confirmed Decisions and removes that item from Recommended Defaults rather than duplicating it",
+        "Keeps the unselected success-message recommendation and its rationale in Recommended Defaults without treating it as a user decision",
+        "Renders all seven bold field titles outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
+        "Outputs awaiting-confirmation + ready for the corrected summary without treating the request to update it as confirmation of the whole summary",
+        "Does not alter Readiness criteria, reopen settled scope, start Boundary Gate, modify documents, implement, or commit"
+      ]
+    },
+    {
+      "id": 44,
+      "scenario": "summary-exclusion-needs-source-not-silence",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122 的 Grilling，對話未中斷，assistant 正在整理摘要。專案指示、來源、working tree 與必要事實均已查證，無其他 active Slice 或 staged changes。唯一結果為分析人員依既有權限手動匯出 CSV，成功完整匯出，30 秒逾時顯示錯誤並允許手動重試，其他必要產品決策、驗收與可行性均已清楚。沒有 AI 預設、延後事項、已知剩餘風險或阻塞。使用者及適用需求文件沒有明確排除任何額外功能；資料備份與通知中心從未被討論，也與本次 Spec 的必要邊界無關。assistant 上一則未決問題卻是：『我打算因為沒有提到資料備份與通知中心，就把它們放進 Explicitly Excluded，這樣可以嗎？』使用者現在回覆：『我們沒討論過那兩個，怎麼會變成已經排除了？請修正摘要讓我重新核對。』",
+      "expected_output": "承認未提及不是排除依據，修正摘要不列出這兩個排除項，不為填滿排除欄再逐項追問無關功能；Explicitly Excluded 保留標題並寫無，狀態仍等待確認。",
+      "files": [],
+      "expectations": [
+        "Acknowledges that silence did not establish an exclusion and removes the unsupported backup and notification-center exclusions",
+        "Keeps Explicitly Excluded present with 無; does not infer those features are included either",
+        "Does not ask the user to decide unrelated feature exclusions merely to populate the field or invent new necessary scope questions",
+        "Renders the corrected summary with all seven bold titles outside code fences, preserves known decisions and evidence, and marks actually empty fields 無",
+        "Outputs awaiting-confirmation + ready without treating the user's correction as whole-summary confirmation or changing stage authorization"
+      ]
     }
   ]
 }
