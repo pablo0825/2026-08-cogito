@@ -26,7 +26,7 @@ from typing import Sequence
 
 # Also works when loaded by importlib in the host regression suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from grader_support import (SCHEMA_VERSION, command_tokens, execution_state,
+from grader_support import (SCHEMA_VERSION, approval_metadata_evidence, command_tokens, execution_state,
                             recovery_evidence, safe_simple_command, tap_evidence)
 
 
@@ -442,6 +442,9 @@ def validate(repo: Path, initial_head: str, final_response: str, codex_exit: int
             "utf-8", errors="replace")
 
     spec, plan, blueprint = (document(path) for path in (SPEC_PATH, PLAN_PATH, BLUEPRINT_PATH))
+    spec_approval = approval_metadata_evidence(spec, "Approval")
+    plan_approval = approval_metadata_evidence(plan, "Approval")
+    commit_approval = approval_metadata_evidence(plan, "Commit Plan")
     blueprint_row = next(
         (line for line in blueprint.splitlines() if line.startswith("| FS-012 |")),
         None,
@@ -463,7 +466,7 @@ def validate(repo: Path, initial_head: str, final_response: str, codex_exit: int
     add_check(checks, "only approval documents changed", [], unexpected_files)
     add_check(checks, "Spec document status", "approved", field_value(spec, "Document Status"))
     add_check(checks, "Plan document status", "approved", field_value(plan, "Document Status"))
-    add_check(checks, "Commit Plan approval", "approved", field_value(plan, "Commit Plan Approval"))
+    add_check(checks, "Commit Plan approval", "approved", commit_approval["values"].get("Commit Plan Approval"))
     add_check(
         checks,
         "Blueprint FS-012 status",
@@ -471,8 +474,17 @@ def validate(repo: Path, initial_head: str, final_response: str, codex_exit: int
         bool(blueprint_row and "| approved |" in blueprint_row),
     )
     add_check(checks, "Approval row removed from Plan", False, "| Approval |" in plan)
-    add_check(checks, "Spec approval recorded", False, "Approved By: `pending`" in spec)
-    add_check(checks, "Plan approval recorded", False, "Approved By: `pending`" in plan)
+    add_evidence_check(checks, "Spec approval recorded", spec_approval)
+    add_evidence_check(checks, "Plan approval recorded", plan_approval)
+    add_evidence_check(checks, "Commit Plan approval metadata recorded", commit_approval)
+    # This case approves both documents in one event. Plan-only revision is a
+    # different route and must not rewrite the unchanged Spec's old approval.
+    approvals = (spec_approval, plan_approval, commit_approval)
+    joint_consistent = all(item["status"] == "PASS" for item in approvals) and all(
+        len({item["values"][field] for item in approvals}) == 1 for field in ("Approved By", "Approved At"))
+    checks.append(Check("Joint approval metadata consistent", joint_consistent,
+                        "same approver and time for this joint approval",
+                        {name: item["values"] for name, item in zip(("Spec", "Plan", "Commit Plan"), approvals)}))
     add_check(
         checks,
         "src tree unchanged",

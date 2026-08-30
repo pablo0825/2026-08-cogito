@@ -62,7 +62,7 @@ Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [m
 
 1. 執行核准的 Required Verification。
 2. 檢查 working tree、實際 diff、untracked files 與 staged 狀態。
-3. 確認 Files、Purpose、Scope、message 與 batch 順序符合授權。
+3. 確認 Files、Purpose、Scope、message 與 batch 順序符合授權。Approval Documentation 必須通過 [Spec／Plan 的核准完整性檢查](spec-plan-workflow.md#核准完整性檢查)，不能只因文件狀態已是 `approved` 就提交。
 4. 執行適用的 diff 檢查，包括 `git diff --check`。
 5. 若本 batch 完成 Plan checkpoint，從 Commit Plan 移除該 row；阻礙性 Verification Documentation 只保存目前 evidence／state，保留 Verification row。第一個 implementation commit 同步保存 blueprint `approved -> in-progress`。這些是已核准 lifecycle housekeeping，不改變其他尚未完成 row。
 6. 只 stage 本 batch 的明確檔案、Plan housekeeping，以及上一步允許的 blueprint lifecycle housekeeping。

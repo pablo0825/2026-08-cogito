@@ -53,6 +53,10 @@ Agent 執行前保存 HEAD、porcelain status、staged／unstaged binary diff、
 
 第一案除了比對 HEAD tree，也比對 initial commit 與實際磁碟檔案，讓未提交的違規檔名出現在 `unexpected_files`。負向測試用固定 synthetic 回覆建立 positive control，不引用先前 Agent 對話；結果標示 `kind: grader-negative-control`、`agent_invoked: false`、`matches_expectation`。兩份 grader 結果應為 FAIL，而 negative-control suite 本身應 PASS。
 
+第一案同時核准 Spec／Plan，因此 grader 分別解析 Spec `Approval`、Plan `Approval` 與 Plan `Commit Plan` 區塊。各自必要欄位必須存在一次、非空、不是 pending 或 placeholder；同一次核准的核准者與時間須一致，兩份 Approval Note 可不同。其他區塊合法的 pending 不阻擋；範例 code fence 或子標題中的欄位不代替正式核准。此 parser 針對 fixture 的 Markdown 格式檢查完整性與一致性，不驗證自然人身分，也不把 joint-approval 的時間一致要求套用到 Plan-only revision。後者的 workflow 保留未變更 Spec 的核准紀錄。
+
+`test_approval_metadata.py` 以隔離 Git repo 驗證漏更新 Plan Approval、漏填／空白／重複／placeholder 欄位、缺失或範例區塊，以及核准資料矛盾；包含完整資料、不同備註與其他區塊 pending 的正向對照。這些無模型測試不等於真實 Agent 行為已通過，修改 skill 後仍應以新 session、新 artifacts 重跑 approval；不改寫舊 FAIL 紀錄。
+
 預設 artifacts 寫入 `cogito/evals/behavioral/artifacts/<timestamp>/`，包含：
 
 - `execution.jsonl`：`codex exec --json` 的完整 stdout。

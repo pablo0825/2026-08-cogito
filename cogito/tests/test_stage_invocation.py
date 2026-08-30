@@ -120,8 +120,8 @@ class StageInvocationContractTests(unittest.TestCase):
         self.assertNotRegex(verification, r"取得授權後才.*修訂.*Plan")
         self.assertNotRegex(commits, r"取得明確 revision 授權後新增 `fix` batch")
 
-    def test_version_marks_new_invocation_contract(self) -> None:
-        self.assertEqual(read("VERSION").strip(), "2.0.1")
+    def test_version_marks_approval_completeness_patch(self) -> None:
+        self.assertEqual(read("VERSION").strip(), "2.0.2")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@
       "expectations": [
         "Selects the unchanged-draft approval branch",
         "Does not load or restart Grilling",
+        "Records complete Approved By, Approved At and Approval Note in both Spec and Plan Approval sections, and consistent Commit Plan approval metadata before committing",
         "Creates only the authorized Approval checkpoint and then stops",
         "Requests the next continuation using explicit $cogito wording"
       ]
@@ -34,7 +35,8 @@
         "Classifies the request as a technical Plan-only revision",
         "Does not restart Grilling or Boundary Gate",
         "Marks the affected Plan or Commit Plan approval pending as required",
-        "Does not implement before reapproval"
+        "Does not implement before reapproval",
+        "On subsequent explicit Plan-only reapproval, updates Plan Approval and Commit Plan metadata without rewriting the unchanged Spec approval record"
       ]
     },
     {

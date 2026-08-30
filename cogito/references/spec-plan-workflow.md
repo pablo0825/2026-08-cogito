@@ -124,12 +124,21 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
 
 核准後：
 
-1. 將 Spec／Plan 與 blueprint 設為 `approved`。
-2. 將 Commit Plan Approval 設為 `approved`。
+1. 將本次核准的 Spec／Plan 與 blueprint 設為 `approved`。若僅重新核准 Plan revision，保留未變更 Spec 的狀態與既有核准紀錄。
+2. 完成本次適用的核准區塊，不以文件狀態或 Commit Plan 核准代替文件本身的 Approval：
+   - Spec／Plan 同時核准：更新 Spec 的 `Approval`、Plan 最後的 `Approval`，各自填入 `Approved By`、`Approved At` 與 `Approval Note`。
+   - Plan-only revision 核准：只更新 Plan 的 `Approval`，不重寫未變更 Spec 的核准資料。
+   - 兩種情況均更新 Plan 的 `Commit Plan`：`Commit Plan Approval: approved`、`Approved By`、`Approved At`。同一次核准沿用相同核准者與時間；Approval Note 說明各文件的核准範圍，不要求逐字相同。
 3. `change` 只在新 Slice、blueprint 與新 Spec 保存 `Revises`／Previous Spec lineage；`correction` 只在新 Slice 保存 `Corrects`／Authoritative Spec lineage。兩者都不修改舊 accepted Spec。
-4. 建立 `docs(<ID>): approve <feature> specification` commit。
+4. 執行下列核准完整性檢查，再建立 `docs(<ID>): approve <feature> specification` commit。
 5. 回報 Commit ID，提供新的 `$cogito` Implementation 階段啟動句，然後停止。即使核准訊息同時要求開始實作，也不得跨階段執行。
 
-完成條件是文件狀態、Commit Plan 核准、blueprint 狀態與 Approval commit 全部一致。
+### 核准完整性檢查
+
+在 Approval commit 前逐一檢查本次適用的核准區塊：必要欄位存在且只有一個有效值，不得空白、保留 `pending` 或模板 placeholder；核准者、時間與備註必須符合本次明確授權，不自行編造。文件狀態、文件 Approval、Commit Plan 核准與 blueprint 必須一致，不能只檢查其中一處。缺漏時先補齊；缺乏核准事實或有矛盾時停止確認，不先 commit。
+
+檢查只針對本次應完成的核准資料，不要求整份文件沒有 `pending`，也不重設未來 checkpoint 或未變更 Spec 的既有核准。
+
+完成條件是上述核准完整性檢查通過、文件與 blueprint 狀態一致，且 Approval commit 已建立。
 
 停止時使用明確階段啟動句：`請以 $cogito 開始 <ID> implementation`。Plan 核准不跨階段授權 Implementation；只有新的 `$cogito` 訊息才能開始 implementation workflow。

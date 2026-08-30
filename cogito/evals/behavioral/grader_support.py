@@ -13,6 +13,53 @@ def verdict(status, reason, **details):
     return {"status": status, "reason": reason, **details}
 
 
+def approval_metadata_evidence(document: str, heading: str) -> dict:
+    """Validate direct fields in one fixture H2 section, not examples or other blocks.
+
+    This checks recorded metadata completeness, not the truth of a user's identity
+    or authorization. The real invocation and retained artifacts supply that context.
+    """
+    required = ("Approved By", "Approved At", "Approval Note") if heading == "Approval" else (
+        "Commit Plan Approval", "Approved By", "Approved At")
+    sections, current, fence = [], None, None
+    for line in re.sub(r"<!--.*?-->", "", document, flags=re.S).splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence:
+            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) + r"{" + str(len(fence)) + r",}[ \t]*", line):
+                fence = None
+            continue
+        if marker:
+            fence = marker[1]
+            continue
+        title = re.match(r"^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$", line)
+        if title:
+            current = None
+            if title[1] == "##" and title[2].rstrip("#").strip() == heading:
+                current = []
+                sections.append(current)
+            continue
+        if current is not None:
+            current.append(line)
+    if len(sections) != 1:
+        return verdict("FAIL", f"Expected exactly one {heading} section", section_count=len(sections), values={})
+    values, issues = {}, []
+    for field in required:
+        matches = re.findall(r"^[ \t]*[-*][ \t]+" + re.escape(field) + r":[ \t]*(.*?)[ \t]*$",
+                             "\n".join(sections[0]), re.M)
+        if len(matches) != 1:
+            issues.append(f"{field}: expected one field, found {len(matches)}")
+            continue
+        value = matches[0].strip().strip("`").strip()
+        values[field] = value
+        if (not value or value.casefold() in {"pending", "tbd", "todo", "none", "null", "n/a", "-", "待定", "待確認"}
+                or re.search(r"<[^>]*>", value)):
+            issues.append(f"{field}: empty or unresolved approval metadata")
+    if heading == "Commit Plan" and values.get("Commit Plan Approval") != "approved":
+        issues.append("Commit Plan Approval: must be approved")
+    return verdict("FAIL" if issues else "PASS", "Incomplete approval metadata" if issues else "Approval metadata complete",
+                   section=heading, values=values, issues=issues)
+
+
 def recovery_evidence(note: str, endpoint: str) -> dict:
     """Parse a bounded set of explicit operational conditions, not keyword bags.
 
