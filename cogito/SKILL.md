@@ -97,6 +97,24 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 - 每個步驟以已授權產出完成、必要檢查實際執行、狀態與文件一致為完成條件。
 - 同階段等待回答、修正、說明或核准時，直接提出要求，不要求 `$cogito`。跨階段或中斷恢復時，提供包含 `$cogito` 的精確啟動句，例如：`請以 $cogito 開始 FS-001 implementation`。
 
+## 操作指令呈現
+
+提供讓使用者複製送出的操作指令時，一律使用獨立的 `text` 程式碼區塊，區塊內只放指令，說明文字放在區塊外。例如：
+
+啟動階段：
+
+```text
+請以 $cogito 開始 FS-029 AI Verification
+```
+
+同階段核准：
+
+```text
+核准 FS-023 Plan revision
+```
+
+以上範例只示範呈現格式，不限制指令措辭，也不改變既有授權規則。
+
 ## 相容性入口
 
 Skill 更新本身不重寫既有文件或撤銷核准。舊文件依相關 workflow 的 legacy fallback 繼續執行；只有 active 文件在已授權操作中可做語義不變、映射無歧義且跨 Spec／Plan／Verification 原子完成的結構遷移。accepted snapshots 保持原樣。
