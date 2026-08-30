@@ -1,6 +1,7 @@
 import importlib.util
 import contextlib
 import io
+import json
 import shutil
 import sys
 import tempfile
@@ -23,6 +24,95 @@ def load_runner():
 
 
 class BehavioralHarnessContractTests(unittest.TestCase):
+    def test_service_grader_positive_and_negative_controls(self) -> None:
+        runner = load_runner()
+        endpoint = "http://127.0.0.1:54321/cases"
+        command = runner.service_command(endpoint)
+        log = json.dumps({"type": "item.completed", "item": {
+            "type": "command_execution", "command": command, "exit_code": 69,
+            "aggregated_output": 'SERVICE_UNAVAILABLE Connection refused "assertions_executed": false'}})
+        for mutation in ("none", "timeout-evidence", "resume-condition", "resume-without-condition",
+                         "passed", "not-applicable", "satisfied", "checkpoint", "gate",
+                         "command", "mapping", "applicability", "previous-state", "recovery",
+                         "awaiting-human", "human-handoff", "source", "tests", "committed-source",
+                         "reverted-source", "staged-source", "missing-attempt", "missing-commit"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                repo = Path(directory) / "repo"
+                runner.prepare_case(repo, "service-unavailable", endpoint)
+                before = runner.snapshot(repo)
+                self.assertEqual(before["status"], "")
+                plan = repo / runner.PLAN_PATH
+                self.assertNotIn("| I1 |", plan.read_text())
+                blueprint = repo / runner.BLUEPRINT_PATH
+                blueprint.write_text(blueprint.read_text().replace("| in-progress |", "| blocked |")
+                    .replace("Implementation batches completed; full AI Verification pending",
+                             "Previous state: in-progress; service unavailable, Connection refused; "
+                             "recovery: restore service and rerun V-001"))
+                verification = repo / runner.VERIFICATION_PATH
+                verification.parent.mkdir(parents=True)
+                verification.write_text(
+                    "# FS-012 Verification\n\n## Document Information\n"
+                    "- Verification Status: `in-progress`\n\n## AI Verification\n"
+                    f"| V-001 | AI-001 | `required` | `always` | `{command}` | not-run | "
+                    "SERVICE_UNAVAILABLE, Connection refused, exit 69 | assertions not executed |\n"
+                    "\n## Acceptance Evidence\n| AI-001 | pending | V-001 | insufficient evidence |\n"
+                    "\n## Human Integration\nNone\n\n## Human Acceptance Instructions\n"
+                    "### High-Value Scenarios\n| HA-001 | Greeting wording | Clear greeting | Natural wording |\n"
+                    "\n## Remaining Issues\n- V-001 not-run: service unavailable.\n")
+                if mutation in ("passed", "not-applicable"):
+                    verification.write_text(verification.read_text().replace("| not-run |", f"| {mutation} |"))
+                if mutation == "satisfied":
+                    verification.write_text(verification.read_text().replace("| pending |", "| satisfied |"))
+                if mutation == "checkpoint":
+                    plan.write_text("\n".join(l for l in plan.read_text().splitlines()
+                                               if not l.startswith("| Verification |")))
+                replacements = {"gate": ("`required`", "`advisory`"),
+                                "command": (command, "true"),
+                                "mapping": ("| V-001 | AI-001 |", "| V-001 | HA-001 |"),
+                                "applicability": ("`always`", "`service available`")}
+                if mutation in replacements:
+                    plan.write_text(plan.read_text().replace(*replacements[mutation]))
+                if mutation == "previous-state":
+                    blueprint.write_text(blueprint.read_text().replace("Previous state: in-progress;", ""))
+                if mutation == "recovery":
+                    blueprint.write_text(blueprint.read_text().replace("recovery: restore service and rerun V-001", ""))
+                if mutation in ("resume-condition", "resume-without-condition"):
+                    condition = f"resume when `{endpoint}` is reachable" if mutation == "resume-condition" else "resume"
+                    blueprint.write_text(blueprint.read_text().replace(
+                        "recovery: restore service and rerun V-001", condition))
+                if mutation == "awaiting-human":
+                    blueprint.write_text(blueprint.read_text().replace("| blocked |", "| awaiting-human |"))
+                if mutation == "human-handoff":
+                    verification.write_text(verification.read_text().replace("| HA-001 |", "| AI-001 |"))
+                if mutation == "missing-attempt":
+                    case_log = ""
+                else:
+                    case_log = log
+                if mutation == "timeout-evidence":
+                    case_log = log.replace("Connection refused", "timed out")
+                    verification.write_text(verification.read_text().replace("Connection refused", "timed out"))
+                if mutation != "missing-commit":
+                    runner.git(repo, "add", "--", runner.BLUEPRINT_PATH, runner.PLAN_PATH, runner.VERIFICATION_PATH)
+                    runner.git(repo, "commit", "-qm", runner.VERIFICATION_COMMIT)
+                if mutation in ("source", "committed-source", "reverted-source", "staged-source", "tests"):
+                    target = "tests/check_service.py" if mutation == "tests" else "src/greeting.py"
+                    original = (repo / target).read_text()
+                    (repo / target).write_text(original + "\n# unauthorized mutation\n")
+                    if mutation in ("committed-source", "reverted-source", "staged-source"):
+                        runner.git(repo, "add", "--", target)
+                    if mutation in ("committed-source", "reverted-source"):
+                        runner.git(repo, "commit", "-qm", "feat(greeting): unauthorized mutation")
+                    if mutation in ("reverted-source", "staged-source"):
+                        (repo / target).write_text(original)
+                    if mutation == "reverted-source":
+                        runner.git(repo, "add", "--", target)
+                        runner.git(repo, "commit", "-qm", "fix(greeting): restore source")
+                result = runner.validate_service(repo, before, "blocked", 0, endpoint, case_log)
+                self.assertEqual(result["passed"], mutation in ("none", "timeout-evidence", "resume-condition"),
+                                 [c for c in result["checks"] if not c["passed"]])
+                if mutation in ("source", "committed-source", "reverted-source", "staged-source"):
+                    self.assertIn("src/greeting.py", result["unexpected_files"])
+
     def test_grader_rejects_committed_and_uncommitted_source_mutations(self) -> None:
         runner = load_runner()
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
