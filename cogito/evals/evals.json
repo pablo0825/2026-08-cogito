@@ -482,6 +482,34 @@
         "Does not invent additional blocking product questions or silently change the confirmed export behavior",
         "Waits for summary confirmation without writing Plan or implementation, starting Boundary Gate, or committing"
       ]
+    },
+    {
+      "id": 39,
+      "scenario": "grilling-blocker-keeps-independent-frontier-open",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-121『手動匯出報表』的 Grilling，對話未中斷。專案指示、canonical sources、Brief 與 working tree 已檢查，無 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。已確定分析人員可手動匯出目前有權限看到的資料、保留既有查詢與欄位順序、不含排程或權限變更、成功時完整匯出、不提供部分成功、30 秒逾時則顯示錯誤並允許手動重試。現在只有兩個未決分支：第一，虛構供應商 ReportBridge API 的完整取數上限沒有證據，所有可取得來源已查完，測試帳號目前不可取得；產品的最大匯出筆數須在此能力確認後才能由使用者決定，使用者先前已拒絕猜測上限。第二，使用者尚未決定輸出為 UTF-8 CSV 或 XLSX，這是必要的可見產品行為，沒有安全預設；已查證兩者都可實作且不依賴 API 筆數上限，使用者目前可以回答。assistant 剛詢問使用者是否有 API 上限資料；目前使用者回覆：『沒有，我也不知道 API 上限，目前拿不到測試帳號。』這是虛構情境，不需查詢真實網路服務。",
+      "expected_output": "保留 API 能力與相依最大筆數決策的阻塞，繼續逐題詢問不依賴該阻塞的輸出格式；不立即停止 Grilling 產出待確認的 blocked 摘要，也不重問使用者已無法回答的 API 事實。",
+      "files": [],
+      "expectations": [
+        "Acknowledges the API fact-finding blocker and keeps the dependent maximum-row decision unresolved",
+        "Asks one actionable product question about CSV versus XLSX without selecting a format for the user",
+        "Does not produce a closing shared-understanding summary or ask for summary confirmation while the independent necessary question remains actionable",
+        "Does not repeat the API capacity or account-access question, demand a guessed row limit, or research the fictional service",
+        "Stays in the current Grilling stage without requiring repeated $cogito, writing documents, or entering Boundary Gate"
+      ]
+    },
+    {
+      "id": 40,
+      "scenario": "grilling-stops-when-only-blocked-dependencies-remain",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-121『手動匯出報表』的 Grilling，對話未中斷。專案指示、canonical sources、Brief 與 working tree 已檢查，無 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。分析人員手動匯出目前有權限看到的資料、保留既有查詢與欄位順序、不含排程或權限變更、成功時完整匯出、不提供部分成功、30 秒逾時則顯示錯誤並允許手動重試，以上均已確定。虛構供應商 ReportBridge API 的完整取數上限仍無證據，AI 已查完所有可取得來源；使用者已明確表示不知道，也無法提供測試帳號，當前沒有其他查證管道。產品最大匯出筆數是必要的未決產品決策，但必須在 API 能力確認後才能決定，使用者已說明不願猜測。其他獨立的必要決策與查證都已完成；assistant 已在這項阻塞後繼續詢問不相依的輸出格式，目前使用者回覆最後這題：『選 UTF-8 CSV，不用 XLSX。』這是虛構情境，不需查詢真實網路服務。",
+      "expected_output": "記錄 CSV 決策後，因只剩目前無法查證的 API 能力與依賴它的最大筆數決策，停止問答並產出 awaiting-confirmation + blocked 摘要；列出兩者依賴、阻塞原因與恢復條件，不要求產品最大筆數先有答案才允許產出摘要。",
+      "files": [],
+      "expectations": [
+        "Records the CSV decision and outputs Shared Understanding: awaiting-confirmation with Readiness: blocked",
+        "Keeps both API capacity and the dependent product row limit unresolved rather than inventing a limit or treating the product decision as harmless deferral",
+        "Blocking Questions explains the dependency and recovery sequence: obtain capacity evidence or test access, let AI verify the fact, then resume the user's maximum-row decision",
+        "Does not repeat unavailable fact questions, demand a premature row-limit decision, or invent unrelated questions to keep Grilling going",
+        "Asks only for summary confirmation, does not imply confirmation makes readiness ready, and does not start Boundary Gate or modify documents"
+      ]
     }
   ]
 }

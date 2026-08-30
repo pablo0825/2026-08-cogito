@@ -1,6 +1,6 @@
 # Shared Understanding Contract
 
-定義 Grilling 的共同理解摘要格式、Readiness 判準、確認方式與確認效力；提問、停止條件與確認後的階段流程仍由 [grilling-workflow.md](grilling-workflow.md) 管理。
+定義 Grilling 的共同理解摘要格式、Readiness 判準、確認方式與確認效力；何時停止問答、產出摘要及確認後的階段流程由 [grilling-workflow.md](grilling-workflow.md) 管理。
 
 ## Readiness 判準
 
@@ -17,7 +17,7 @@ Readiness 判斷目前需求是否足以建立準確 Spec；Shared Understanding
 
 ## 摘要格式與確認
 
-停止提問並完成可取得的必要查證後，或必要查證因缺少證據／存取條件而受阻時，在對話中輸出目前有效的摘要：
+共同理解摘要使用以下格式：
 
 ```text
 Confirmed Decisions
