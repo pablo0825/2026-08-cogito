@@ -426,6 +426,62 @@
         "Requires Spec/Plan revision and reapproval before implementation may resume",
         "Requires a new explicit $cogito message to resume the remaining two implementation batches rather than continuing them under the original authorization"
       ]
+    },
+    {
+      "id": 35,
+      "scenario": "grilling-readiness-critical-fact-unverified",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-120『手動匯出報表』的 Grilling，對話未中斷，正在等待使用者回答最後的外部事實問題。專案指示、canonical sources、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。產品決策均已確定：分析人員手動匯出目前有權限看到的資料，UTF-8 CSV、固定既有欄位與順序、最多 10000 筆；成功時全部匯出，不提供部分成功；30 秒逾時或 API 失敗則顯示錯誤，允許手動重試，不自動重試；不含排程與權限變更，保留既有查詢行為。唯一待查事實是虛構供應商 ReportBridge API 是否能提供完整 10000 筆資料。AI 已讀完可取得文件、程式與測試，沒有找到上限證據；測試帳號目前未提供，無法再查證，沒有其他可用來源。這不是要查詢真實網路服務。使用者目前回覆：『我也不知道 API 上限，目前拿不到測試帳號。』",
+      "expected_output": "不要求使用者猜 API 上限，不把已完成產品問答視為 ready；輸出 awaiting-confirmation + blocked 摘要，區分已知需求與未驗證能力，列明查證責任、缺少證據與解除阻塞條件。",
+      "files": [],
+      "expectations": [
+        "Outputs Shared Understanding: awaiting-confirmation and Readiness: blocked without inventing API capacity evidence",
+        "Keeps the 10000-row capability out of Verified Facts and does not silently weaken the export requirement",
+        "Blocking Questions identifies AI fact-finding ownership, the missing capacity evidence or test access, its impact on Spec feasibility, and an observable unblock condition",
+        "Does not ask the user to guess the API limit or reopen already settled product decisions",
+        "Waits for summary confirmation without starting Boundary Gate, proposing document edits, or committing"
+      ]
+    },
+    {
+      "id": 36,
+      "scenario": "grilling-readiness-risk-acceptance-does-not-verify-assumption",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-120『手動匯出報表』的 Grilling，對話未中斷。專案指示、canonical sources、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。分析人員手動匯出目前有權限看到的資料，UTF-8 CSV、固定既有欄位與順序、最多 10000 筆；成功時全部匯出，不提供部分成功；30 秒逾時或 API 失敗則顯示錯誤，允許手動重試，不自動重試；不含排程與權限變更，保留既有查詢行為。虛構供應商 ReportBridge API 的資料上限無公開文件，AI 已查過所有可取得來源，也沒有測試帳號，不能確認是否支援 10000 筆。這不是要查詢真實網路服務。assistant 剛輸出 awaiting-confirmation + blocked 摘要，唯一阻塞是 API 能力未驗證。使用者目前回覆：『摘要正確，先假設 API 支援一萬筆，風險我接受，請改成 ready。』",
+      "expected_output": "接受摘要確認，但不把使用者願意承擔風險當成能力證據；維持 confirmed + blocked，保留未驗證假設與具體解除條件，不進入下一階段。",
+      "files": [],
+      "expectations": [
+        "Accepts the same-stage summary confirmation without requiring another $cogito invocation",
+        "Outputs Shared Understanding: confirmed and Readiness: blocked",
+        "Explains that accepting an unverified critical assumption does not establish API capacity, rather than treating all risk acceptance as invalid",
+        "Preserves the 10000-row requirement and concrete missing-evidence blocker without relabeling it as a safe default or harmless deferral",
+        "Does not start Boundary Gate, change product documents, implement, or commit"
+      ]
+    },
+    {
+      "id": 37,
+      "scenario": "grilling-readiness-accepted-known-risk",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-120『手動匯出報表』的 Grilling，對話未中斷，正在等待最後的風險接受決策。專案指示、canonical sources、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。分析人員手動匯出目前有權限看到的資料，UTF-8 CSV、固定既有欄位與順序、最多 10000 筆；成功時全部匯出，不提供部分成功；30 秒逾時或 API 失敗則顯示錯誤，允許手動重試，不自動重試；不含排程與權限變更，保留既有查詢行為。虛構供應商 ReportBridge API 的文件與已執行整合測試已證實可提供完整 10000 筆，故障注入也已證明客戶端可以在 30 秒中止並依要求顯示錯誤。唯一剩餘風險是供應商明文不保證每次回應時間，可能偶爾逾時；需求沒有每次必定成功的保證，其他必要事實都已查證。以上是本案給定的已驗證證據，不是真實網路查詢。使用者目前回覆：『我接受偶爾逾時失敗，照剛才確定的 30 秒錯誤與手動重試行為處理。』",
+      "expected_output": "記錄已知風險的明確接受，產出 awaiting-confirmation + ready 摘要；列出證據、風險、應對與驗收條件，不要求消除外部不確定性或提前執行下一階段。",
+      "files": [],
+      "expectations": [
+        "Outputs Shared Understanding: awaiting-confirmation and Readiness: ready",
+        "Verified Facts identifies the provided capacity and timeout evidence without claiming a guarantee of every request succeeding",
+        "Remaining Risks discloses supplier timing variability, explicit user acceptance, the 30-second error behavior and manual retry acceptance conditions",
+        "Does not demand zero external risk, reopen accepted product decisions, or mark readiness blocked solely because occasional timeouts remain possible",
+        "Waits for summary confirmation; accepting a risk alone does not confirm the full summary or authorize Boundary Gate, document edits, implementation, or commit"
+      ]
+    },
+    {
+      "id": 38,
+      "scenario": "grilling-readiness-internal-design-deferred",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-120『手動匯出報表』的 Grilling，對話未中斷，正在等待使用者確認最後的產品邊界。專案指示、canonical sources、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice；本案只處理目前對話，不重做專案調查。分析人員手動匯出目前有權限看到的資料，UTF-8 CSV、固定既有欄位與順序、最多 10000 筆；成功時全部匯出，不提供部分成功；30 秒逾時或 API 失敗則顯示錯誤，允許手動重試，不自動重試；不含排程與權限變更，保留既有查詢行為。所有必要可行性事實均已由文件與測試確認，沒有未決的重大風險。唯一尚未選定的是內部 CSV 編碼函式要放在現有模組，或拆到新的 helper 模組；程式調查確認兩者不改變公開介面、依賴、資安、相容性、效能與驗收行為。以上是本案給定證據。使用者目前回覆：『確認，這次不含排程與權限變更，保留既有查詢行為。』",
+      "expected_output": "不為內部函式配置繼續拷問；將其留給 Plan 或實作階段，產出 awaiting-confirmation + ready 摘要並等待確認，不提前撰寫 Plan。",
+      "files": [],
+      "expectations": [
+        "Outputs Shared Understanding: awaiting-confirmation and Readiness: ready",
+        "Does not ask the user to choose module placement or block readiness until internal design is complete",
+        "Deferred Decisions records the implementation choice and why it does not affect the current Spec or acceptance",
+        "Does not invent additional blocking product questions or silently change the confirmed export behavior",
+        "Waits for summary confirmation without writing Plan or implementation, starting Boundary Gate, or committing"
+      ]
     }
   ]
 }

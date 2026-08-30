@@ -91,19 +91,21 @@ Rolling Adoption 必須由使用者確認 Current、Target 與 Preserved Behavio
 
 ## 停止條件
 
-下列資訊清楚，且剩餘節點都已分類為 `default`、`defer`、`prune` 或待 AI 查證的事實時，停止 Grilling：
+下列產品決策與待查事項已明確，且剩餘節點都已分類為 `default`、`defer`、`prune` 或待 AI 查證的事實時，停止向使用者提問：
 
 - 問題、使用者與預期結果。
 - Included／Excluded 與一句話可描述的完成結果。
 - 可驗收的完成條件。
 - 必須保留的既有行為。
-- 適用的限制、整合與重大風險。
+- 適用的限制、整合與重大風險，以及其中仍待查證的事項。
 
 不要在滿足停止條件後繼續尋找可問的細節。
 
+停止提問不代表完成查證或已達 `Readiness: ready`。可由 AI 取得證據的必要事實，仍由 AI 在目前 Grilling 階段繼續查證，不轉成使用者必須回答的問題。查證若揭露新的必要產品決策，回到同一階段的 frontier；若現有可取得證據不足或缺少必要存取條件，輸出受阻摘要，不假裝查證完成。
+
 ## 共同理解摘要
 
-停止時完整讀取 [shared-understanding-contract.md](shared-understanding-contract.md)，依其格式、確認方式與效力限制，在對話中產出目前有效的摘要並等待使用者明確確認。
+停止提問或需要輸出受阻摘要時，完整讀取 [shared-understanding-contract.md](shared-understanding-contract.md)，依其 Readiness 判準完成可取得的必要查證，再依摘要格式、確認方式與效力限制，在對話中產出目前有效的摘要並等待使用者明確確認。必要查證受阻時維持 `blocked`，列出缺少的證據與解除阻塞的條件；即使使用者確認摘要，也不自動變成 `ready`。
 
 ## 摘要確認後的流程
 
