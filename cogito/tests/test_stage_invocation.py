@@ -29,9 +29,14 @@ class StageInvocationContractTests(unittest.TestCase):
 
     def test_grilling_keeps_answers_and_summary_confirmation_in_stage(self) -> None:
         workflow = read("references/grilling-workflow.md")
+        contract_path = re.search(
+            r"完整讀取 \[shared-understanding-contract\.md\]\(([^)]+)\)", workflow
+        )
+        self.assertIsNotNone(contract_path)
+        contract = read(f"references/{contract_path.group(1)}")
 
         self.assertRegex(workflow, r"回答.*反問.*不需要.*`\$cogito`")
-        self.assertRegex(workflow, r"摘要確認.*同一.*Grilling.*不需要.*`\$cogito`")
+        self.assertRegex(contract, r"摘要確認.*同一.*Grilling.*不需要.*`\$cogito`")
         self.assertRegex(workflow, r"Boundary Gate.*新.*`\$cogito`")
 
     def test_evals_cover_continuation_and_stage_boundaries(self) -> None:
@@ -120,8 +125,8 @@ class StageInvocationContractTests(unittest.TestCase):
         self.assertNotRegex(verification, r"取得授權後才.*修訂.*Plan")
         self.assertNotRegex(commits, r"取得明確 revision 授權後新增 `fix` batch")
 
-    def test_version_marks_approval_completeness_patch(self) -> None:
-        self.assertEqual(read("VERSION").strip(), "2.0.2")
+    def test_version_marks_shared_understanding_extraction_patch(self) -> None:
+        self.assertEqual(read("VERSION").strip(), "2.0.3")
 
 
 if __name__ == "__main__":
