@@ -30,7 +30,7 @@ Rolling Adoption 必須由使用者確認 Current、Target 與 Preserved Behavio
 - `Decision`：必須由使用者決定的產品目標、範圍、取捨或風險接受。
 - `Assumption`：尚未驗證；不得改寫成 Fact 或 Decision。
 
-## 工作類型與 Bug Triage
+## 依工作類型決定釐清範圍
 
 | 類型 | Grilling 重點 |
 |---|---|
@@ -38,7 +38,7 @@ Rolling Adoption 必須由使用者確認 Current、Target 與 Preserved Behavio
 | `change` | Current／Target／Preserved Behavior、影響範圍、相容性與遷移風險 |
 | `correction` | Authoritative Spec、可重現差異與必須恢復的 Acceptance |
 
-收到 Bug 時先分流：
+收到 Bug 時，先判斷是否需要需求釐清：
 
 1. 有效 Spec 已唯一決定正確行為：依 `correction` 進行根因調查，只詢問 AI 無法取得的必要重現資訊。
 2. 正確行為缺漏或有多個合理答案：執行聚焦的 Grilling，取得產品決策。
