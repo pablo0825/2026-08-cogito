@@ -57,6 +57,8 @@ Agent 執行前保存 HEAD、porcelain status、staged／unstaged binary diff、
 
 `test_approval_metadata.py` 以隔離 Git repo 驗證漏更新 Plan Approval、漏填／空白／重複／placeholder 欄位、缺失或範例區塊，以及核准資料矛盾；包含完整資料、不同備註與其他區塊 pending 的正向對照。這些無模型測試不等於真實 Agent 行為已通過，修改 skill 後仍應以新 session、新 artifacts 重跑 approval；不改寫舊 FAIL 紀錄。
 
+Approval 的回覆判定不要求固定出現「新訊息／下一階段」：可接受明確停止本階段，並直接要求使用者送出對應 FS-012 `$cogito` implementation 啟動指令；既有明確要求新訊息的表達也保留。`grader_support.py` 以有限句型解析整份回覆，區分正文、核准 commit metadata 與 code block；指令必須直接接在對使用者的送出要求後，單獨指令、範例／引用或 code block 中的整段敘述不能視為授權交接。明確免除新 invocation、宣告直接實作或停止／繼續互相矛盾為 FAIL；陌生或含糊語句、未能確認正確啟動指令則為 UNCONFIRMED／人工審查，不因關鍵字出現自動 PASS。這不是通用自然語言裁判，其他合法措辭可能仍需人工確認。兩個既有回覆 assertions 保留名稱與 passed 欄位，expected／actual 改記錄結構化 evidence verdict；其餘 Git、文件與未實作 assertions 不變，明確檔案違規也不會被文字 UNCONFIRMED 掩蓋。`test_approval_reply.py` 保存 2.0.12 失敗執行的完整原始回覆，涵蓋正向等義、否定、矛盾、引用、未知表達及 committed／staged／unstaged 違規。離線 snapshot fallback 使用相同回覆 parser，但缺少 Git objects 時仍不能完整確認。
+
 預設 artifacts 寫入 `cogito/evals/behavioral/artifacts/<timestamp>/`，包含：
 
 - `execution.jsonl`：`codex exec --json` 的完整 stdout。

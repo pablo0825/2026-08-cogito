@@ -26,7 +26,7 @@ from typing import Sequence
 
 # Also works when loaded by importlib in the host regression suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from grader_support import (SCHEMA_VERSION, approval_metadata_evidence, command_tokens, execution_state,
+from grader_support import (SCHEMA_VERSION, approval_metadata_evidence, approval_reply_evidence, command_tokens, execution_state,
                             recovery_evidence, safe_simple_command, tap_evidence)
 
 
@@ -509,18 +509,9 @@ def validate(repo: Path, initial_head: str, final_response: str, codex_exit: int
                   [path for path in changed_paths(initial_files, actual_files)
                    if path.startswith(prefix)])
 
-    response_has_start = all(token in final_response for token in ("$cogito", "FS-012")) and bool(
-        re.search(r"implementation", final_response, re.IGNORECASE)
-    )
-    response_says_new = bool(
-        re.search(
-            r"新(?:的|一則|訊息|階段)|下一(?:步|階段)|完成.+後.+再",
-            final_response,
-            re.DOTALL,
-        )
-    )
-    add_check(checks, "response gives FS-012 $cogito implementation command", True, response_has_start)
-    add_check(checks, "response requires a new message/stage", True, response_says_new)
+    response = approval_reply_evidence(final_response)
+    add_evidence_check(checks, "response gives FS-012 $cogito implementation command", response["command"])
+    add_evidence_check(checks, "response requires a new message/stage", response["handoff"])
 
     return {
         "passed": all(item.passed for item in checks),
@@ -1355,10 +1346,7 @@ def grade_snapshot_archive(case: str, before: dict, after: dict, commits: list, 
         add_check(checks, "Blueprint approved", "approved", rows[0][6] if len(rows) == 1 else None)
         for key in ("status", "staged_diff", "unstaged_diff"):
             add_check(checks, f"Final {key} clean", "", after[key])
-        add_check(checks, "New implementation message requested", True,
-                  all(token in reply for token in ("$cogito", "FS-012"))
-                  and bool(re.search(r"implementation", reply, re.I))
-                  and bool(re.search(r"新|下一|new|next", reply, re.I)))
+        add_evidence_check(checks, "New implementation message requested", approval_reply_evidence(reply)["handoff"])
     return {"passed": all(c.passed for c in checks), "checks": [asdict(c) for c in checks],
             "new_commits": commits, "unexpected_files": unexpected, "agent_final_response": reply,
             "coverage": "partial-archive-snapshots-only"}

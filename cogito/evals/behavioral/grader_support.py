@@ -13,6 +13,107 @@ def verdict(status, reason, **details):
     return {"status": status, "reason": reason, **details}
 
 
+def approval_reply_evidence(reply: str) -> dict:
+    """Recognize a bounded, affirmative handoff, not a bag of stage keywords.
+
+    Only a command directly attached to a user-directed request counts. Fenced
+    prose, quotations, extra/unrecognized clauses and incomplete requests require
+    review. Git/file assertions remain independently necessary for overall PASS.
+    """
+    command = r"(?:請以\s+)?\$cogito\s+(?:請)?(?:開始|啟動|start)\s+FS-012\s+implementation"
+    units, fence, body = [], None, []
+    for line in reply.splitlines():
+        marker = re.fullmatch(r"\s*(`{3,}|~{3,})([\w-]*)\s*", line)
+        if fence:
+            if marker and not marker[2] and marker[1][0] == fence[0] and len(marker[1]) >= len(fence):
+                units.append(("code", "\n".join(body).strip()))
+                fence, body = None, []
+            else:
+                body.append(line)
+            continue
+        if marker:
+            fence = marker[1]
+            continue
+        plain = line.strip().replace("`", "")
+        if re.fullmatch(r"Commit: [a-f0-9]{7,40}|Message: docs\(FS-012\): approve [a-z0-9-]+ specification|"
+                        r"Verification: git diff --check 通過", plain):
+            units.append(("metadata", plain))
+        else:
+            units.extend(("prose", part.strip()) for part in re.split(r"[，。；]", plain) if part.strip())
+    if fence:
+        units.append(("unknown", "Unclosed code fence"))
+
+    stopped, requested, command_seen, explicit_new = False, False, False, False
+    pending = None
+    unknown, violations = [], []
+    for kind, text in units:
+        is_command = bool(re.fullmatch(command, text.rstrip("。"), re.I))
+        command_seen |= is_command
+        if kind == "code":
+            if pending is not None and is_command:
+                requested, explicit_new, pending = True, explicit_new or pending, None
+            else:
+                unknown.append(text)
+                pending = None
+            continue
+        # These are affirmative statements in prose, not strings inside a quote
+        # or code example. Unsupported negations are unknown, never auto-PASS.
+        if kind == "prose" and re.fullmatch(
+                r"(?:不需要|無需)(?:新的?)?(?:\s*\$cogito\s*)?訊息|"
+                r"(?:不必|不用)再(?:送出|傳送)(?:啟動指令|訊息)|"
+                r"(?:但)?(?:我會|我將)?(?:現在|直接|立即)?(?:開始|繼續)\s*(?:FS-012\s+)?(?:實作|implementation)|"
+                r"本階段不會停止", text, re.I):
+            violations.append(text)
+            pending = None
+            continue
+        if pending is not None:
+            if is_command:
+                requested, explicit_new, pending = True, explicit_new or pending, None
+                continue
+            unknown.append("Request not immediately followed by the target command")
+            pending = None
+        if kind == "metadata":
+            continue
+        if kind != "prose":
+            unknown.append(text)
+            continue
+        if re.fullmatch(r"(?:依 Cogito 規則)?(?:本階段|本次核准)(?:到此|已)?(?:停止|結束)", text):
+            stopped = True
+        elif re.fullmatch(r"核准完成|已完成 FS-012 Spec/Plan 核准文件提交|"
+                          r"(?:尚未|未|不會)(?:進入|開始)實作|要開始實作", text):
+            continue
+        elif re.fullmatch(r"請以新的 \$cogito 訊息(?:開始|啟動) FS-012 implementation", text, re.I):
+            requested, command_seen, explicit_new = True, True, True
+        else:
+            request = re.fullmatch(
+                r"(?P<lead>請(?:另行)?(?:送出|傳送)(?:以下(?:指令|訊息))?|"
+                r"請以新的訊息(?:啟動|開始))[：:]\s*(?P<command>.*)", text)
+            if request:
+                requires_new = "新的訊息" in request["lead"]
+                if not request["command"]:
+                    pending = requires_new
+                elif re.fullmatch(command, request["command"], re.I):
+                    requested, command_seen = True, True
+                    explicit_new |= requires_new
+                else:
+                    unknown.append(text)
+            else:
+                unknown.append(text)
+
+    command_result = verdict("PASS" if command_seen else "UNCONFIRMED",
+                             "Target command present" if command_seen else "Target command cannot be established")
+    if violations:
+        handoff = verdict("FAIL", "Reply waives the handoff or declares same-invocation implementation",
+                          conflicting_statements=violations)
+    elif unknown or pending is not None or not requested or not (stopped or explicit_new):
+        handoff = verdict("UNCONFIRMED", "Cannot reliably establish an affirmative stop and user-triggered handoff",
+                          unparsed=unknown, stopped=stopped, requested=requested, explicit_new=explicit_new)
+    else:
+        handoff = verdict("PASS", "Stage ends; user must send the target Cogito implementation invocation",
+                          stopped=stopped, requested=requested, explicit_new=explicit_new)
+    return {"command": command_result, "handoff": handoff}
+
+
 def approval_metadata_evidence(document: str, heading: str) -> dict:
     """Validate direct fields in one fixture H2 section, not examples or other blocks.
 
