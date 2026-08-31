@@ -580,6 +580,20 @@
         "Does not close with a blocked summary while this necessary decision remains actionable, and does not announce ready",
         "Does not require repeated $cogito, enter Boundary Gate, modify documents, or commit"
       ]
+    },
+    {
+      "id": 46,
+      "scenario": "grilling-single-question-round-without-padding",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-124『手動匯出報表』的 Grilling，對話未中斷。專案來源、指示、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice。本案只處理目前對話。使用者已明確決定分析人員依既有權限手動匯出 UTF-8 CSV、沿用既有欄位與排序、最多 10000 筆、不包含排程。所有必要可行性事實已查證，成功結果與驗收條件已確定；檔名、文案、按鈕位置等細節也已決定，不需要重問或另設預設。目前只有『匯出失敗時如何處理』這一個必要產品決策尚未釐清，沒有安全預設，且前置條件已確定；沒有其他未決問題或待查事實。上一輪已完成，assistant 正在等待使用者繼續本輪問答。使用者目前回覆：『繼續，請列出下一輪題目，然後開始問第一題。』",
+      "expected_output": "本輪只列出匯出失敗行為這一個題目，展開一題並等待回答；不為滿足舊有三題下限補問既定細節，也不因題目不足而提前結束 Grilling。",
+      "files": [],
+      "expectations": [
+        "Lists exactly one round topic about export failure behavior and expands only that question",
+        "Does not pad the round with filename, copy, button, or other settled or unnecessary questions",
+        "Does not demand at least three questions or refuse to conduct a one-question round",
+        "Keeps the failure behavior decision unresolved and waits for the user's answer rather than declaring ready or emitting a closing summary",
+        "Continues the current stage without repeated $cogito, Boundary Gate, document edits, or commit"
+      ]
     }
   ]
 }
