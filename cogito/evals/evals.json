@@ -518,7 +518,7 @@
       "expected_output": "以七個粗體欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無，狀態為 awaiting-confirmation + ready。",
       "files": [],
       "expectations": [
-        "Renders all seven field titles in bold Markdown outside code fences, with blank lines before their bodies; multiple independent decisions use bullets",
+        "Renders all seven field titles in bold Markdown outside code fences, with blank lines before their bodies; uses prose, bullets, or tables suited to the content without merging summary fields",
         "Keeps the AI date-in-filename suggestion and reason in Recommended Defaults, not Confirmed Decisions; does not turn the observed report.csv filename into a product requirement",
         "Verified Facts cites the supplied tests and code evidence; Deferred Decisions explains why module placement does not block Spec",
         "Explicitly Excluded records the scheduling exclusion with its applicable requirements-source basis, without inventing additional exclusions",
@@ -534,7 +534,7 @@
       "expectations": [
         "Outputs Shared Understanding: confirmed and Readiness: ready without demanding repeated $cogito for summary confirmation",
         "Retains the filename recommendation and its AI source in Recommended Defaults rather than moving or duplicating it into Confirmed Decisions",
-        "Renders all seven bold field titles outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
+        "Renders all seven bold field titles outside code fences, uses content-appropriate prose, bullets, or tables without merging fields, and keeps empty fields with 無",
         "Preserves the explicit scheduling exclusion and does not add unmentioned scope exclusions",
         "Stops after confirmation, keeps document and implementation authorization unchanged, and provides a separate explicit Boundary Gate start rather than executing it"
       ]
@@ -609,6 +609,20 @@
         "Uses the documented awaiting_pickup cancellation support and response as evidence, without inferring unsupported post-handoff cancellation",
         "After checking the remaining necessary fact, applies the shared-understanding contract and produces an awaiting-confirmation + ready summary rather than prematurely declaring blocked",
         "Preserves the confirmed product decisions and stage boundaries; does not restart invocation, enter Boundary Gate, edit project documents, implement, or commit"
+      ]
+    },
+    {
+      "id": 48,
+      "scenario": "summary-content-appropriate-tables-preserve-provenance",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-126「手動匯出報表」的 Grilling，對話未中斷。專案指示、來源、Brief 與 working tree 已檢查，沒有 staged changes 或其他 active Slice。本案只處理目前對話，不需要再調查專案或外部服務。使用者已確認：分析人員依既有權限與查詢條件手動匯出 UTF-8 CSV，最多 10000 筆；匯出成功時提供完整檔案；查無資料時顯示無資料提示且不產生檔案；30 秒逾時時顯示錯誤、不提供部分檔案並允許手動重試；權限不足時拒絕匯出並顯示原因。本次明確排除排程匯出。必要事實皆已驗證：給定的整合測試證實完整匯出 10000 筆，故障測試證實 30 秒中止與失敗不留部分檔案，權限測試證實拒絕未授權匯出。AI 另外建議下載檔名包含日期以方便辨識，已確認此項低風險、可逆且不影響產品邊界，但使用者尚未逐項選定；現有檔名沒有日期只是程式觀察，不是產品決策。沒有延後事項、已知剩餘風險或阻塞。HTTP 狀態碼與錯誤代碼不在本次摘要的必要內容中，也沒有提供或確認相關值。assistant 正在等待最後的內容核對，使用者目前回覆：「上述行為都對，請整理共同理解摘要，讓我能快速核對各種情況對應的行為。」此前尚未產出整份摘要。",
+      "expected_output": "在 Confirmed Decisions 內用情況／行為表格整理已確認的對應關係，其他內容依需要使用短句或列點；七個欄位各自保留，AI 檔名建議與給定證據不混入決策表，不新增 HTTP 或錯誤代碼填格，摘要等待確認且 ready。",
+      "files": [],
+      "expectations": [
+        "Uses a rendered Markdown table within Confirmed Decisions to make the confirmed success, empty-result, timeout, and permission-denial behaviors easy to compare",
+        "Preserves all seven separate bold field titles and uses prose or bullets for simple non-comparative content rather than forcing every field into a table",
+        "Does not invent HTTP status codes, error codes, retry rules, or other unconfirmed values merely to fill table cells; retains the given timeout and no-partial-file limitations with the relevant behavior",
+        "Keeps the AI filename recommendation and its reason in Recommended Defaults and the supplied evidence in Verified Facts, without converting observations or recommendations into user decisions",
+        "Keeps the user-sourced scheduling exclusion, empty fields marked 無, and awaiting-confirmation + ready status; does not treat behavior confirmation as whole-summary confirmation or authorization for file edits, implementation, or commit"
       ]
     }
   ]

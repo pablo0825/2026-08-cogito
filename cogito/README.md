@@ -2,9 +2,9 @@
 
 Cogito 是以 Feature Slice 為核心的 Codex 軟體工程工作流程 skill，適用於前端、後端與全端專案，協助釐清需求、控制 Slice 邊界、建立 Spec／Plan、執行實作與驗證，以及逐步收編既有專案。
 
-Cogito 2.0.9 採 stage-scoped invocation：使用者以 `$cogito` 明確開始或恢復每個治理階段；對目前未決問題、摘要或 Proposal 的直接回答可在同階段隱式續接。一般請求、新 Scope、新階段與中斷恢復不會隱式啟動 Cogito。
+Cogito 2.0.10 採 stage-scoped invocation：使用者以 `$cogito` 明確開始或恢復每個治理階段；對目前未決問題、摘要或 Proposal 的直接回答可在同階段隱式續接。一般請求、新 Scope、新階段與中斷恢復不會隱式啟動 Cogito。
 
-2.0.9 釐清 Grilling 的剪枝定義：可由 AI 查證的必要事項移出提問清單後，轉入待查事項持續追蹤，不視為已解決。查證與受阻後的處理沿用既有停止流程；Readiness、摘要、確認與授權規則均不變。
+2.0.10 允許共同理解摘要依內容選用短句、列點或表格；表格用於讓對應或比較更清楚，不要求每份摘要使用。七個欄位及其分類、Readiness、確認與授權規則均不變。
 
 目前版本記錄於 [VERSION](VERSION)。AI 執行時以 [SKILL.md](SKILL.md) 為唯一入口；本文件只提供給維護者快速理解封裝結構，不取代其中的規則。
 
