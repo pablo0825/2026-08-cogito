@@ -594,6 +594,22 @@
         "Keeps the failure behavior decision unresolved and waits for the user's answer rather than declaring ready or emitting a closing summary",
         "Continues the current stage without repeated $cogito, Boundary Gate, document edits, or commit"
       ]
+    },
+    {
+      "id": 47,
+      "scenario": "grilling-pruned-question-retains-fact-check",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-125「取消待取件訂單」的 Grilling，對話未中斷。專案指示、來源與 working tree 已檢查，無 staged changes 或其他 active Slice。本案只處理目前對話，不修改專案。使用者已決定：客服依既有權限取消尚未交付物流的訂單；物流確認取消成功後才顯示成功；取消失敗則保留原狀態、顯示錯誤並允許手動重試；已交付物流的訂單明確排除。目標、範圍、保留行為、驗收與必要產品決策均已釐清，無 AI 預設、延後事項或已知剩餘風險。唯一未決事項是目前串接的物流 API 是否支援取消尚未交付的訂單；這是必要可行性事實，尚未查證。附帶的 logistics-api.md 是已核對版本、適用於目前串接的 API 文件，AI 可以直接讀取；其內容尚未載入。assistant 上一題錯把這個事實交給使用者回答。使用者現在回覆：「這題我不知道，文件你能自己查，就從問我的清單移掉。沒有其他問題的話，幫我整理摘要。」請接續目前階段；API 能力只能依實際讀取的附件內容判定，不假設結果。",
+      "expected_output": "將 API 能力移出使用者提問清單後仍追蹤並實際讀取附件查證；取得支援證據後再依 contract 產出等待確認的 ready 摘要，不直接丟棄事項、假設能力或提前產出 blocked 摘要。",
+      "files": [
+        "evals/fixtures/grilling-fact-check/logistics-api.md"
+      ],
+      "expectations": [
+        "Actually reads the supplied logistics-api.md before treating the API capability as verified or producing a closing summary",
+        "Does not ask the user to supply the AI-accessible API fact or treat removing the question as resolving the fact",
+        "Uses the documented awaiting_pickup cancellation support and response as evidence, without inferring unsupported post-handoff cancellation",
+        "After checking the remaining necessary fact, applies the shared-understanding contract and produces an awaiting-confirmation + ready summary rather than prematurely declaring blocked",
+        "Preserves the confirmed product decisions and stage boundaries; does not restart invocation, enter Boundary Gate, edit project documents, implement, or commit"
+      ]
     }
   ]
 }
