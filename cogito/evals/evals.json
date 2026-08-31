@@ -666,6 +666,20 @@
         "Does not classify the necessary retry decision as Deferred Decisions, a recommendation, a confirmed decision, or an exclusion; retains the already confirmed no-data behavior",
         "Does not require repeated invocation, enter Boundary Gate, edit project files, implement, or commit; a skip does not confirm the summary"
       ]
+    },
+    {
+      "id": 52,
+      "scenario": "grilling-first-skip-last-question-produces-blocked-summary",
+      "prompt": "對話前文：使用者已以 $cogito 啟動 FS-127「手動匯出報表」的 Grilling，對話未中斷。專案指示、來源、Brief 與 working tree 已檢查，無 staged changes 或其他 active Slice。本案只處理目前對話，不調查 host 專案或真實服務。已確認：分析人員依既有權限與查詢條件手動匯出 UTF-8 CSV，最多 10000 筆；成功時提供完整檔案，30 秒逾時則中止、顯示錯誤且不提供部分檔案。本次明確排除排程及自動重試。給定的整合測試已證實完整匯出能力，故障測試已證實逾時中止、不留部分檔案，且再次手動操作在技術上可行。所有必要事實均已查證，沒有其他查證工作、AI 預設、可延後事項或已知剩餘風險。是否允許逾時後手動重試，仍是必要產品決策，沒有已核准規則或安全預設。查無資料時只顯示提示且不產生檔案也已確認；現在只剩是否允許逾時後手動重試這個必要問題，沒有其他可有效進行的必要問答或查證。assistant 第一次詢問：「逾時後是否允許使用者手動重試？」使用者現在第一次回覆：「先跳過這題。」此前尚未跳過或回訪過任何問題。",
+      "expected_output": "首次跳過當下沒有其他必要問答或查證可進行，直接產出 awaiting-confirmation + blocked 摘要；不立即回訪、不要求再次跳過，保留手動重試的必要決策及影響與恢復條件。",
+      "files": [],
+      "expectations": [
+        "Produces the seven-field awaiting-confirmation + blocked summary on the first skip when no other effective necessary questioning or fact-checking remains",
+        "Does not immediately repeat the retry question, require a second skip, invent filler questions, or merely promise a future revisit without summarizing",
+        "Blocking Questions retains the retry decision, its impact on timeout behavior or acceptance, and the user decision needed to resume clarification",
+        "Does not drop, defer, prune, default, exclude, or decide the unresolved retry behavior; preserves confirmed no-data behavior and separates technical feasibility from product permission",
+        "Does not treat skipping as summary confirmation or authorization to enter Boundary Gate, edit files, implement, or commit"
+      ]
     }
   ]
 }
