@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -63,6 +64,25 @@ class StateAndEventContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.runtime = load_runtime()
         self.workflow = self.runtime.load_workflow()
+
+    def test_runtime_facade_loads_from_an_arbitrary_working_directory(self) -> None:
+        source = (
+            "import importlib.util; "
+            f"p={str(RUNTIME_PATH)!r}; "
+            "s=importlib.util.spec_from_file_location('cogito_runtime_smoke', p); "
+            "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+            "assert m.RunStore and m.validate_package and m.render_workflow_mermaid; "
+            "assert m.DEFAULT_WORKFLOW == m.ROOT / 'workflows' / 'cogito-v3.json'"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            completed = subprocess.run(
+                [sys.executable, "-c", source],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_illegal_transition_fails_closed(self) -> None:
         with self.assertRaises(self.runtime.CogitoError):

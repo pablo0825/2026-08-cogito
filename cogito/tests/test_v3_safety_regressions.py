@@ -125,6 +125,18 @@ class GateSafetyTests(unittest.TestCase):
         with self.assertRaises(self.runtime.CogitoError):
             store._validate_review({"approved": True, "review_exemption": True})
 
+    def test_missing_evidence_fails_before_loading_ledger_or_git(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
+            store.run_dir = Path(directory)
+            store.events_path = Path(directory) / "events.jsonl"
+            store.load = lambda: self.fail("missing evidence must not load the ledger")
+            store._git = lambda *_args: self.fail("missing evidence must not query Git")
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "required verification evidence is missing"
+            ):
+                store._validate_evidence(package(), [], require_current_head=True)
+
     def test_maintenance_review_exemption_advances_verified_tasks(self) -> None:
         store = self.runtime.RunStore.__new__(self.runtime.RunStore)
         store.approved_package = lambda: package("maintenance")

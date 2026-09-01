@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -16,79 +15,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from cogito_runtime import CogitoError, ID_RE, atomic_write_json, hash_json, materialize_contract, validate_package
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from cogito_common import ID_RE, CogitoError, atomic_write_json, hash_json
+from cogito_contracts import materialize_contract, validate_package
+from cogito_evidence_binding import (
+    git as _git,
+    safe_cwd as _safe_cwd,
+    safe_file as _safe_file,
+    working_tree_binding as _working_tree_binding,
+)
 
 OUTPUT_CAP = 64 * 1024
 BASE_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "PATHEXT")
-
-
-def _git(worktree: Path, *args: str) -> str:
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(worktree), *args], shell=False, check=True,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise CogitoError(f"cannot establish Git evidence binding: {exc}") from exc
-    return proc.stdout.strip()
-
-
-def _working_tree_binding(worktree: Path) -> dict[str, Any]:
-    """Bind evidence to HEAD plus actual unstaged and untracked tested content."""
-    try:
-        diff = subprocess.run(
-            ["git", "-C", str(worktree), "diff", "--binary", "HEAD", "--"],
-            shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
-        ).stdout
-        untracked_raw = subprocess.run(
-            ["git", "-C", str(worktree), "ls-files", "--others", "--exclude-standard", "-z"],
-            shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
-        ).stdout
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise CogitoError(f"cannot snapshot working tree: {exc}") from exc
-    untracked: list[dict[str, str]] = []
-    for raw in filter(None, untracked_raw.split(b"\0")):
-        relative = raw.decode("utf-8", errors="surrogateescape")
-        path = _safe_file(worktree, relative)
-        digest = hashlib.sha256()
-        try:
-            with path.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-        except OSError as exc:
-            raise CogitoError(f"cannot hash untracked file {relative}: {exc}") from exc
-        untracked.append({"path": relative, "sha256": digest.hexdigest()})
-    binding = {
-        "head_tree": _git(worktree, "rev-parse", "HEAD^{tree}"),
-        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
-        "untracked": sorted(untracked, key=lambda item: item["path"]),
-    }
-    binding["snapshot_hash"] = hash_json(binding)
-    return binding
-
-
-def _safe_file(worktree: Path, relative: str) -> Path:
-    root = worktree.resolve()
-    candidate = (root / relative).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise CogitoError("working-tree path escapes worktree") from exc
-    if not candidate.is_file():
-        raise CogitoError(f"working-tree path is not a regular file: {relative}")
-    return candidate
-
-
-def _safe_cwd(worktree: Path, relative: str) -> Path:
-    root = worktree.resolve()
-    candidate = (root / relative).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise CogitoError("check cwd escapes the worktree") from exc
-    if not candidate.is_dir():
-        raise CogitoError("check cwd does not exist or is not a directory")
-    return candidate
 
 
 def _limited(value: bytes, cap: int) -> tuple[str, bool]:

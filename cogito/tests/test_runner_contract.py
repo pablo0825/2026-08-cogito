@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -33,7 +34,15 @@ class ControlledRunnerContractTests(unittest.TestCase):
         git(repo, "commit", "-qm", "baseline")
         return repo, git(repo, "rev-parse", "HEAD")
 
-    def invoke(self, package: Path, check_id: str, repo: Path, evidence: Path):
+    def invoke(
+        self,
+        package: Path,
+        check_id: str,
+        repo: Path,
+        evidence: Path,
+        *,
+        env: dict[str, str] | None = None,
+    ):
         return subprocess.run(
             [
                 sys.executable,
@@ -50,6 +59,7 @@ class ControlledRunnerContractTests(unittest.TestCase):
             ],
             text=True,
             capture_output=True,
+            env=env,
         )
 
     def write_package(self, root: Path, commit: str, checks: list[dict]) -> Path:
@@ -126,6 +136,94 @@ class ControlledRunnerContractTests(unittest.TestCase):
             evidence = json.loads(evidence_files[0].read_text())
             self.assertEqual(evidence["status"], "failed")
             self.assertTrue(evidence["timed_out"])
+
+    def test_runner_redacts_and_caps_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-output",
+                    "argv": [
+                        sys.executable,
+                        "-c",
+                        "print('SECRET-1234'); print('x' * 70000)",
+                    ],
+                    "redact_patterns": [r"SECRET-\d+"],
+                }],
+            )
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-output", repo, evidence_dir)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
+            self.assertNotIn("SECRET-1234", evidence["stdout"])
+            self.assertIn("[REDACTED]", evidence["stdout"])
+            self.assertTrue(evidence["truncated"])
+            self.assertLessEqual(len(evidence["stdout"].encode()), 64 * 1024)
+
+    def test_runner_exposes_only_allowlisted_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-env",
+                    "argv": [
+                        sys.executable,
+                        "-c",
+                        "import os; print(os.getenv('COGITO_ALLOWED')); print(os.getenv('COGITO_BLOCKED'))",
+                    ],
+                    "env_allowlist": ["COGITO_ALLOWED"],
+                }],
+            )
+            value = json.loads(package.read_text())
+            value["policy_snapshot"]["allowed_environment"] = ["COGITO_ALLOWED"]
+            package.write_text(json.dumps(value))
+            evidence_dir = root / "evidence"
+            environment = dict(os.environ)
+            environment.update({"COGITO_ALLOWED": "visible", "COGITO_BLOCKED": "hidden"})
+            result = self.invoke(package, "C-env", repo, evidence_dir, env=environment)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
+            self.assertEqual(evidence["stdout"].splitlines(), ["visible", "None"])
+
+    def test_runner_rejects_cwd_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{"id": "C-cwd", "argv": ["true"], "cwd": ".."}],
+            )
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-cwd", repo, evidence_dir)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("check cwd escapes the worktree", result.stderr)
+            self.assertFalse(evidence_dir.exists())
+
+    def test_runner_rejects_invalid_redaction_pattern(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-redact",
+                    "argv": ["printf", "sensitive"],
+                    "redact_patterns": ["["],
+                }],
+            )
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-redact", repo, evidence_dir)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("invalid redaction pattern", result.stderr)
+            self.assertFalse(evidence_dir.exists())
 
 
 if __name__ == "__main__":
