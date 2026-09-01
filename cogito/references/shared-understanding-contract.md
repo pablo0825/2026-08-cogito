@@ -27,9 +27,13 @@ Readiness 判斷目前需求是否足以建立準確 Spec；Shared Understanding
 
 ## 摘要格式與確認
 
-共同理解摘要保留七個欄位，標題使用 Markdown 二級標題加粗體（`## **標題**`），與正文之間留一個空行。實際摘要正常渲染，不將整份摘要包在程式碼區塊內；下列區塊只示範 Markdown 結構：
+共同理解摘要最上方使用 Markdown 一級標題。已有明確 Slice ID 時使用 `# FS-NNN Shared Understanding`，以目前 Slice ID 取代 `FS-NNN`；尚未建立 Slice 或沒有可確認的 Slice ID 時使用 `# Shared Understanding`。不得猜測、預留或為摘要建立 Slice ID。
+
+摘要保留七個欄位，標題使用 Markdown 二級標題加粗體（`## **標題**`），與正文之間留一個空行。實際摘要正常渲染，不將整份摘要包在程式碼區塊內；下列區塊只示範已有 Slice ID 時的 Markdown 結構：
 
 ```markdown
+# FS-NNN Shared Understanding
+
 ## **Confirmed Decisions**
 
 〈本欄內容〉
@@ -85,3 +89,11 @@ Readiness: ready | blocked
 摘要確認只表示內容正確，不授權修改 `docs/project/`、Blueprint、Spec 或 Plan，不核准實作，也不授權 commit。
 
 完整問答留在對話中。Canonical 文件只在取得適用授權後保存目前有效的結論，不建立 Requirement Interview history 文件。
+
+## 固定確認提示
+
+`Shared Understanding: awaiting-confirmation` 的摘要在狀態行後輸出以下固定文字，不得省略、改寫或擴張；實際輸出使用一般段落，不加引號、列點或引用格式：
+
+請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。
+
+`Shared Understanding: confirmed` 的摘要不再次輸出確認提示。

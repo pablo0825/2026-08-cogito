@@ -2,9 +2,9 @@
 
 Cogito 是以 Feature Slice 為核心的 Codex 軟體工程工作流程 skill，適用於前端、後端與全端專案，協助釐清需求、控制 Slice 邊界、建立 Spec／Plan、執行實作與驗證，以及逐步收編既有專案。
 
-Cogito 2.0.13 採 stage-scoped invocation：使用者以 `$cogito` 明確開始或恢復每個治理階段；對目前未決問題、摘要或 Proposal 的直接回答可在同階段隱式續接。一般請求、新 Scope、新階段與中斷恢復不會隱式啟動 Cogito。
+Cogito 2.0.14 採 stage-scoped invocation：使用者以 `$cogito` 明確開始或恢復每個治理階段；對目前未決問題、摘要或 Proposal 的直接回答可在同階段隱式續接。一般請求、新 Scope、新階段與中斷恢復不會隱式啟動 Cogito。
 
-2.0.13 將共同理解摘要的七個欄位標題改為 Markdown 二級標題加粗體（`## **標題**`），提升欄位與內容的視覺層次。欄位名稱、內容分類、Readiness、確認與授權規則均不變。
+2.0.14 為共同理解摘要加入動態一級標題：已知 Slice ID 時使用 `# FS-NNN Shared Understanding`，否則使用 `# Shared Understanding`；並固定 `awaiting-confirmation` 摘要的確認提示。七個欄位、Readiness 與授權效力均不變。
 
 目前版本記錄於 [VERSION](VERSION)。AI 執行時以 [SKILL.md](SKILL.md) 為唯一入口；本文件只提供給維護者快速理解封裝結構，不取代其中的規則。
 
