@@ -42,6 +42,27 @@ Gate 在此表只使用 `required` 或 `advisory`；`human` 項目記錄於 Huma
 
 此表記錄目前證據，不是要求使用者逐項重跑的 Human Acceptance checklist。
 
+## Independent Code Review
+
+`Execution Mode: legacy-staged` 且沒有獨立 review 要求時填寫 `Not applicable — legacy-staged`。`sequential-package` 必須由未參與實作的獨立 Review Agent 完整填寫；無法取得 Reviewer 時不得建立自我審查結果。
+
+- Review Status: `pending | passed | blocked`
+- Reviewer: `<independent agent identity or pending>`
+- Reviewed Baseline: `<approved baseline and reviewed diff>`
+- Risk Classification: `low | high`
+- Review-Fix Rounds Used: `<0-3>`
+- Recommendation: `approve | fix | block`
+- Conformance: <Spec／Plan、Scope、Files 與停止條件的一致性結論>
+- Test Adequacy: <Acceptance coverage 與 evidence 缺口>
+
+### Risk Hotspots
+
+| File / Lines | Risk | Worst Impact | Evidence / Gap | Rollback | User Action |
+|---|---|---|---|---|---|
+| `<path>:<line>` | <風險或 `None`> | <最壞影響> | <證據或缺口> | <回滾方式> | `review | none` |
+
+低風險且沒有 hotspot 時填寫一列 `None`。高風險必須精確指出需要使用者閱讀的程式碼段落；blocking finding 未解決、required evidence 不足或 Recommendation 不是 `approve` 時不得進入 `awaiting-human`。
+
 ## Human Integration
 
 | ID | Requirement | Status | Evidence | Confirmed By | Confirmed At |

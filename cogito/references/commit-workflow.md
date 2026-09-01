@@ -2,6 +2,8 @@
 
 每次會建立 commit 的操作或中斷後恢復 sequence 時完整讀取一次。同一 continuous sequence 的 batches 共用本規則，不在每批重讀。
 
+`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。Working tree、exact staging、commit history 與 Final Approval 邊界不變；package mode 只增加 Development Package preparation、核准後 handoff 與受限 Review Fix commit。
+
 ## 授權對照
 
 | 明確授權 | 對應 commit |
@@ -12,13 +14,14 @@
 | 核准 Rolling Adoption Proposal | Proposal 指定的 Adoption Documentation commit |
 | 建立 Spec／Plan | Draft Documentation |
 | 核准 Spec／Plan | Commit Plan approval＋Approval Documentation |
+| 核准 Development Package | 必要的 Blueprint Revision＋Execution Candidate Approval＋核准 batches＋完整 checks＋獨立 review；不含 Final Approval |
 | 開始 `continuous` implementation | 所有尚未完成的 implementation batches與各 batch Required Verification |
 | 開始 AI Verification | 完整 AI Verification＋Verification Documentation |
 | 開始或繼續 legacy `per-batch` Plan | 下一個 implementation batch |
 | 提供 Human Acceptance 結果 | Final 或 Acceptance Feedback Documentation |
 | 核准 Maintenance Proposal | Proposal 指定的單一 Maintenance commit |
 
-核准 Spec／Plan 本身不授權實作；Approval commit 後停止，Implementation 必須由新的 `$cogito` 訊息啟動。取得目前階段的工作授權後不再另問是否 commit。模糊回覆不構成授權。
+`legacy-staged` 的 Spec／Plan 核准本身不授權實作；Approval commit 後停止，Implementation 必須由新的 `$cogito` 訊息啟動。`sequential-package` 只接受目前 Development Package 的明確 Package Approval，Approval commit 成為 Approved Baseline 後依 package reference 自動 handoff。取得目前模式的工作授權後不再另問是否 commit。模糊回覆不構成授權。
 
 ## Working tree 邊界
 
@@ -29,6 +32,8 @@
 - 目標檔案已有無法安全分離的使用者修改時停止。
 - 只有使用者明確要求採納時，才將其既有修改納入本次範圍。
 - 不建立空 commit，不 push，不 amend、rebase、squash、reset、cherry-pick 或 force push。
+
+package Preparation Authority 建立的 drafts 必須保持 unstaged；Package Approval 前不得建立 Draft 或其他 commit。若無法把 package drafts 與使用者既有變更安全區分，停止等待處理。
 
 ## Batch 設計
 
@@ -52,6 +57,8 @@ Feature-Slice: <ID>
 
 Maintenance 使用 `refactor`、`test` 或 `chore` 等符合實際目的的 type 與穩定英文模組 scope，不加入 `Feature-Slice` trailer。
 
+package mode 的 Review Fix 使用 `fix`，每輪最多一個可審查 commit，body 保留 `Feature-Slice: <ID>`。只允許核准 Files／Internal Areas、不得修改 Spec 或擴大 Plan；詳細 finding 與已解決歷史由 Git 保存，Verification 只留目前 review 結果與使用輪數。
+
 ## Maintenance commit
 
 Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [maintenance-workflow.md](maintenance-workflow.md) 唯一定義。本文件只負責 working-tree 邊界、exact staging、staged diff、message 與 commit creation。核准後建立一個 commit，不建立或更新 Plan row；commit 後回報並停止。
@@ -69,7 +76,7 @@ Maintenance 的 eligibility、Proposal、Invariants 與 proof sufficiency 由 [m
 7. 檢查 staged file list、staged diff 與排除項目。
 8. 使用核准 message 建立 commit。
 9. 在對話回報 Commit ID、message、檔案、排除項目與驗證結果；不寫入 Spec、Plan 或 Verification。
-10. continuous sequence 直接進入 Plan 中下一個 implementation batch；最後一個 implementation batch 後停止，提示以新的 `$cogito` 訊息開始 AI Verification。
+10. continuous sequence 直接進入 Plan 中下一個 implementation batch；`legacy-staged` 在最後一個 implementation batch 後停止並提示以新的 `$cogito` 訊息開始 AI Verification，`sequential-package` 依 package reference 繼續完整 checks 與獨立 review。
 
 若 stage 後發現異常，只撤銷本次新增的 staging，不改 working tree 或操作開始前狀態。範圍內問題可修正並重跑驗證；需要新增／重組 batch、修改未核准檔案、改變 Spec／Plan／Integration Contract、處理範圍外失敗、分離重疊修改或取得人類決策時停止。
 

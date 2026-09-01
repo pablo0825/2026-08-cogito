@@ -2,11 +2,13 @@
 
 用於執行已核准 Plan 的 implementation batches，並以風險相稱的檢查維持快速回饋。
 
+`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。本文件的 batch、Scope、verification 與 commit safety 仍適用；package reference 只覆蓋開始授權、核准範圍內的 Review Fix，以及 sequence 完成後的 handoff。`legacy-staged` 維持原行為。
+
 ## 開始條件
 
 確認 blueprint、Spec、Plan 與 Commit Plan 皆已核准，工作樹沒有無法安全分離的重疊變更。完整讀取 [commit-workflow.md](commit-workflow.md) 一次；同一 continuous sequence 的每個 batch 不重讀，只有中斷恢復時以 `$cogito` 重新讀取。Blueprint 的 `approved -> in-progress` 在第一個成功的 implementation commit 中作為 lifecycle housekeeping 保存；第一個 commit 前中斷時，以 working tree 識別未提交工作，不留下單獨的狀態修改。
 
-使用者明確要求開始 `continuous` Plan 時，授權只涵蓋所有尚未完成的已核准 implementation batches 與各 batch Required Verification。授權不涵蓋完整 AI Verification、Verification Documentation 或 Plan 未列出的 remediation code。依 I1、I2、…、In 執行，不在 batches 間詢問。
+`legacy-staged` 由使用者明確要求開始 `continuous` Plan；授權只涵蓋所有尚未完成的已核准 implementation batches 與各 batch Required Verification，不涵蓋完整 AI Verification、Verification Documentation 或 Plan 未列出的 remediation code。`sequential-package` 則必須驗證 Package Approval 與 Approved Baseline，並只在 Development Package 的 Autonomy Budget 內執行。依 I1、I2、…、In 執行，不在 batches 間詢問。
 
 ## Batch 執行
 
@@ -21,7 +23,7 @@
 
 Batch Required Verification 是該 commit 的必要條件；結果為 `failed` 或 `not-run` 時不建立該 batch commit。不要因期限、已投入工作或後續完整驗證而略過。
 
-不得擴張 Scope、處理其他 Slice、自行回答需求問題、擴大重構、修改未核准檔案或建立隱藏 commit。範圍內問題可修正並重跑驗證；需要新增或重組 batch、修改 Spec／Plan／Integration Contract、處理範圍外失敗、分離重疊變更或取得人類決策時停止。
+不得擴張 Scope、處理其他 Slice、自行回答需求問題、擴大重構、修改未核准檔案或建立隱藏 commit。範圍內問題可修正並重跑驗證；需要新增或重組一般 implementation batch、修改 Spec／Plan／Integration Contract、處理範圍外失敗、分離重疊變更或取得人類決策時停止。package mode 的獨立 Review Fix 不是一般 implementation batch，只能依已核准的輪數、Files／Internal Areas 與停止條件執行。
 
 ## Risk-based Required Verification
 
@@ -43,6 +45,6 @@ Batch Required Verification 是該 commit 的必要條件；結果為 `failed` �
 
 ## Sequence 完成
 
-最後一個 implementation commit 完成後停止，不讀取或執行 verification workflow。回報 implementation 結果，並提示：`請以 $cogito 開始 <ID> AI Verification`。AI Verification 是新的階段，只有該明確訊息才能載入 [verification-acceptance-workflow.md](verification-acceptance-workflow.md) 並執行核准 Plan 的 `V-*` mappings。
+`legacy-staged` 在最後一個 implementation commit 完成後停止，不讀取或執行 verification workflow；回報 implementation 結果並提示：`請以 $cogito 開始 <ID> AI Verification`。`sequential-package` 在同一 package sequence 完整讀取 [verification-acceptance-workflow.md](verification-acceptance-workflow.md)，執行核准的 `V-*` mappings、獨立 review 與允許的 review–fix loop。
 
 缺少 `Implementation Execution` 的 legacy `per-batch` Plan 維持每批明確授權，commit 後停止。恢復時以 Plan 中第一個尚未完成 batch 為下一步，並用 Git history 確認已提交工作，不重做已提交 batch。

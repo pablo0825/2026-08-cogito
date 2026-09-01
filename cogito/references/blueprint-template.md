@@ -6,11 +6,12 @@
 
 ## Document Information
 
-- Schema Version: `2`
+- Schema Version: `3`
 - Document Status: `active`
 - Requirements Root: `docs/project/`
 - Adoption Mode: `complete | rolling`
 - Coverage: `complete | partial`
+- Execution Mode: `legacy-staged | sequential-package`
 - Last Reconciled: `<YYYY-MM-DD>`
 - Active Feature Slice: `<ID or none>`
 
@@ -19,6 +20,8 @@
 <簡明說明目的、需求來源及使用方式>
 
 Rolling Adoption 且 Coverage 為 `partial` 時，明確寫出：Feature Slice Index 只列已收編或正在收編的能力；未列出不代表產品不存在該功能。完整模式省略此警示。
+
+`Execution Mode` 缺少時依相容性規則視為 `legacy-staged`。新建或升級為 `sequential-package` 前必須讓使用者核准 mode 影響；mode 變更不修改 accepted snapshots。
 
 ## Requirement Sources
 

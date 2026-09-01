@@ -75,6 +75,33 @@
 
 若沒有，填寫 `None`。
 
+## Development Package
+
+`Execution Mode: legacy-staged` 時填寫 `Not applicable — legacy-staged`，並省略本節其餘欄位。`sequential-package` 必須完整填寫，作為 Package Approval 的一部分。
+
+- Execution Mode: `sequential-package`
+- Approved Baseline: `Approval Documentation commit containing this approved Plan`
+- Package Handoff: `automatic-to-awaiting-human`
+- Independent Review: `required`
+- Risk Classification: `low | high`
+- Autonomy Budget: `<只允許的內部實作、測試、Files／Internal Areas 與低風險整合>`
+- Review-Fix Budget: `<1 | 2 | 3> rounds, maximum 3`
+- Time / Cost Budget: `<可觀察上限或 not-configured>`
+- Stop Conditions: `<產品行為、公開契約、資料模型、安全邊界、Slice 責任／依賴／順序、Plan 主要方式、核心檔案、Verification Gate、未收斂或 Agent 分歧>`
+
+### Approval Summary
+
+- Deliverable: <完成後的使用者結果>
+- Excluded: <明確不做的內容>
+- Shared Understanding Delta: `None` 或 <不得隱藏的差異>
+- Boundary / Slice Structure: <Gate 結果、拆分、依賴與順序>
+- Execution Candidate: `<本 package 唯一可執行的 Slice ID>`
+- Implementation / Integration: <主要方式、共用區域與整合策略>
+- Verification / Human Review: <required checks、Human Integration／Acceptance 與高風險人工檢查>
+- Approval Effect: <核准後自動執行的範圍與最後停止點>
+
+任何 Agent 新增的假設、Scope Delta、前置 Slice、風險或未驗證的重要事實都必須出現在 Approval Summary，不能只放在其他章節。
+
 ## Verification Gates
 
 | Check ID | Acceptance IDs | Check | Gate | Applicability | Command / Method |
@@ -97,7 +124,7 @@ Gate 只使用 `required`、`advisory`、`human`。`Applicability` 使用 `alway
 
 ## Commit Plan
 
-Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 pending 狀態限制。
+`legacy-staged` 的 Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 pending 狀態限制。`sequential-package` 的 Preparation Authority 只建立 unstaged drafts，不建立 Draft commit；Package Approval 後才建立 Approval commit。
 
 - Commit Plan Approval: `pending`
 - Approved By: `pending`
@@ -115,6 +142,8 @@ Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 p
 表格只列尚未完成的 checkpoints。Approval、implementation、Verification 或 Final checkpoint 完成並提交時，在同一 commit 移除對應 row；沒有未完成 checkpoint 時以 `None` 取代表格。單純移除已完成 row 不將 Commit Plan Approval 設為 `pending`；修改任何尚未完成 row 仍依實質性重新核准。
 
 Commit Plan 的 `Required Verification` 是 batch commit gate，不取代上方控制 Slice 狀態的完整 Verification Gates。
+
+`sequential-package` 的 Review Fix 不預先建立空白 batch row；核准的 Development Package 已限制其輪數、Files／Internal Areas 與停止條件。實際修正每輪使用一個 `fix` commit，不能藉此改變尚未完成 Commit Plan。
 
 ## Approval
 

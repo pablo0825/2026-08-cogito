@@ -20,6 +20,15 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 - 使用者授權只涵蓋明確指定的 Proposal、文件 checkpoint、implementation sequence 或驗收結果。完成目前授權後停止；下一階段等待新的明確授權。
 - 保留操作開始前的使用者變更；不擴張核准 Scope、不修改未核准檔案、不把未執行檢查標成通過、不 push、不改寫 Git history。
 
+## Execution Mode
+
+從 blueprint 的 `Execution Mode` 決定 handoff 與授權模型：
+
+- `legacy-staged`：保留逐階段 invocation、核准與停止點。
+- `sequential-package`：仍只允許一個 active Feature Slice，但把 Boundary Gate、draft preparation、implementation、AI Verification 與獨立 review 組成有明確權限邊界的 Development Package。完整讀取並依 [development-package-workflow.md](references/development-package-workflow.md) 執行；第一階段不套用於 Rolling Adoption 或 Maintenance。
+
+缺少 `Execution Mode` 的既有 blueprint 一律視為 `legacy-staged`。切換 mode 是 project-level Blueprint Revision，必須先呈現影響並取得使用者明確核准；不得因使用者想減少核准次數就自行啟用。`sequential-package` 的 mode-specific 規則只覆蓋各 workflow 的 stage handoff，不放寬 canonical requirements、working-tree、Scope、Git history 或 Final Acceptance 邊界。
+
 ## 啟動與續接閘門
 
 在讀取專案或執行操作前，先依序判斷：
@@ -32,7 +41,7 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 
 若訊息同時直接回答目前問題並要求新操作、擴張無關 Scope 或跨階段，只處理目前答案；不得執行新增部分，並提示以新的 `$cogito` 訊息啟動。改談其他主題後、工作中斷後或另開 Feature Slice／Maintenance，也必須明確恢復。
 
-階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。進入每個新階段都必須有新的 `$cogito` 訊息；階段內的明確「同意／核准」可以授權目前 Proposal。`$cogito` 只啟動階段，不自行構成核准。
+階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。`legacy-staged` 進入每個新階段都必須有新的 `$cogito` 訊息；`sequential-package` 只依 Development Package reference 定義的 Preparation Authority 與 Package Approval 自動 handoff。階段內的明確「同意／核准」可以授權目前 Proposal。`$cogito` 只啟動階段，不自行構成核准。
 
 ## 開始操作
 
@@ -55,6 +64,8 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 | 執行不改產品行為且可用自動化證明的小型 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 開始、繼續或修正已核准 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；建立 Verification 時再讀 [verification-template.md](references/verification-template.md) |
+
+若 mode 是 `sequential-package`，上述 Grilling、Boundary Gate、Spec／Plan、Implementation 與 AI Verification 路由另外完整讀取 [development-package-workflow.md](references/development-package-workflow.md)，由其決定可自動進行的 handoff 與停止點。
 
 同一 continuous sequence 只需讀取 commit workflow 一次；中斷後以 `$cogito` 恢復時重新讀取。只有新的 `$cogito` 訊息明確啟動下一階段時才載入其 workflow，不預載或自動 handoff。
 
@@ -90,9 +101,9 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 ## 全域授權與完成條件
 
 - Shared Understanding confirmation 只確認摘要正確；Boundary Gate pass 只確認 Slice 邊界；兩者都不授權文件修改、實作或 commit。
-- Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，單獨核准不授權實作。
-- Spec／Plan 核准完成後停止；Implementation 是新階段，必須由新的 `$cogito` 訊息啟動。
-- `continuous` implementation 授權只涵蓋尚未完成的已核准 batches 與各 batch Required Verification；完整 AI Verification 與 Verification Documentation 屬於新的 AI Verification 階段。
+- `legacy-staged` 的 Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，單獨核准不授權實作；核准完成後停止，Implementation 必須由新的 `$cogito` 訊息啟動。
+- `legacy-staged` 的 `continuous` implementation 授權只涵蓋尚未完成的已核准 batches 與各 batch Required Verification；完整 AI Verification 與 Verification Documentation 屬於新的 AI Verification 階段。
+- `sequential-package` 的準備、執行、獨立 review 與 Final Approval 權限只依 Development Package reference；Package Approval 之前不得實作，Final Approval 仍只由使用者確認。
 - Rolling Adoption 與 Maintenance 的授權只涵蓋各自 Proposal 列出的 batch、檔案、證明與 commit。
 - 每個步驟以已授權產出完成、必要檢查實際執行、狀態與文件一致為完成條件。
 - 同階段等待回答、修正、說明或核准時，直接提出要求，不要求 `$cogito`。跨階段或中斷恢復時，提供包含 `$cogito` 的精確啟動句，例如：`請以 $cogito 開始 FS-001 implementation`。

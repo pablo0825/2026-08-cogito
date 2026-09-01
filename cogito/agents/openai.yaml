@@ -1,7 +1,7 @@
 interface:
   display_name: "Cogito"
   short_description: "Adopt, clarify, and execute software work"
-  default_prompt: "Use $cogito to start one Cogito stage; direct answers can continue that stage without repeating $cogito."
+  default_prompt: "Use $cogito to clarify and execute one Feature Slice with the project's approved staged or development-package workflow."
 
 policy:
   allow_implicit_invocation: true

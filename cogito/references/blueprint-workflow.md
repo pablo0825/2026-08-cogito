@@ -2,11 +2,13 @@
 
 用於建立、同步、審查或修訂 Feature Slice blueprint，以及管理需求文件變更。
 
+切換 `Execution Mode` 是 project-level Blueprint Revision：說明目前與目標 mode、授權／停止點差異、相容性與回復方式，等待使用者明確核准後才修改。缺少欄位的既有 blueprint 視為 `legacy-staged`。`sequential-package` 的未提交拆分候選與 Development Package preparation 另外依 [development-package-workflow.md](development-package-workflow.md)；Package Approval 前不得 commit 或執行候選 Slice。
+
 ## 需求來源與 Slice 邊界
 
 一般模式只使用 `docs/project/`、使用者明確確認的需求，以及可追溯至需求文件的既有 blueprint 內容。Rolling Adoption 依 [rolling-adoption-workflow.md](rolling-adoption-workflow.md) 將相關舊文件、程式、測試與 Git history 視為 Legacy Baseline 證據，只有使用者確認且寫入 `docs/project/` 的內容才成為權威需求。將 `AGENTS.md`、架構規範與程式碼視為限制或現況，不視為產品需求。
 
-使用者提出新的或實質改變既有的產品行為時，先完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)，共同理解確認後停止。只有使用者以新的 `$cogito` 訊息啟動 Boundary Gate，才依 [spec-plan-workflow.md](spec-plan-workflow.md) 執行 Gate。`Shared Understanding: confirmed` 且 `Readiness: ready` 後，Gate 通過才可提出產品需求文件修改 Proposal、建立 Slice 或提出一般 Blueprint Slice Revision Proposal；Gate 未通過時只可提出 Boundary Gate 要求的垂直拆分 Proposal，不修改任何文件。摘要確認與 Gate 通過都不構成修改 `docs/project/`、blueprint 或其他文件的授權。單純依清楚且未改變的權威需求 reconcile blueprint 時，不重做產品決策訪談或 Boundary Gate。
+使用者提出新的或實質改變既有的產品行為時，先完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)。`legacy-staged` 在共同理解確認後停止，並要求使用者以新的 `$cogito` 訊息啟動 Boundary Gate；`sequential-package` 依 Preparation Authority 自動準備。`Shared Understanding: confirmed` 且 `Readiness: ready` 後才可執行 Gate。`legacy-staged` 的 Gate 未通過時只可提出垂直拆分 Proposal，不修改文件；`sequential-package` 可建立 unstaged provisional drafts，但 Package Approval 前不得 stage、commit 或實作。摘要確認本身只確認內容；任何持久化或執行權限仍由適用 mode 的明確授權決定。單純依清楚且未改變的權威需求 reconcile blueprint 時，不重做產品決策訪談或 Boundary Gate。
 
 讓每個 Slice 對應一個可觀察、可獨立驗收且本身有價值的使用者目標，並能用一句話描述完成結果；Slice 包含完成該結果所需的各層工作。若內容包含兩個以上可獨立驗收的結果、可分階段交付且前一階段已有價值、需要多套獨立 Human Acceptance，或新 agent 難以在單一 context 中理解並完成，先提出拆分 Proposal。不要依元件、API client、type、store、tests、重構或 tooling 等技術層拆分。
 

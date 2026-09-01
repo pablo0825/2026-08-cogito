@@ -83,7 +83,7 @@ Readiness: ready | blocked
 
 ## 確認效力與保存
 
-摘要確認只建立內容基線，不構成任何後續工作的授權。確認後的摘要持續有效，直到使用者明確修改或撤回。
+摘要確認只建立內容基線，不構成新的後續工作授權。確認後的摘要持續有效，直到使用者明確修改或撤回。`sequential-package` 若已由使用者在 project level 核准，後續可逆準備依既有 Preparation Authority 進行，而不是由本次摘要確認臨時取得授權。
 
 完整問答留在對話中；Canonical 文件只在取得適用授權後保存目前有效的結論，不建立 Requirement Interview history 文件。
 
@@ -91,9 +91,21 @@ Readiness: ready | blocked
 
 等待使用者明確確認摘要；摘要確認仍屬於同一 Grilling 階段，不需要重複 `$cogito`。
 
-`Shared Understanding: awaiting-confirmation` 的摘要在狀態行後輸出以下固定結尾，不得省略、改寫或擴張。確認提示與引導句使用一般段落，不加引號、列點或引用格式；`同意` 使用標示為 `text` 的程式碼區塊：
+`Shared Understanding: awaiting-confirmation` 的摘要在狀態行後輸出 mode 對應的固定結尾，不得省略、改寫或擴張。確認提示與引導句使用一般段落，不加引號、列點或引用格式；`同意` 使用標示為 `text` 的程式碼區塊。
+
+`legacy-staged` 或缺少 `Execution Mode` 時使用：
 
 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。
+
+若摘要正確，可直接回覆：
+
+```text
+同意
+```
+
+`sequential-package` 使用：
+
+請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確；專案已核准的 Preparation Authority 會接著準備 Boundary Gate、Slice、Spec、Plan 與 Development Package，但 Package Approval 前不會 stage、commit 或實作。
 
 若摘要正確，可直接回覆：
 
