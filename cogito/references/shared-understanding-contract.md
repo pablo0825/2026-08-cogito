@@ -92,8 +92,14 @@ Readiness: ready | blocked
 
 ## 固定確認提示
 
-`Shared Understanding: awaiting-confirmation` 的摘要在狀態行後輸出以下固定文字，不得省略、改寫或擴張；實際輸出使用一般段落，不加引號、列點或引用格式：
+`Shared Understanding: awaiting-confirmation` 的摘要在狀態行後輸出以下固定結尾，不得省略、改寫或擴張。確認提示與引導句使用一般段落，不加引號、列點或引用格式；`同意` 使用標示為 `text` 的程式碼區塊：
 
 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。
 
-`Shared Understanding: confirmed` 的摘要不再次輸出確認提示。
+若摘要正確，可直接回覆：
+
+```text
+同意
+```
+
+程式碼區塊只提供方便複製的回覆，不代表 AI 自行確認摘要。使用者指出修正內容時，更新摘要並維持 `awaiting-confirmation`，不得視為同意。`Shared Understanding: confirmed` 的摘要不再次輸出確認提示、引導句或程式碼區塊。
