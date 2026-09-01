@@ -27,34 +27,34 @@ Readiness 判斷目前需求是否足以建立準確 Spec；Shared Understanding
 
 ## 摘要格式與確認
 
-共同理解摘要保留七個欄位，標題使用 Markdown 粗體，與正文之間留一個空行。實際摘要正常渲染，不將整份摘要包在程式碼區塊內；下列區塊只示範 Markdown 結構：
+共同理解摘要保留七個欄位，標題使用 Markdown 二級標題加粗體（`## **標題**`），與正文之間留一個空行。實際摘要正常渲染，不將整份摘要包在程式碼區塊內；下列區塊只示範 Markdown 結構：
 
 ```markdown
-**Confirmed Decisions**
+## **Confirmed Decisions**
 
 〈本欄內容〉
 
-**Verified Facts**
+## **Verified Facts**
 
 〈本欄內容〉
 
-**Recommended Defaults**
+## **Recommended Defaults**
 
 〈本欄內容〉
 
-**Deferred Decisions**
+## **Deferred Decisions**
 
 〈本欄內容〉
 
-**Explicitly Excluded**
+## **Explicitly Excluded**
 
 〈本欄內容〉
 
-**Remaining Risks**
+## **Remaining Risks**
 
 〈本欄內容〉
 
-**Blocking Questions**
+## **Blocking Questions**
 
 〈本欄內容〉
 

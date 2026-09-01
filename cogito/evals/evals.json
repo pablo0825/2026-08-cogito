@@ -515,10 +515,10 @@
       "id": 41,
       "scenario": "summary-seven-fields-and-provenance",
       "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122『手動匯出報表』的 Grilling，對話未中斷；專案來源、指示、Brief 與 working tree 已查，沒有 staged changes 或其他 active Slice。本案只處理目前對話。使用者明確決定：分析人員手動匯出目前有權限的資料、UTF-8 CSV、既有欄位順序、最多 10000 筆、成功時全部匯出、30 秒逾時則顯示錯誤並允許手動重試、不自動重試。必要可行性事實均有給定證據：整合測試證實可完整取出 10000 筆，故障測試證實 30 秒中止及錯誤行為，程式調查發現現有檔名固定為 report.csv。AI 建議檔名包含日期以方便辨識，這是已判定低風險、可逆且不影響產品邊界的預設，使用者沒有逐項選定。CSV 函式的模組位置未定，但程式調查證實不影響介面、效能或驗收，可留給 Plan。適用且未被新要求推翻的 docs/project/reporting.md 已明確寫『本 Slice 不包含排程匯出』；沒有未決重大風險，也沒有任何其他必要決策或待查證據。assistant 正在等待最後的保留行為確認，使用者回覆：『保留既有查詢與權限行為。』請輸出目前共同理解摘要。",
-      "expected_output": "以七個粗體欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無，狀態為 awaiting-confirmation + ready。",
+      "expected_output": "以七個 Markdown 二級標題加粗體的欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無，狀態為 awaiting-confirmation + ready。",
       "files": [],
       "expectations": [
-        "Renders all seven field titles in bold Markdown outside code fences, with blank lines before their bodies; uses prose, bullets, or tables suited to the content without merging summary fields",
+        "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, with blank lines before their bodies; uses prose, bullets, or tables suited to the content without merging summary fields",
         "Keeps the AI date-in-filename suggestion and reason in Recommended Defaults, not Confirmed Decisions; does not turn the observed report.csv filename into a product requirement",
         "Verified Facts cites the supplied tests and code evidence; Deferred Decisions explains why module placement does not block Spec",
         "Explicitly Excluded records the scheduling exclusion with its applicable requirements-source basis, without inventing additional exclusions",
@@ -534,7 +534,7 @@
       "expectations": [
         "Outputs Shared Understanding: confirmed and Readiness: ready without demanding repeated $cogito for summary confirmation",
         "Retains the filename recommendation and its AI source in Recommended Defaults rather than moving or duplicating it into Confirmed Decisions",
-        "Renders all seven bold field titles outside code fences, uses content-appropriate prose, bullets, or tables without merging fields, and keeps empty fields with 無",
+        "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, uses content-appropriate prose, bullets, or tables without merging fields, and keeps empty fields with 無",
         "Preserves the explicit scheduling exclusion and does not add unmentioned scope exclusions",
         "Stops after confirmation, keeps document and implementation authorization unchanged, and provides a separate explicit Boundary Gate start rather than executing it"
       ]
@@ -548,7 +548,7 @@
       "expectations": [
         "Moves the explicitly selected filename rule into Confirmed Decisions and removes that item from Recommended Defaults rather than duplicating it",
         "Keeps the unselected success-message recommendation and its rationale in Recommended Defaults without treating it as a user decision",
-        "Renders all seven bold field titles outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
+        "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
         "Outputs awaiting-confirmation + ready for the corrected summary without treating the request to update it as confirmation of the whole summary",
         "Does not alter Readiness criteria, reopen settled scope, start Boundary Gate, modify documents, implement, or commit"
       ]
@@ -563,7 +563,7 @@
         "Acknowledges that silence did not establish an exclusion and removes the unsupported backup and notification-center exclusions",
         "Keeps Explicitly Excluded present with 無; does not infer those features are included either",
         "Does not ask the user to decide unrelated feature exclusions merely to populate the field or invent new necessary scope questions",
-        "Renders the corrected summary with all seven bold titles outside code fences, preserves known decisions and evidence, and marks actually empty fields 無",
+        "Renders the corrected summary with all seven titles as bold Markdown level-two headings (`## **Title**`) outside code fences, preserves known decisions and evidence, and marks actually empty fields 無",
         "Outputs awaiting-confirmation + ready without treating the user's correction as whole-summary confirmation or changing stage authorization"
       ]
     },
@@ -619,7 +619,7 @@
       "files": [],
       "expectations": [
         "Uses a rendered Markdown table within Confirmed Decisions to make the confirmed success, empty-result, timeout, and permission-denial behaviors easy to compare",
-        "Preserves all seven separate bold field titles and uses prose or bullets for simple non-comparative content rather than forcing every field into a table",
+        "Preserves all seven separate field titles as bold Markdown level-two headings (`## **Title**`) and uses prose or bullets for simple non-comparative content rather than forcing every field into a table",
         "Does not invent HTTP status codes, error codes, retry rules, or other unconfirmed values merely to fill table cells; retains the given timeout and no-partial-file limitations with the relevant behavior",
         "Keeps the AI filename recommendation and its reason in Recommended Defaults and the supplied evidence in Verified Facts, without converting observations or recommendations into user decisions",
         "Keeps the user-sourced scheduling exclusion, empty fields marked 無, and awaiting-confirmation + ready status; does not treat behavior confirmation as whole-summary confirmation or authorization for file edits, implementation, or commit"
