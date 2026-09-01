@@ -504,7 +504,7 @@
       "expected_output": "記錄 CSV 決策後，因只剩目前無法查證的 API 能力與依賴它的最大筆數決策，停止問答並產出 awaiting-confirmation + blocked 摘要；列出兩者依賴、阻塞原因與恢復條件，不要求產品最大筆數先有答案才允許產出摘要。",
       "files": [],
       "expectations": [
-        "Records the CSV decision and outputs Shared Understanding: awaiting-confirmation with Readiness: blocked",
+        "Records the CSV decision and outputs Shared Understanding: awaiting-confirmation with Readiness: blocked, separated from the seven fields by a Markdown horizontal rule and from each other by a blank line",
         "Keeps both API capacity and the dependent product row limit unresolved rather than inventing a limit or treating the product decision as harmless deferral",
         "Blocking Questions explains the dependency and recovery sequence: obtain capacity evidence or test access, let AI verify the fact, then resume the user's maximum-row decision",
         "Does not repeat unavailable fact questions, demand a premature row-limit decision, or invent unrelated questions to keep Grilling going",
@@ -515,14 +515,14 @@
       "id": 41,
       "scenario": "summary-seven-fields-and-provenance",
       "prompt": "對話前文：使用者已以 $cogito 啟動 FS-122『手動匯出報表』的 Grilling，對話未中斷；專案來源、指示、Brief 與 working tree 已查，沒有 staged changes 或其他 active Slice。本案只處理目前對話。使用者明確決定：分析人員手動匯出目前有權限的資料、UTF-8 CSV、既有欄位順序、最多 10000 筆、成功時全部匯出、30 秒逾時則顯示錯誤並允許手動重試、不自動重試。必要可行性事實均有給定證據：整合測試證實可完整取出 10000 筆，故障測試證實 30 秒中止及錯誤行為，程式調查發現現有檔名固定為 report.csv。AI 建議檔名包含日期以方便辨識，這是已判定低風險、可逆且不影響產品邊界的預設，使用者沒有逐項選定。CSV 函式的模組位置未定，但程式調查證實不影響介面、效能或驗收，可留給 Plan。適用且未被新要求推翻的 docs/project/reporting.md 已明確寫『本 Slice 不包含排程匯出』；沒有未決重大風險，也沒有任何其他必要決策或待查證據。assistant 正在等待最後的保留行為確認，使用者回覆：『保留既有查詢與權限行為。』請輸出目前共同理解摘要。",
-      "expected_output": "以 `# FS-122 Shared Understanding` 開頭，以七個 Markdown 二級標題加粗體的欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無，狀態為 awaiting-confirmation + ready。 狀態行後使用固定確認提示、一般段落引導句及只含「同意」的 `text` 程式碼區塊。",
+      "expected_output": "以 `# FS-122 Shared Understanding` 開頭，以七個 Markdown 二級標題加粗體的欄位輸出摘要，區分使用者決策、給定證據、AI 檔名預設、內部延後事項及文件明確排除；空風險與阻塞欄寫無。七欄與狀態區之間使用 Markdown 水平分隔線，awaiting-confirmation 與 ready 狀態行之間留一個空行；狀態行後使用固定確認提示、一般段落引導句及只含「同意」的 `text` 程式碼區塊。",
       "files": [],
       "expectations": [
         "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, with blank lines before their bodies; uses prose, bullets, or tables suited to the content without merging summary fields; starts with the exact level-one title `# FS-122 Shared Understanding`",
         "Keeps the AI date-in-filename suggestion and reason in Recommended Defaults, not Confirmed Decisions; does not turn the observed report.csv filename into a product requirement",
         "Verified Facts cites the supplied tests and code evidence; Deferred Decisions explains why module placement does not block Spec",
         "Explicitly Excluded records the scheduling exclusion with its applicable requirements-source basis, without inventing additional exclusions",
-        "Remaining Risks and Blocking Questions both remain present with 無 rather than being omitted; outputs awaiting-confirmation + ready and waits without advancing stages or modifying files; after the status lines outputs the exact fixed confirmation prompt: 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。; then outputs the plain-text cue `若摘要正確，可直接回覆：` followed by a fenced `text` code block containing only `同意`"
+        "Remaining Risks and Blocking Questions both remain present with 無 rather than being omitted; inserts a Markdown horizontal rule before the status block and a blank line between awaiting-confirmation and ready; waits without advancing stages or modifying files; after the status lines outputs the exact fixed confirmation prompt: 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。; then outputs the plain-text cue `若摘要正確，可直接回覆：` followed by a fenced `text` code block containing only `同意`"
       ]
     },
     {
@@ -532,7 +532,7 @@
       "expected_output": "以 `# FS-122 Shared Understanding` 開頭，確認摘要並重列七欄，狀態改為 confirmed + ready，但檔名預設仍留在 Recommended Defaults；不把整份摘要確認改寫為使用者逐項指定 AI 預設，也不啟動 Boundary Gate。 confirmed 摘要不再次輸出 awaiting-confirmation 的固定確認提示、引導句或「同意」程式碼區塊。",
       "files": [],
       "expectations": [
-        "Outputs Shared Understanding: confirmed and Readiness: ready without demanding repeated $cogito for summary confirmation; starts with `# FS-122 Shared Understanding` and does not output the fixed awaiting-confirmation prompt, reply cue, or `同意` code block again",
+        "Outputs Shared Understanding: confirmed and Readiness: ready after a Markdown horizontal rule, with a blank line between the status lines, without demanding repeated $cogito for summary confirmation; starts with `# FS-122 Shared Understanding` and does not output the fixed awaiting-confirmation prompt, reply cue, or `同意` code block again",
         "Retains the filename recommendation and its AI source in Recommended Defaults rather than moving or duplicating it into Confirmed Decisions",
         "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, uses content-appropriate prose, bullets, or tables without merging fields, and keeps empty fields with 無",
         "Preserves the explicit scheduling exclusion and does not add unmentioned scope exclusions",
@@ -549,7 +549,7 @@
         "Moves the explicitly selected filename rule into Confirmed Decisions and removes that item from Recommended Defaults rather than duplicating it",
         "Keeps the unselected success-message recommendation and its rationale in Recommended Defaults without treating it as a user decision",
         "Renders all seven field titles as bold Markdown level-two headings (`## **Title**`) outside code fences, uses bullets for multiple independent decisions, and keeps empty fields with 無",
-        "Outputs awaiting-confirmation + ready for the corrected summary without treating the request to update it as confirmation of the whole summary",
+        "Outputs awaiting-confirmation + ready after a Markdown horizontal rule, with a blank line between the status lines, without treating the request to update it as confirmation of the whole summary",
         "Does not alter Readiness criteria, reopen settled scope, start Boundary Gate, modify documents, implement, or commit"
       ]
     },
@@ -685,12 +685,12 @@
       "id": 53,
       "scenario": "summary-without-slice-id-uses-generic-title-and-fixed-prompt",
       "prompt": "對話前文：使用者已以 $cogito 啟動「既有報表匯出能力」的第一次 Rolling Adoption Grilling，對話未中斷。這次收編尚未建立 Slice、沒有 Slice ID，也沒有可確認的預留編號；不得為摘要建立或猜測 ID。Legacy Sources、Observed Behavior、Current、Target 與 Preserved Behavior 都已完成調查並由使用者確認：沿用分析人員既有權限與查詢條件，手動完整匯出 UTF-8 CSV，最多 10000 筆；30 秒逾時顯示錯誤、不提供部分檔案並允許手動重試；排程匯出明確排除。所有必要事實已有給定測試證據，沒有 AI 預設、延後事項、剩餘風險或阻塞。使用者目前回覆：「內容都對，請整理第一次共同理解摘要讓我確認。」此前尚未產出完整摘要。",
-      "expected_output": "以 `# Shared Understanding` 開頭，不加入或猜測 FS 編號；依七欄格式產出 awaiting-confirmation + ready 摘要，狀態行後逐字輸出固定確認提示、一般段落引導句及只含「同意」的 `text` 程式碼區塊。",
+      "expected_output": "以 `# Shared Understanding` 開頭，不加入或猜測 FS 編號；依七欄格式產出 awaiting-confirmation + ready 摘要，在七欄與狀態區之間使用 Markdown 水平分隔線，並在兩個狀態行之間留一個空行；狀態行後逐字輸出固定確認提示、一般段落引導句及只含「同意」的 `text` 程式碼區塊。",
       "files": [],
       "expectations": [
         "Starts the rendered summary with exactly `# Shared Understanding`, not an FS-prefixed title, placeholder, invented ID, capability name, or newly created Slice",
         "Renders all seven separate fields as bold Markdown level-two headings and preserves the supplied decisions, evidence, and explicit scheduling exclusion without inventing content",
-        "Outputs `Shared Understanding: awaiting-confirmation` and `Readiness: ready`, then exactly the fixed confirmation prompt: 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。; then outputs the plain-text cue `若摘要正確，可直接回覆：` followed by a fenced `text` code block containing only `同意`",
+        "Separates the seven fields from the status block with a Markdown horizontal rule; outputs `Shared Understanding: awaiting-confirmation` and `Readiness: ready` with a blank line between them, then exactly the fixed confirmation prompt: 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確，不授權進入後續階段、修改文件、建立 Slice、實作或 commit。; then outputs the plain-text cue `若摘要正確，可直接回覆：` followed by a fenced `text` code block containing only `同意`",
         "Keeps the fixed confirmation prompt and reply cue as ordinary paragraphs; puts only `同意` in a fenced `text` code block, without omitting, paraphrasing, extending, quoting, or bulleting the fixed ending",
         "Does not create a Slice, start Boundary Gate, modify files, implement, commit, or treat the request to produce the first full summary as confirmation of it"
       ]
