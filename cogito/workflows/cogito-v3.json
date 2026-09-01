@@ -1,0 +1,47 @@
+{
+  "version": "3.0.0",
+  "initial_state": "preparing",
+  "terminal_states": ["accepted", "cancelled"],
+  "limits": {
+    "max_workers": 3,
+    "transient_retries": 2,
+    "verification_corrections": 3,
+    "review_fix_cycles": 3,
+    "format_repairs": 2
+  },
+  "profiles": {
+    "feature": {"kinds": ["feature", "change", "correction"], "package": "development", "review": "independent"},
+    "maintenance": {"kinds": ["maintenance"], "package": "mini", "review": "objective-exemption-eligible"},
+    "documentation": {"kinds": ["documentation"], "package": "mini", "review": "independent"}
+  },
+  "transitions": [
+    {"from": "preparing", "event": "shared-understanding-ready", "to": "awaiting-shared-confirmation", "guard": "shared_understanding_frozen"},
+    {"from": "preparing", "event": "mini-package-ready", "to": "awaiting-package-approval", "guard": "mini_package_valid"},
+    {"from": "awaiting-shared-confirmation", "event": "shared-understanding-confirmed", "to": "boundary-analysis", "guard": "shared_confirmed"},
+    {"from": "boundary-analysis", "event": "boundary-complete", "to": "package-preparing", "guard": "boundary_ready"},
+    {"from": "package-preparing", "event": "package-ready", "to": "awaiting-package-approval", "guard": "package_valid"},
+    {"from": "awaiting-package-approval", "event": "package-approved", "to": "start-gate", "guard": "package_approved"},
+    {"from": "start-gate", "event": "start-gate-passed", "to": "executing", "guard": "start_ready"},
+    {"from": "executing", "event": "implementation-complete", "to": "verifying", "guard": "tasks_complete"},
+    {"from": "verifying", "event": "verification-passed", "to": "reviewing", "guard": "verification_passed"},
+    {"from": "verifying", "event": "verification-correction-required", "to": "technical-correction", "guard": "verification_retry_available", "counter": "verification_corrections"},
+    {"from": "technical-correction", "event": "technical-correction-complete", "to": "verifying", "guard": "technical_correction_valid"},
+    {"from": "reviewing", "event": "review-approved", "to": "integrating", "guard": "review_approved"},
+    {"from": "reviewing", "event": "review-fix-required", "to": "review-fix", "guard": "review_retry_available", "counter": "review_fix_cycles"},
+    {"from": "review-fix", "event": "review-fix-complete", "to": "verifying", "guard": "review_fix_valid"},
+    {"from": "integrating", "event": "slice-integration-complete", "to": "integrating", "guard": "integration_complete"},
+    {"from": "integrating", "event": "wave-integration-complete", "to": "executing", "guard": "integration_complete"},
+    {"from": "integrating", "event": "integration-complete", "to": "post-integration-verification", "guard": "integration_complete"},
+    {"from": "post-integration-verification", "event": "post-verification-correction-required", "to": "post-integration-correction", "guard": "verification_retry_available", "counter": "verification_corrections"},
+    {"from": "post-integration-correction", "event": "post-integration-correction-complete", "to": "post-integration-verification", "guard": "technical_correction_valid"},
+    {"from": "post-integration-verification", "event": "human-review-required", "to": "awaiting-human", "guard": "post_checks_passed_and_human_required"},
+    {"from": "post-integration-verification", "event": "auto-accept-ready", "to": "finalizing", "guard": "post_checks_passed_and_no_human"},
+    {"from": "awaiting-human", "event": "human-approved", "to": "finalizing", "guard": "human_approved"},
+    {"from": "finalizing", "event": "finalization-complete", "to": "accepted", "guard": "final_recorded"}
+  ],
+  "global_events": [
+    {"event": "block", "to": "blocked", "guard": "block_reason_present"},
+    {"event": "cancel", "to": "cancelled", "guard": "cancellation_authorized"}
+  ],
+  "resume_targets": ["preparing", "awaiting-shared-confirmation", "boundary-analysis", "package-preparing", "awaiting-package-approval", "start-gate", "executing", "verifying", "technical-correction", "reviewing", "review-fix", "integrating", "post-integration-verification", "post-integration-correction", "awaiting-human", "finalizing"]
+}

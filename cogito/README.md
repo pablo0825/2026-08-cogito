@@ -1,36 +1,31 @@
-# Cogito
+# Cogito 3.0
 
-Cogito 是以 Feature Slice 為核心的 Codex 軟體工程工作流程 skill，適用於前端、後端與全端專案，協助釐清需求、控制 Slice 邊界、建立 Spec／Plan、執行實作與驗證，以及逐步收編既有專案。
+Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill。3.0 是 clean break：單一狀態機取代 Blueprint 與舊執行模式，Project Graph 表達 Slice DAG，Development Package 是唯一正式開發核准；實作、測試、獨立審查與受控修正可自動前進，只有適用的 human gate 會中途通知使用者。
 
-Cogito 2.2.0 新增 opt-in 的 `controlled-parallel` execution mode。在核准前先產出 Slice compatibility、Read／Write Set、共用前置工作、worktree／branch 與預計整合方式；使用者核准兩小時內有效的 Parallel Wave 後，最多三個隔離 Worker 可平行執行 implementation／tests，完成結果再通過一次一個 Slice 的獨立 review／integration gate。低風險可在 Reviewer 核准後自動整合，高風險必須指出 exact code hotspots 並等待使用者核准；Final Acceptance 仍逐 Slice 由使用者確認。
-
-`sequential-package` 保留 2.1.0 的單 Slice Development Package 行為，`legacy-staged` 也維持原有逐階段流程。既有專案不會自動切換 mode；Rolling Adoption 與 Maintenance 仍不平行化。
-
-`legacy-staged` 繼續採 stage-scoped invocation：使用者以 `$cogito` 明確開始或恢復每個治理階段；對目前未決問題、摘要或 Proposal 的直接回答可在同階段隱式續接。一般請求、新 Scope、新階段與中斷恢復不會隱式啟動 Cogito。
-
-目前版本記錄於 [VERSION](VERSION)。AI 執行時以 [SKILL.md](SKILL.md) 為唯一入口；本文件只提供給維護者快速理解封裝結構，不取代其中的規則。
-
-## 目錄結構
+## 結構
 
 ```text
 cogito/
 ├── SKILL.md
-├── agents/
-├── evals/
-├── references/
 ├── VERSION
-└── README.md
+├── agents/openai.yaml
+├── workflows/cogito-v3.json
+├── schemas/
+├── scripts/
+├── references/
+├── tests/
+└── evals/
 ```
 
-## 各項責任
+- `SKILL.md`：精簡的語意政策與 progressive-disclosure 路由。
+- `workflows/`：狀態、合法轉移、guard 與重試上限。
+- `schemas/`：Project Graph、Package、Run、Agent Result 與 Result 的機器契約。
+- `scripts/`：Gate runtime 與 controlled runner。
+- `references/`：依 `next_action` 才載入的作業規則與模板。
+- `tests/`、`evals/`：狀態機、邊界與行為回歸。
 
-- `SKILL.md`：skill 入口、核心不變量與操作路由。
-- `agents/`：Codex 顯示與啟動設定。
-- `evals/`：可重跑的路由、授權、狀態、追溯與 Maintenance 行為案例。
-- `references/`：依操作需要才讀取的 workflow 與文件模板。
-- `VERSION`：目前 skill 的語意版本。
-- `README.md`：提供維護者使用的簡介與結構說明。
+3.0 不讀取或遷移舊 Blueprint。既有 `docs/project/`、舊 Spec 與其他文件保持原位並作為 read-only sources；第一次觸及相關能力時，以 lazy adoption 在同一 Package 收編必要來源，不建立額外核准點，也不搬移無關文件。
 
-## 維護原則
+Runtime 不接受 Agent 自行宣告核准、驗證通過或獨立審查成立；這些 verdict 由 CLI 從 Package、lease/result identity 與不可變 machine evidence 計算。Technical Amendments 先 materialize 為 effective contract，才能執行或驗證。Final commit 包含 Result 與 Project Graph，而該 commit 的 ID 由後續 event 與結案報告記錄，避免 Result 自我引用。
 
-修改 skill 後以 `evals/evals.json` 的固定案例重跑回歸測試。案例保存的是輸入與可觀察期望；執行時使用乾淨子代理讀取當前 skill，避免靠主對話記憶補足規則。更新行為規則時同步檢查入口路由、對應 reference、模板與 eval expectation，並提升 [VERSION](VERSION) 的語意版本。
+維護時先執行 runtime/unit tests，再執行 skill validation 與 behavioral evals。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。

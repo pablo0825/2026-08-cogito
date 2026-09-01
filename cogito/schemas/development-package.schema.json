@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cogito.local/schemas/development-package.schema.json",
+  "title": "Immutable Cogito Development Package",
+  "type": "object",
+  "required": ["schema_version", "run_id", "kind", "mini_package", "delivery_branch", "baseline_commit", "shared_understanding", "slices", "execution_dag", "checks", "approved_paths", "human_gate", "policy_snapshot", "limits", "stop_conditions", "source_registry"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "run_id": {"type": "string", "pattern": "^(DEV|MNT)-[A-Za-z0-9._-]+$"},
+    "kind": {"enum": ["feature", "change", "correction", "maintenance", "documentation"]},
+    "mini_package": {"type": "boolean"},
+    "delivery_branch": {"type": "string", "minLength": 1},
+    "baseline_commit": {"$ref": "#/$defs/gitObject"},
+    "shared_understanding": {"type": "object", "required": ["hash"], "properties": {"path": {"$ref": "#/$defs/repositoryPath"}, "hash": {"$ref": "#/$defs/contentHash"}}, "additionalProperties": true},
+    "boundary": {"type": "object", "required": ["decision", "evidence"], "properties": {"decision": {"enum": ["single-slice", "split-required"]}, "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}, "additionalProperties": false},
+    "slices": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/slice"}},
+    "execution_dag": {
+      "type": "object", "required": ["tasks", "edges"],
+      "properties": {
+        "tasks": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "object", "required": ["id"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "slice_id": {"type": ["string", "null"]}, "role": {"enum": ["implement", "verify", "review", "integrate", "finalize"]}, "paths": {"type": "array", "items": {"$ref": "#/$defs/repositoryPath"}, "uniqueItems": true}}, "additionalProperties": true}},
+        "edges": {"type": "array", "uniqueItems": true, "items": {"type": "object", "required": ["from", "to"], "properties": {"from": {"$ref": "#/$defs/identifier"}, "to": {"$ref": "#/$defs/identifier"}}, "additionalProperties": false}}
+      }, "additionalProperties": false
+    },
+    "checks": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "object", "required": ["id", "argv"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "cwd": {"$ref": "#/$defs/repositoryPath"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "required": {"type": "boolean"}, "env_allowlist": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}, "redact_patterns": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}},
+    "approved_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/repositoryPath"}, "uniqueItems": true},
+    "human_gate": {"type": "object", "required": ["predicates", "high_risk_hotspots"], "properties": {"predicates": {"type": "array", "uniqueItems": true, "items": {"type": "object", "required": ["id", "applicable"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "applicable": {"type": "boolean"}, "reason": {"type": "string"}}, "additionalProperties": false}}, "high_risk_hotspots": {"type": "array", "items": {"$ref": "#/$defs/repositoryPath"}, "uniqueItems": true}}, "additionalProperties": false},
+    "policy_snapshot": {"type": "object", "required": ["max_workers", "fetch_allowed"], "properties": {"max_workers": {"type": "integer", "minimum": 1, "maximum": 3}, "fetch_allowed": {"type": "boolean"}, "allowed_environment": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}, "required_checks": {"type": "array", "items": {"$ref": "#/$defs/identifier"}, "uniqueItems": true}, "source": {"enum": ["global-defaults", "project-policy", "stricter-merge"]}, "hash": {"$ref": "#/$defs/contentHash"}}, "additionalProperties": true},
+    "limits": {"type": "object", "required": ["transient_retries", "verification_corrections", "review_fix_cycles", "format_repairs"], "properties": {"transient_retries": {"type": "integer", "minimum": 0, "maximum": 2}, "verification_corrections": {"type": "integer", "minimum": 0, "maximum": 3}, "review_fix_cycles": {"type": "integer", "minimum": 0, "maximum": 3}, "format_repairs": {"type": "integer", "minimum": 0, "maximum": 2}}, "additionalProperties": false},
+    "stop_conditions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object", "required": ["id", "condition", "outcome"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "condition": {"type": "string", "minLength": 1}, "outcome": {"enum": ["blocked", "awaiting-human", "cancelled"]}}, "additionalProperties": false}]}},
+    "source_registry": {"type": "array", "items": {"type": "object", "required": ["path", "hash", "relevance", "disposition"], "properties": {"path": {"$ref": "#/$defs/repositoryPath"}, "hash": {"$ref": "#/$defs/contentHash"}, "relevance": {"type": "string", "minLength": 1}, "disposition": {"enum": ["read-only-source", "adopted", "updated", "superseded", "not-touched"]}}, "additionalProperties": false}},
+    "maintenance_guards": {"$ref": "#/$defs/maintenanceGuards"},
+    "package_hash": {"$ref": "#/$defs/contentHash"}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"enum": ["feature", "change", "correction"]}}, "required": ["kind"]}, "then": {"required": ["boundary"], "properties": {"mini_package": {"const": false}, "slices": {"minItems": 1}}}},
+    {"if": {"properties": {"kind": {"enum": ["maintenance", "documentation"]}}, "required": ["kind"]}, "then": {"required": ["maintenance_guards"], "properties": {"mini_package": {"const": true}, "slices": {"maxItems": 0}}}}
+  ],
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+    "gitObject": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "contentHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "repositoryPath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "document": {"type": "object", "required": ["path", "hash"], "properties": {"path": {"$ref": "#/$defs/repositoryPath"}, "hash": {"$ref": "#/$defs/contentHash"}}, "additionalProperties": false},
+    "worker": {"type": "object", "required": ["branch", "worktree", "allowed_paths"], "properties": {"branch": {"type": "string", "minLength": 1}, "worktree": {"type": "string", "minLength": 1}, "allowed_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/repositoryPath"}, "uniqueItems": true}}, "additionalProperties": false},
+    "slice": {"type": "object", "required": ["id", "type", "spec", "plan", "worker"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["feature", "change", "correction"]}, "spec": {"$ref": "#/$defs/document"}, "plan": {"$ref": "#/$defs/document"}, "worker": {"$ref": "#/$defs/worker"}, "lineage": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}, "additionalProperties": false},
+    "maintenanceGuards": {"type": "object", "required": ["behavior_unchanged", "public_contract_unchanged", "data_model_unchanged", "security_boundary_unchanged", "slice_responsibility_unchanged", "deterministic_evidence", "single_commit"], "properties": {"behavior_unchanged": {"const": true}, "public_contract_unchanged": {"const": true}, "data_model_unchanged": {"const": true}, "security_boundary_unchanged": {"const": true}, "slice_responsibility_unchanged": {"const": true}, "deterministic_evidence": {"const": true}, "single_commit": {"const": true}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

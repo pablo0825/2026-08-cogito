@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cogito.local/schemas/project-policy.schema.json",
+  "title": "Cogito Project Policy",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "max_workers": {"type": "integer", "minimum": 1, "maximum": 3},
+    "fetch_allowed": {"type": "boolean"},
+    "allowed_environment": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "human_gate": {"type": "object", "properties": {"required": {"type": "boolean"}, "predicates": {"type": "array", "items": {"type": "object", "required": ["id", "applicable"], "properties": {"id": {"type": "string"}, "applicable": {"type": "boolean"}}, "additionalProperties": true}}, "high_risk_hotspots": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
+    "required_checks": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  },
+  "additionalProperties": false
+}

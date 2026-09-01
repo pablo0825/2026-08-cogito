@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cogito.local/schemas/agent-result.schema.json",
+  "title": "Cogito Agent Result",
+  "type": "object",
+  "required": ["schema_version", "run_id", "task_id", "agent_id", "role", "status", "base_commit", "head_commit", "changed_paths", "evidence", "risks", "requested_transition"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "run_id": {"type": "string", "pattern": "^(DEV|MNT)-[A-Za-z0-9._-]+$"},
+    "task_id": {"type": "string", "minLength": 1},
+    "agent_id": {"type": "string", "minLength": 1},
+    "role": {"enum": ["implementer", "reviewer", "integrator"]},
+    "status": {"enum": ["complete", "needs-fix", "blocked"]},
+    "base_commit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "head_commit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "changed_paths": {"type": "array", "items": {"$ref": "#/$defs/repositoryPath"}, "uniqueItems": true},
+    "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "risks": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "requested_transition": {"enum": ["executing", "verifying", "technical-correction", "reviewing", "review-approved", "review-fix", "integrating", "post-integration-verification", "awaiting-human", "finalizing", "blocked"]},
+    "reviewed_implementer": {"type": "string", "minLength": 1},
+    "repair_attempt": {"type": "integer", "minimum": 0, "maximum": 2}
+  },
+  "allOf": [
+    {"if": {"properties": {"role": {"const": "reviewer"}}, "required": ["role"]}, "then": {"required": ["reviewed_implementer"]}},
+    {"if": {"properties": {"role": {"enum": ["implementer", "integrator"]}, "status": {"const": "complete"}}, "required": ["role", "status"]}, "then": {"properties": {"head_commit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"}}}}
+  ],
+  "$defs": {"repositoryPath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}},
+  "additionalProperties": false
+}

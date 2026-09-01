@@ -1,134 +1,79 @@
 ---
 name: cogito
-description: Use when a user explicitly invokes $cogito, or directly responds to the immediately preceding unresolved prompt in an uninterrupted active Cogito stage.
+description: Use when a user explicitly invokes $cogito, or directly answers the immediately preceding unresolved Cogito prompt in the same active run.
 ---
 
 # Cogito
 
-以 canonical requirements 定義產品行為，以 Feature Slice 管理規劃、實作、驗證與驗收。Cogito 由使用者以 `$cogito` 明確啟動或恢復一個階段；同一階段內可依下列續接閘門直接回答，不必逐則重複 invocation。
+以一個可執行 Gate workflow 管理需求釐清、切片、開發、驗證、獨立審查、整合與結案。Skill 定義語意政策；程式化 Gate 是狀態、轉移、計數器與下一步的唯一執行權威。
 
-## 核心模型
+## 不變量
 
-- 使用中文撰寫專案文件；路徑、API、ID、slug、指令、程式識別字與狀態值使用英文。
-- `docs/project/` 是已收編產品意圖與正式規則的唯一權威來源；Slice Brief 定義本次使用者結果與高階邊界；Spec 將 canonical requirements 整理成可實作、可驗收的 Slice contract；Plan 定義實作與驗證方法；Verification 保存目前證據；Git 保存歷史。
-- `docs/blueprint/feature-slice-blueprint.md` 是 Slice 狀態、active slot 與目前收編範圍的唯一權威來源。
-- 程式碼、測試、TODO、舊文件與 Git history 只提供現況、限制或 Legacy Baseline 證據；只有使用者確認且寫入 `docs/project/` 的產品規則才成為 canonical requirement。
-- 同一項產品規則只有一個 canonical 位置。Spec 的 Slice contract 必須可追溯至 canonical source；兩者語義衝突時停止並確認，不自行選擇其中一份。
-- `legacy-staged` 與 `sequential-package` 同一時間只處理一個 active Feature Slice 或一個 Maintenance；已核准且本質上跨 Slice 的 Blueprint 操作除外。`controlled-parallel` 只依受控平行 workflow 允許最多三個隔離 Worker Slice，且同時只有一個 Integration Candidate。`blocked` 若阻礙前狀態為 active，仍占用對應 slot。
-- Slice 依可獨立驗收且具有使用者價值的垂直結果切分。Spec 定義「做什麼」，Plan 定義「怎麼做」，實作只依已核准的 Spec、Plan 與 Commit Plan 進行。
-- 分開記錄 committed、AI verified 與 human accepted；只有使用者能確認 Human Integration 與 Human Acceptance。
-- 使用者授權只涵蓋明確指定的 Proposal、文件 checkpoint、implementation sequence 或驗收結果。完成目前授權後停止；下一階段等待新的明確授權。
-- 保留操作開始前的使用者變更；不擴張核准 Scope、不修改未核准檔案、不把未執行檢查標成通過、不 push、不改寫 Git history。
+- 使用中文撰寫專案文件；ID、路徑、API、指令與狀態值使用英文。
+- 每次操作先讀適用的 `AGENTS.md`、專案政策與 Git 狀態，再執行 Gate 回傳的 `next_action`。不得自行跳步、猜測狀態或繞過 guard；資料缺漏、矛盾或 Gate 失敗時 fail closed。
+- 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 只確認理解正確；Boundary Gate pass 只確認邊界，兩者都不授權實作。
+- Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
+- Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
+- Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免獨立審查。
+- 正式 checks 只由 controlled runner 執行；Agent 敘述不是證據。證據衝突時依「核准契約 > machine evidence > Agent description」保守處理。
+- 核准、Boundary、check closure、獨立審查、human applicability 與狀態轉移等敏感 verdict 只能由 runtime CLI 根據可驗證輸入計算。Agent 只回報觀察、證據與建議，不得用 boolean 自行宣告 guard 通過。
+- 沒有適用的 Human Integration、Human Acceptance 或高風險 hotspot 時，完成 `finalizing` 後自動 `accepted`，只向使用者提供結案報告；否則停在單一 human gate。
 
-## Execution Mode
+## 啟動與續接
 
-從 blueprint 的 `Execution Mode` 決定 handoff 與授權模型：
+訊息含 `$cogito` 時啟動或恢復。沒有 invocation 時，只有直接回答上一個未決 Grilling 問題、摘要確認、Package approval 或 human gate 才可續接；其他訊息依一般對話處理。`$cogito` 本身不是核准。
 
-- `legacy-staged`：保留逐階段 invocation、核准與停止點。
-- `sequential-package`：仍只允許一個 active Feature Slice，但把 Boundary Gate、draft preparation、implementation、AI Verification 與獨立 review 組成有明確權限邊界的 Development Package。完整讀取並依 [development-package-workflow.md](references/development-package-workflow.md) 執行；第一階段不套用於 Rolling Adoption 或 Maintenance。
-- `controlled-parallel`：以 `sequential-package` 的授權邊界為基礎，加入核准前相容性分析、最多三個隔離 implementation／test Worker、兩小時 Wave Approval 有效期，以及一次一個 Slice 的 review／integration gate。完整讀取並依 [development-package-workflow.md](references/development-package-workflow.md) 與 [controlled-parallel-workflow.md](references/controlled-parallel-workflow.md) 執行；Rolling Adoption 與 Maintenance 不平行化。
+## 執行協定
 
-缺少 `Execution Mode` 的既有 blueprint 一律視為 `legacy-staged`。切換 mode 是 project-level Blueprint Revision，必須先呈現影響並取得使用者明確核准；不得因使用者想減少核准次數就自行啟用。package／parallel mode-specific 規則只覆蓋其明定的 stage handoff 與 orchestration，不放寬 canonical requirements、working-tree、Scope、Git history 或 Final Acceptance 邊界。
+1. 執行 `cogito/scripts/cogito_gate.py` 查詢或建立 run；run 草稿保存在 `.cogito/runs/DEV-*/drafts/`。
+2. 完整讀取 Gate `next_action` 指定的 reference 與輸入，只執行該 action。
+3. 以結構化 payload 回報 action 結果；格式錯誤最多修復兩次，修復不得改 code、evidence 或 risk。
+4. 每次轉移後再次查詢 Gate。計數器跨 resume 與 Agent 更換保留；不得用對話記憶代替 event history。
+5. `blocked` 只能經 Resume Gate 回到合法狀態；`cancelled` 與 `accepted` 是終態。
 
-## 啟動與續接閘門
+狀態主路徑為：
 
-在讀取專案或執行操作前，先依序判斷：
+```text
+preparing -> awaiting-shared-confirmation -> boundary-analysis
+-> package-preparing -> awaiting-package-approval -> start-gate
+-> executing -> verifying -> reviewing -> integrating -> executing (下一個 DAG wave)
+-> post-integration-verification -> awaiting-human | finalizing -> accepted
+```
 
-1. 訊息包含 `$cogito`：明確啟動或恢復該訊息指定的一個階段，再進行操作路由。
-2. 訊息沒有 `$cogito`，但直接回應 active Cogito 階段中上一個未決問題、摘要或 Proposal：只續接該階段。
-3. 其他訊息：不得啟動、恢復或推進 Cogito；依一般對話處理，或在使用者要求新 Cogito 操作時提示明確 invocation。
-
-直接回應包括回答、修正、反問、要求解釋、表示不知道、採用建議，以及對目前明確 Proposal 的核准或拒絕。只有在 immediately preceding unresolved prompt 正在等待該輸入、對話未中斷，且訊息確實包含該輸入時，才可隱式續接目前答案。含糊回覆留在同階段澄清。
-
-若訊息同時直接回答目前問題並要求新操作、擴張無關 Scope 或跨階段，只處理目前答案；不得執行新增部分，並提示以新的 `$cogito` 訊息啟動。改談其他主題後、工作中斷後或另開 Feature Slice／Maintenance，也必須明確恢復。
-
-階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。`legacy-staged` 進入每個新階段都必須有新的 `$cogito` 訊息；`sequential-package` 只依 Development Package reference 定義的 Preparation Authority 與 Package Approval 自動 handoff；`controlled-parallel` 另外只依 Parallel Wave Approval 建立 Worker。階段內的明確「同意／核准」可以授權目前未到期 Proposal。`$cogito` 只啟動階段，不自行構成核准。
-
-## 開始操作
-
-1. 確認專案根目錄並讀取適用的 `AGENTS.md` 與專案指示。
-2. 讀取 blueprint、目標 Slice 文件與 canonical sources，確認目前狀態、active slot、coverage 與 lineage。Maintenance 只需確認 blueprint 不存在或沒有占用 active slot 的 Slice。
-3. 記錄 working tree、staged 狀態與目標檔案既有修改。
-4. 從使用者訊息辨識一個操作，依下表完整讀取所需 reference；templates 只在實際產出時載入。
-
-若已有 staged changes，或目標檔案有無法安全分離的使用者修改，停止並說明。只有使用者明確要求採納時才能納入目前操作。
+允許的受控循環：`verifying -> technical-correction -> verifying`，總計最多三輪；`reviewing -> review-fix -> verifying -> reviewing`，最多三輪；`post-integration-verification -> post-integration-correction -> post-integration-verification` 共用前者 correction 預算，修正後不重複 integration。Transient retry 最多兩次。任何超限、契約漂移或不可恢復衝突皆進入 `blocked`。
 
 ## 操作路由
 
-| 操作 | 必須完整讀取 |
+| Gate action | 必須完整讀取 |
 |---|---|
-| 已上線能力缺少完整 canonical coverage 或 accepted lineage，需要第一次收編或修改 | Grilling 階段讀取 [rolling-adoption-workflow.md](references/rolling-adoption-workflow.md) 與 [grilling-workflow.md](references/grilling-workflow.md)，完成後停止；Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
-| 建立、同步或審查 blueprint；依既有清楚需求調整 Slice；拆分、合併或撤回 Slice | [blueprint-workflow.md](references/blueprint-workflow.md)；產出時再讀 [blueprint-template.md](references/blueprint-template.md) 與 [slice-brief-template.md](references/slice-brief-template.md) |
-| 建立 Spec、修改產品語義，或 Bug 的正確行為未由有效 Spec 唯一決定 | Grilling 階段讀取 [grilling-workflow.md](references/grilling-workflow.md)，首次判定 Readiness 前依其指示讀取共同理解 contract，並在摘要確認後停止；新的 Boundary Gate 階段再讀 [spec-plan-workflow.md](references/spec-plan-workflow.md) |
-| 核准完全未變更的 draft Spec／Plan | [spec-plan-workflow.md](references/spec-plan-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；不載入 Grilling |
-| 只修訂實作方法、Files、batches、commands 或 Verification Gates，產品 Scope、行為、Acceptance 與 Integration Contract 不變 | [spec-plan-workflow.md](references/spec-plan-workflow.md)；需要 commit 時再讀 [commit-workflow.md](references/commit-workflow.md) |
-| 執行不改產品行為且可用自動化證明的小型 rename、refactor、formatting、test cleanup 或 type cleanup | [maintenance-workflow.md](references/maintenance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
-| 開始、繼續或修正已核准 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
-| 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；建立 Verification 時再讀 [verification-template.md](references/verification-template.md) |
+| Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
+| Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
+| Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
+| 首次在舊專案處理能力 | [project-bootstrap.md](references/project-bootstrap.md) |
 
-若 mode 是 `sequential-package`，上述 Grilling、Boundary Gate、Spec／Plan、Implementation 與 AI Verification 路由另外完整讀取 [development-package-workflow.md](references/development-package-workflow.md)，由其決定可自動進行的 handoff 與停止點。若 mode 是 `controlled-parallel`，還必須完整讀取 [controlled-parallel-workflow.md](references/controlled-parallel-workflow.md)，由其決定 Wave、Worker、review queue 與 integration gate；不得只套用單 Slice package 規則。
+不要預載其他 reference。Gate schema 與 workflow JSON 是機器契約；Markdown reference 解釋 Agent 應遵守的語意。
 
-同一 continuous sequence 只需讀取 commit workflow 一次；中斷後以 `$cogito` 恢復時重新讀取。只有新的 `$cogito` 訊息明確啟動下一階段時才載入其 workflow，不預載或自動 handoff。
+## 權威資料
 
-## Feature Slice 與文件識別
+- `docs/cogito/project-graph.json`：Slice 結構、依賴、lineage、disposition、`active_run_id`。
+- `docs/cogito/packages/DEV-*.json`：不可變 Development Package；Technical Amendments 是 append-only overlay。
+- `.cogito/runs/<run-id>/events.jsonl`：append-only 執行歷史；`state.json` 是可重建 projection/cache。
+- controlled runner evidence：以不覆寫的內容尋址檔案綁定 HEAD/tree、check definition 與 effective contract hash。Gate 先將 base Package 與有序 amendments materialize 為 effective contract 快照，runner 不接受 Agent 自行組合的契約。
+- `docs/cogito/results/DEV-*.json`：結案結果。
+- Spec／Plan Markdown：產品語意與實作方法；Git：提交歷史。
 
-Feature Slice ID 使用 `FS-001` 格式並保持穩定；名稱使用英文 kebab-case。文件路徑使用：
+`Blueprint`、`Slice Brief`、Verification Markdown、Commit Plan 與文件內 approval/status metadata 不再使用。
 
-```text
-docs/blueprint/feature-slice-blueprint.md
-docs/blueprint/slices/<ID>-<name>.md
-docs/specs/<ID>/<ID>-<name>-spec.md
-docs/plans/<ID>/<ID>-<name>-plan.md
-docs/verification/<ID>/<ID>-<name>-verification.md
-```
+## 文件與邊界
 
-Type 只使用 `feature`、`change`、`correction`。`change` 使用 `Revises` 或第一次收編的 `Legacy Baseline`；`correction` 使用 `Corrects` 指向仍有效的 Authoritative Spec。已 `accepted` 的產品內容是不可變快照；後續需求改變建立新的 `change` Slice。
+Feature Slice ID 使用穩定的 `FS-001` 格式。Spec 路徑為 `docs/specs/<ID>/<ID>-<name>-spec.md`；Plan 路徑為 `docs/plans/<ID>/<ID>-<name>-plan.md`。新的正式控制文件放在 `docs/cogito/`。
 
-Spec Acceptance ID 在 Slice 內使用不重複的 `AI-001` 與 `HA-001`；Plan checks 使用 `V-001`；Human Integration 使用 `HI-001`。ID 不重新編號或重用；新 Slice 建立自己的 namespace。
+適用邊界由 global defaults、可選 project policy 與 Package snapshot 疊加，較嚴格者優先；缺少 project policy 不阻塞。永久放寬或修改 project policy 需另行取得 project-level approval。
 
-## 狀態機
+Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
 
-只使用 `proposed`、`awaiting-approval`、`approved`、`in-progress`、`awaiting-human`、`accepted`、`blocked`、`withdrawn`。
+## 最終化
 
-```text
-proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> accepted
-```
+進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id`、已知 amendment/commit 摘要及必要且合法的 Spec／Plan 更新。Result 不記錄包含自身的 final commit ID；commit 成功後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗為 `blocked`。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。
 
-- `awaiting-approval`、`approved`、`in-progress`、`awaiting-human` 為 active status。
-- `legacy-staged`／`sequential-package` 的 blueprint 記錄單一 Active Feature Slice；`controlled-parallel` 記錄最多三個 Active Feature Slices 與最多一個 Integration Candidate。
-- `blocked` 保存阻礙前狀態、原因與恢復條件；阻礙前狀態為 active 時，Blueprint 的 active 欄位保持該 ID。
-- `withdrawn` 為終止狀態；保留 ID 與文件。
-- 狀態轉移同步更新 blueprint 的 Status、Status Note 與 Last Updated；建立文件時同步 Documents link。
-
-## 全域授權與完成條件
-
-- Shared Understanding confirmation 只確認摘要正確；Boundary Gate pass 只確認 Slice 邊界；兩者都不授權文件修改、實作或 commit。
-- `legacy-staged` 的 Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，單獨核准不授權實作；核准完成後停止，Implementation 必須由新的 `$cogito` 訊息啟動。
-- `legacy-staged` 的 `continuous` implementation 授權只涵蓋尚未完成的已核准 batches 與各 batch Required Verification；完整 AI Verification 與 Verification Documentation 屬於新的 AI Verification 階段。
-- `sequential-package` 的準備、執行、獨立 review 與 Final Approval 權限只依 Development Package reference；Package Approval 之前不得實作，Final Approval 仍只由使用者確認。
-- `controlled-parallel` 的相容性分析、Wave Approval、Worker 隔離、序列 review／integration 與兩小時到期規則只依受控平行 reference；不得從 Development Package 核准推論多 Slice 執行權限。
-- Rolling Adoption 與 Maintenance 的授權只涵蓋各自 Proposal 列出的 batch、檔案、證明與 commit。
-- 每個步驟以已授權產出完成、必要檢查實際執行、狀態與文件一致為完成條件。
-- 同階段等待回答、修正、說明或核准時，直接提出要求，不要求 `$cogito`。跨階段或中斷恢復時，提供包含 `$cogito` 的精確啟動句，例如：`請以 $cogito 開始 FS-001 implementation`。
-
-## 操作指令呈現
-
-提供讓使用者複製送出的操作指令時，一律使用獨立的 `text` 程式碼區塊，區塊內只放指令，說明文字放在區塊外。例如：
-
-啟動階段：
-
-```text
-請以 $cogito 開始 FS-029 AI Verification
-```
-
-同階段核准：
-
-```text
-核准 FS-023 Plan revision
-```
-
-以上範例只示範呈現格式，不限制指令措辭，也不改變既有授權規則。
-
-## 相容性入口
-
-Skill 更新本身不重寫既有文件或撤銷核准。舊文件依相關 workflow 的 legacy fallback 繼續執行；只有 active 文件在已授權操作中可做語義不變、映射無歧義且跨 Spec／Plan／Verification 原子完成的結構遷移。accepted snapshots 保持原樣。
+Maintenance 與 documentation-only adoption 使用同一引擎的 Mini Package profile，不建立 Slice、Spec 或 Plan，僅跳過 runtime 以客觀 guard 證明不適用的節點；不是另一套 workflow。Maintenance 還必須不改產品行為或契約、不改依賴/安全/資料邊界、路徑固定、可以 deterministic checks 覆蓋並以目前 checkout 單一 commit 完成；documentation-only 還必須只整理或引用既有語意。任一條無法證明即回到 Grilling／完整 Package。
