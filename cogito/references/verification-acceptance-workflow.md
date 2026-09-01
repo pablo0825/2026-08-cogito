@@ -2,7 +2,7 @@
 
 用於完整 AI Verification、Human Integration 與 Human Acceptance。
 
-`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。Verification evidence、Acceptance closure 與只有使用者能確認 Final Approval 的規則不變；package reference 只允許在核准 Autonomy Budget 與 Review-Fix Budget 內自動修正並要求獨立 review。`legacy-staged` 維持原有停止與 revision handoff。
+`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。`Execution Mode: controlled-parallel` 同時完整讀取該文件與 [controlled-parallel-workflow.md](controlled-parallel-workflow.md)。Verification evidence、Acceptance closure 與只有使用者能確認 Final Approval 的規則不變；parallel result 必須通過單一序列 review／integration gate。`legacy-staged` 維持原有停止與 revision handoff。
 
 ## AI Verification
 
@@ -27,11 +27,11 @@
 
 Check 結果與 Acceptance closure 分開：每個 `AI-*` 只有在所有必要 mapped evidence 充分時標為 `satisfied`。一個 check 可支持多個 criteria，一個 criterion 可需要多個 checks；所有 mapped checks 為 `not-applicable` 不會讓無條件 criterion 自動完成。只有 advisory evidence 不足以完成原本需要 required coverage 的 Acceptance。
 
-失敗後可以在現有 AI Verification 授權下重跑 commands 與更新 evidence。`legacy-staged` 的任何程式碼修改都屬於新的 Spec／Plan 階段：先保存失敗證據並停止，提示使用者以新的 `$cogito` 訊息啟動 Plan revision；修訂與重新核准完成後，再由另一個新的 `$cogito` 訊息開始 Implementation。`sequential-package` 只有完全落在核准 Autonomy Budget 的內部實作與測試修正，才可進入獨立 review–fix loop；其他失敗保存證據並產生決策卡後停止。兩種 mode 的產品語義 delta 都必須回到 Grilling 與 Boundary Gate，不得由修正預算吸收。完成所有可執行工作後：
+失敗後可以在現有 AI Verification 授權下重跑 commands 與更新 evidence。`legacy-staged` 的任何程式碼修改都屬於新的 Spec／Plan 階段：先保存失敗證據並停止，提示使用者以新的 `$cogito` 訊息啟動 Plan revision；修訂與重新核准完成後，再由另一個新的 `$cogito` 訊息開始 Implementation。package／parallel mode 只有完全落在核准 Autonomy Budget 的內部實作與測試修正，才可進入獨立 review–fix loop；parallel integration conflict 還必須符合 Integration Budget。其他失敗保存證據並產生決策卡後停止。所有 mode 的產品語義 delta 都必須回到 Grilling 與 Boundary Gate，不得由修正預算吸收。完成所有可執行工作後：
 
 1. 建立或更新 Verification；Plan 只保留驗證要求，不複製實際結果。只有所有 required checks 與所有 `AI-*` closure 完成時，才從 Plan 移除 Verification row。
-2. 任一 `required` 為 `failed` 或 `not-run` 時不得進入 `awaiting-human`。`legacy-staged` 只允許補跑與更新 evidence；需要程式修正時保存證據並停止，不改為 `awaiting-approval`、不提出 fix batch revision，也不修改 Plan，改以新的 `$cogito` 訊息啟動 Spec／Plan revision。`sequential-package` 只依 package reference 執行允許的修正；輪數耗盡、超界或無法解除時設為 `blocked`，記錄阻礙前狀態與恢復條件。
-3. 所有 `required` 均為 `passed` 或符合 approved-predicate 規則的 `not-applicable`，且所有 `AI-*` 均為 `satisfied` 時，`legacy-staged` 可將 blueprint 設為 `awaiting-human`。`sequential-package` 還必須完成獨立 Review Agent 審查、保存 Independent Code Review report，且沒有 blocking finding，才能進入 `awaiting-human`。`advisory` 的 `failed` 或 `not-run` 不阻擋前進，但必須在 Notes 與 Remaining Issues 記錄原因、風險與 release impact。
+2. 任一 `required` 為 `failed` 或 `not-run` 時不得進入 `awaiting-human`。`legacy-staged` 只允許補跑與更新 evidence；需要程式修正時保存證據並停止，不改為 `awaiting-approval`、不提出 fix batch revision，也不修改 Plan，改以新的 `$cogito` 訊息啟動 Spec／Plan revision。package／parallel mode 只依適用 reference 執行允許的修正；輪數耗盡、超界或無法解除時設為 `blocked`，記錄阻礙前狀態與恢復條件。
+3. 所有 `required` 均為 `passed` 或符合 approved-predicate 規則的 `not-applicable`，且所有 `AI-*` 均為 `satisfied` 時，`legacy-staged` 可將 blueprint 設為 `awaiting-human`。`sequential-package` 還必須完成獨立 review 且沒有 blocking finding；`controlled-parallel` 還必須完成唯一門閥中的獨立 review、序列 integration 與 post-integration checks，才能進入 `awaiting-human`。`advisory` 的 `failed` 或 `not-run` 不阻擋前進，但必須在 Notes 與 Remaining Issues 記錄原因、風險與 release impact。
 4. 建立 Verification Documentation commit；阻礙性結果可以保存目前證據與 blocked state，但不消耗 Verification checkpoint。任何結果都必須如實記錄。
 5. 回報 Commit ID、未解決項目與 Human Integration／Acceptance 步驟，然後以明確 `$cogito` 新階段啟動句停止。
 

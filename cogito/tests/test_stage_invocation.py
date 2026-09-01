@@ -126,7 +126,7 @@ class StageInvocationContractTests(unittest.TestCase):
         self.assertNotRegex(commits, r"取得明確 revision 授權後新增 `fix` batch")
 
     def test_version_includes_opt_in_development_package_mode(self) -> None:
-        self.assertEqual(read("VERSION").strip(), "2.1.0")
+        self.assertGreaterEqual(tuple(map(int, read("VERSION").strip().split("."))), (2, 1, 0))
 
 
 if __name__ == "__main__":

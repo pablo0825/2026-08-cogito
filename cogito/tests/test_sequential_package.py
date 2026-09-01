@@ -102,7 +102,7 @@ class SequentialPackageContractTests(unittest.TestCase):
         )
 
     def test_version_adds_package_mode_as_a_minor_release(self) -> None:
-        self.assertEqual(read("VERSION").strip(), "2.1.0")
+        self.assertGreaterEqual(tuple(map(int, read("VERSION").strip().split("."))), (2, 1, 0))
 
 
 if __name__ == "__main__":

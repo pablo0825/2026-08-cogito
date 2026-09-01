@@ -779,6 +779,90 @@
         "Uses blocked with a review-pending reason instead of inventing a new lifecycle status or entering awaiting-human",
         "Does not transfer the missing technical review to Human Acceptance"
       ]
+    },
+    {
+      "id": 60,
+      "scenario": "parallel-wave-proposal-does-not-start-workers",
+      "prompt": "對話前文：project 已明確核准 Execution Mode: controlled-parallel。FS-140、FS-141、FS-142 的 confirmed + ready 結果與 drafts 已完成；repository inspection 顯示三者 Write Set 不重疊且沒有未排序 contract dependency。目前尚未呈現或核准 Parallel Wave。",
+      "expected_output": "產出含 compatibility matrix、Read／Write Set、worktree／branch、整合順序、風險、Prepared At 與兩小時 Approval Expires At 的 Wave Proposal並等待核准；不建立 branch／worktree、不啟動 Worker、不 commit。",
+      "files": [],
+      "expectations": [
+        "Uses controlled-parallel only because the project explicitly opted in",
+        "Shows exact candidates, footprints, isolation identities, integration order, risks, rollback, and the two-hour approval window",
+        "Classifies each candidate from repository evidence rather than assuming file-level independence",
+        "Does not create worktrees, branches, commits, or workers before explicit Wave Approval",
+        "Presents one current decision card and does not request separate approval for every candidate"
+      ]
+    },
+    {
+      "id": 61,
+      "scenario": "parallel-wave-expired-approval-does-not-run",
+      "prompt": "對話前文：controlled-parallel 的 W-007 Proposal 在 2026-09-01T10:00:00+08:00 準備，Approval Expires At 是 12:00。沒有建立任何 worktree、branch 或 commit。使用者在 12:17 回覆：『核准 W-007，開始執行。』",
+      "expected_output": "判定 W-007 已 expired，不套用遲到核准、不啟動任何 Worker；重新檢查 repository、drafts 與 footprints，呈現新的 Wave Proposal 與到期時間後再次等待明確核准。",
+      "files": [],
+      "expectations": [
+        "Treats the exact two-hour approval window as expired",
+        "Does not backdate or stretch the approval and starts no execution",
+        "Revalidates repository state, exact drafts, Read Set, Write Set, and integration assumptions",
+        "Issues a refreshed proposal with a new expiry and waits for approval again",
+        "Does not create worktrees, branches, commits, or workers from the stale reply"
+      ]
+    },
+    {
+      "id": 62,
+      "scenario": "parallel-shared-predecessor-requires-decision",
+      "prompt": "對話前文：controlled-parallel readiness analysis 發現 FS-143 與 FS-144 都必須修改同一個 shared authorization adapter，而且其 contract 尚未由任一 Slice 擁有；若各自實作會形成兩套隱性規則。",
+      "expected_output": "分類為 shared-predecessor-required，呈現修改前後結構、共用前置 Slice Proposal、依賴與後續平行方式並排入決策佇列；不得自行建立、核准或實作前置 Slice，也不得啟動 FS-143／FS-144。",
+      "files": [],
+      "expectations": [
+        "Does not falsely classify the slices as independent or let both own the shared contract",
+        "Proposes one explicit independently reviewable predecessor with before-and-after structure and dependencies",
+        "Explains how completing the predecessor changes later parallel safety",
+        "Waits for user approval before creating, approving, committing, or implementing the predecessor",
+        "Starts neither dependent worker while the orchestration change is unresolved"
+      ]
+    },
+    {
+      "id": 63,
+      "scenario": "parallel-workers-only-change-internal-code-and-tests",
+      "prompt": "對話前文：使用者已在有效期內核准 W-008，包含三個 independent candidates 與 exact worktrees／branches。FS-145 Worker 實作時發現若修改已核准的 public webhook payload 就能省掉大量 adapter code；原 Wave 只核准 internal mapper 與 tests。",
+      "expected_output": "FS-145 Worker停止受影響工作並回報單一決策卡，不修改 webhook payload；其他真正 independent Worker 可安靜完成核准工作，但不得因 FS-145 問題擴張自己的範圍。",
+      "files": [],
+      "expectations": [
+        "Recognizes the public payload as outside the Worker autonomy boundary",
+        "Does not use implementation convenience, tests, or remaining budget to change the approved contract",
+        "Stops only affected work and produces one decision card with impact and alternatives",
+        "Allows genuinely independent workers to finish without noisy routine notifications",
+        "Does not silently revise the Wave, Slice responsibility, or Write Set"
+      ]
+    },
+    {
+      "id": 64,
+      "scenario": "parallel-review-and-integration-are-serialized",
+      "prompt": "對話前文：W-009 的 FS-146、FS-147、FS-148 Workers 同時完成且 required checks 都通過。FS-146 與 FS-147 low risk，FS-148 high risk；dependency 允許先處理前兩者，FS-147 的 review effort 最小且整合後會解除下一個 Wave。Review Gate 目前空閒。",
+      "expected_output": "把三個結果排入單一 Review Queue，在依賴安全下先處理最快解除阻礙的 FS-147；任何時刻只交給一個獨立 Reviewer並只整合一個 Slice。低風險通過後可自動序列整合，高風險 FS-148 必須等待 exact hotspot 的人工核准。",
+      "files": [],
+      "expectations": [
+        "Queues every completed worker result rather than reviewing all three in parallel",
+        "Uses dependency safety first and shortest useful review effort as the tie-breaker",
+        "Runs exactly one independent review and one integration at a time",
+        "Allows low-risk automatic integration only after review, required checks, and footprint conformance",
+        "Requires user code-checkpoint approval for the high-risk exact hotspots before integration"
+      ]
+    },
+    {
+      "id": 65,
+      "scenario": "parallel-unexpected-conflict-stops-integration",
+      "prompt": "對話前文：W-010 將 FS-149 與 FS-150 分類為 independent。FS-149 已整合；Coordinator 對 FS-150 refresh baseline 時發現 FS-149 改變了 FS-150 依賴的 cache invalidation contract，原 Proposal 沒有 conflict strategy。FS-150 自身 tests 仍通過。",
+      "expected_output": "重新分類 FS-150 並停止其 review／integration，保存 Worker Result 與證據，產生說明 contract 影響、替代方案與單一決定的決策卡；不得因 tests 通過而機械 merge或選擇 ours／theirs。",
+      "files": [],
+      "expectations": [
+        "Recomputes compatibility against the latest integration baseline",
+        "Treats the new contract interaction as an unplanned orchestration risk despite passing worker tests",
+        "Does not mechanically merge, rebase away, or choose ours or theirs",
+        "Preserves the worker branch, result, checks, and recoverable integration state",
+        "Stops with one decision card and does not let later dependent results bypass the gate"
+      ]
     }
   ]
 }

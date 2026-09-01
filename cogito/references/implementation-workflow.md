@@ -2,13 +2,13 @@
 
 用於執行已核准 Plan 的 implementation batches，並以風險相稱的檢查維持快速回饋。
 
-`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。本文件的 batch、Scope、verification 與 commit safety 仍適用；package reference 只覆蓋開始授權、核准範圍內的 Review Fix，以及 sequence 完成後的 handoff。`legacy-staged` 維持原行為。
+`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)。`Execution Mode: controlled-parallel` 同時完整讀取該文件與 [controlled-parallel-workflow.md](controlled-parallel-workflow.md)。本文件的 batch、Scope、verification 與 commit safety 仍適用；mode reference 只覆蓋開始授權、Worker isolation、核准範圍內的 Review Fix，以及 sequence 完成後的 handoff。`legacy-staged` 維持原行為。
 
 ## 開始條件
 
 確認 blueprint、Spec、Plan 與 Commit Plan 皆已核准，工作樹沒有無法安全分離的重疊變更。完整讀取 [commit-workflow.md](commit-workflow.md) 一次；同一 continuous sequence 的每個 batch 不重讀，只有中斷恢復時以 `$cogito` 重新讀取。Blueprint 的 `approved -> in-progress` 在第一個成功的 implementation commit 中作為 lifecycle housekeeping 保存；第一個 commit 前中斷時，以 working tree 識別未提交工作，不留下單獨的狀態修改。
 
-`legacy-staged` 由使用者明確要求開始 `continuous` Plan；授權只涵蓋所有尚未完成的已核准 implementation batches 與各 batch Required Verification，不涵蓋完整 AI Verification、Verification Documentation 或 Plan 未列出的 remediation code。`sequential-package` 則必須驗證 Package Approval 與 Approved Baseline，並只在 Development Package 的 Autonomy Budget 內執行。依 I1、I2、…、In 執行，不在 batches 間詢問。
+`legacy-staged` 由使用者明確要求開始 `continuous` Plan；授權只涵蓋所有尚未完成的已核准 implementation batches 與各 batch Required Verification，不涵蓋完整 AI Verification、Verification Documentation 或 Plan 未列出的 remediation code。`sequential-package` 必須驗證 Package Approval 與 Approved Baseline；`controlled-parallel` 必須驗證未到期的 Wave Approval、專用 worktree／branch、Base Revision 與 Worker ownership。兩者只在核准 Autonomy Budget 內依 I1、I2、…、In 執行，不在 batches 間詢問。
 
 ## Batch 執行
 
@@ -45,6 +45,6 @@ Batch Required Verification 是該 commit 的必要條件；結果為 `failed` �
 
 ## Sequence 完成
 
-`legacy-staged` 在最後一個 implementation commit 完成後停止，不讀取或執行 verification workflow；回報 implementation 結果並提示：`請以 $cogito 開始 <ID> AI Verification`。`sequential-package` 在同一 package sequence 完整讀取 [verification-acceptance-workflow.md](verification-acceptance-workflow.md)，執行核准的 `V-*` mappings、獨立 review 與允許的 review–fix loop。
+`legacy-staged` 在最後一個 implementation commit 完成後停止，不讀取或執行 verification workflow；回報 implementation 結果並提示：`請以 $cogito 開始 <ID> AI Verification`。`sequential-package` 在同一 package sequence 完整執行 verification、獨立 review 與允許的 review–fix loop。`controlled-parallel` 的 Worker 執行完整 required checks 後提交 Worker Result 並進入序列 Review Queue；不得自行 review、integrate 或推進至 `awaiting-human`。
 
 缺少 `Implementation Execution` 的 legacy `per-batch` Plan 維持每批明確授權，commit 後停止。恢復時以 Plan 中第一個尚未完成 batch 為下一步，並用 Git history 確認已提交工作，不重做已提交 batch。

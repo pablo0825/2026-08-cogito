@@ -1,6 +1,6 @@
 # Development Package Workflow
 
-只適用於 blueprint 明確設定 `Execution Mode: sequential-package`、已有 canonical source 的單一 active Feature Slice。缺少欄位或使用 `legacy-staged` 時不得套用本文件，維持既有逐階段停止與授權規則。第一階段不改變 Rolling Adoption 或 Maintenance；兩者仍走既有 staged workflow。本模式只壓縮單一 Slice 的核准與 handoff，不授權平行執行多個 Slice。
+完整適用於 blueprint 明確設定 `Execution Mode: sequential-package`、已有 canonical source 的單一 active Feature Slice。`controlled-parallel` 重用本文件的 Development Package、Preparation Authority、Autonomy Budget、review–fix 與 Final Approval 邊界，但候選數量、Wave Approval、worktree、Worker 與 integration 只依 [controlled-parallel-workflow.md](controlled-parallel-workflow.md)。缺少欄位或使用 `legacy-staged` 時不得套用本文件。Rolling Adoption 與 Maintenance 仍走既有 staged workflow。
 
 ## 授權模型
 
@@ -8,7 +8,7 @@
 
 ### Preparation Authority
 
-專案經使用者核准採用 `sequential-package` 後即建立 standing Preparation Authority；`confirmed + ready` 的 Shared Understanding 只是啟動條件，不是新的授權。AI 可進行可逆的開發包準備：執行 Boundary Gate、分析程式、配置候選 ID、建立或修訂 blueprint／Brief／Spec／Plan draft，並產出 Development Package 摘要。Preparation Authority 不授權 commit、實作、AI Verification、Review Fix 或 Final Approval。
+專案經使用者核准採用 `sequential-package` 或 `controlled-parallel` 後即建立 standing Preparation Authority；`confirmed + ready` 的 Shared Understanding 只是啟動條件，不是新的授權。AI 可進行可逆的開發包準備：執行 Boundary Gate、分析程式、配置候選 ID、建立或修訂 blueprint／Brief／Spec／Plan draft，並產出 Development Package 摘要。Preparation Authority 不授權 commit、worktree／branch 建立、Worker、實作、AI Verification、Review Fix 或 Final Approval。
 
 所有準備內容必須留在 working tree 且不 stage；開始前仍依 commit workflow 記錄並保留使用者既有變更。若準備內容與既有 staged changes 或目標檔案修改無法安全分離，停止，不以 package mode 繞過 working-tree 邊界。
 
@@ -23,7 +23,7 @@
 5. 在核准的 Autonomy Budget 內執行 review–fix loop，再重跑受影響 checks 與獨立 review。
 6. 保存 Verification 與 review report，將 Slice 推進至 `awaiting-human` 後停止。
 
-Package Approval 不授權 Final Approval、Human Integration、Human Acceptance、push、改寫 Git history 或下列停止條件中的變更。第一階段仍沿用目前 checked-out branch 的 commit model；review 門閥控制 acceptance，不宣稱提供 worktree isolation 或 merge queue，後兩者留給受控平行階段。
+Package Approval 不授權 Final Approval、Human Integration、Human Acceptance、push、改寫 Git history 或下列停止條件中的變更。`sequential-package` 仍沿用目前 checked-out branch 的 commit model，不提供 worktree isolation 或 merge queue；`controlled-parallel` 只有額外取得未到期 Wave Approval 後，才依其 workflow 建立隔離環境與序列 integration。
 
 ### Final Approval
 
@@ -130,4 +130,4 @@ package sequence 預設安靜：一般 batch 完成、低風險 finding 與已�
 
 ## 相容性
 
-`legacy-staged` 完整保留原有 stage-scoped invocation、單獨 Spec／Plan approval、Implementation、AI Verification 與 Human Acceptance handoff。只有 blueprint 明確採用 `sequential-package` 時，本文件的 mode-specific 規則才覆蓋其他 reference 中要求在 Boundary Gate、Spec／Plan approval、implementation sequence 或 AI Verification 前後停止的規則。
+`legacy-staged` 完整保留原有 stage-scoped invocation、單獨 Spec／Plan approval、Implementation、AI Verification 與 Human Acceptance handoff。只有 blueprint 明確採用 `sequential-package` 或 `controlled-parallel` 時，本文件的共用 package 邊界才覆蓋其他 reference 的適用停止點；parallel orchestration 仍只由 controlled parallel reference 定義。

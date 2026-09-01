@@ -14,7 +14,7 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 - `docs/blueprint/feature-slice-blueprint.md` 是 Slice 狀態、active slot 與目前收編範圍的唯一權威來源。
 - 程式碼、測試、TODO、舊文件與 Git history 只提供現況、限制或 Legacy Baseline 證據；只有使用者確認且寫入 `docs/project/` 的產品規則才成為 canonical requirement。
 - 同一項產品規則只有一個 canonical 位置。Spec 的 Slice contract 必須可追溯至 canonical source；兩者語義衝突時停止並確認，不自行選擇其中一份。
-- 同一時間只處理一個 active Feature Slice 或一個 Maintenance；已核准且本質上跨 Slice 的 Blueprint 操作除外。`blocked` 若阻礙前狀態為 active，仍占用 active slot。
+- `legacy-staged` 與 `sequential-package` 同一時間只處理一個 active Feature Slice 或一個 Maintenance；已核准且本質上跨 Slice 的 Blueprint 操作除外。`controlled-parallel` 只依受控平行 workflow 允許最多三個隔離 Worker Slice，且同時只有一個 Integration Candidate。`blocked` 若阻礙前狀態為 active，仍占用對應 slot。
 - Slice 依可獨立驗收且具有使用者價值的垂直結果切分。Spec 定義「做什麼」，Plan 定義「怎麼做」，實作只依已核准的 Spec、Plan 與 Commit Plan 進行。
 - 分開記錄 committed、AI verified 與 human accepted；只有使用者能確認 Human Integration 與 Human Acceptance。
 - 使用者授權只涵蓋明確指定的 Proposal、文件 checkpoint、implementation sequence 或驗收結果。完成目前授權後停止；下一階段等待新的明確授權。
@@ -26,8 +26,9 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 
 - `legacy-staged`：保留逐階段 invocation、核准與停止點。
 - `sequential-package`：仍只允許一個 active Feature Slice，但把 Boundary Gate、draft preparation、implementation、AI Verification 與獨立 review 組成有明確權限邊界的 Development Package。完整讀取並依 [development-package-workflow.md](references/development-package-workflow.md) 執行；第一階段不套用於 Rolling Adoption 或 Maintenance。
+- `controlled-parallel`：以 `sequential-package` 的授權邊界為基礎，加入核准前相容性分析、最多三個隔離 implementation／test Worker、兩小時 Wave Approval 有效期，以及一次一個 Slice 的 review／integration gate。完整讀取並依 [development-package-workflow.md](references/development-package-workflow.md) 與 [controlled-parallel-workflow.md](references/controlled-parallel-workflow.md) 執行；Rolling Adoption 與 Maintenance 不平行化。
 
-缺少 `Execution Mode` 的既有 blueprint 一律視為 `legacy-staged`。切換 mode 是 project-level Blueprint Revision，必須先呈現影響並取得使用者明確核准；不得因使用者想減少核准次數就自行啟用。`sequential-package` 的 mode-specific 規則只覆蓋各 workflow 的 stage handoff，不放寬 canonical requirements、working-tree、Scope、Git history 或 Final Acceptance 邊界。
+缺少 `Execution Mode` 的既有 blueprint 一律視為 `legacy-staged`。切換 mode 是 project-level Blueprint Revision，必須先呈現影響並取得使用者明確核准；不得因使用者想減少核准次數就自行啟用。package／parallel mode-specific 規則只覆蓋其明定的 stage handoff 與 orchestration，不放寬 canonical requirements、working-tree、Scope、Git history 或 Final Acceptance 邊界。
 
 ## 啟動與續接閘門
 
@@ -41,7 +42,7 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 
 若訊息同時直接回答目前問題並要求新操作、擴張無關 Scope 或跨階段，只處理目前答案；不得執行新增部分，並提示以新的 `$cogito` 訊息啟動。改談其他主題後、工作中斷後或另開 Feature Slice／Maintenance，也必須明確恢復。
 
-階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。`legacy-staged` 進入每個新階段都必須有新的 `$cogito` 訊息；`sequential-package` 只依 Development Package reference 定義的 Preparation Authority 與 Package Approval 自動 handoff。階段內的明確「同意／核准」可以授權目前 Proposal。`$cogito` 只啟動階段，不自行構成核准。
+階段邊界包括 Grilling、Boundary Gate／文件 Proposal、Spec／Plan、Blueprint／Rolling Adoption、Maintenance、Implementation、AI Verification、Human Integration／Acceptance。`legacy-staged` 進入每個新階段都必須有新的 `$cogito` 訊息；`sequential-package` 只依 Development Package reference 定義的 Preparation Authority 與 Package Approval 自動 handoff；`controlled-parallel` 另外只依 Parallel Wave Approval 建立 Worker。階段內的明確「同意／核准」可以授權目前未到期 Proposal。`$cogito` 只啟動階段，不自行構成核准。
 
 ## 開始操作
 
@@ -65,7 +66,7 @@ description: Use when a user explicitly invokes $cogito, or directly responds to
 | 開始、繼續或修正已核准 implementation sequence | [implementation-workflow.md](references/implementation-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md) |
 | 執行 AI Verification；記錄 Human Integration 或 Human Acceptance | [verification-acceptance-workflow.md](references/verification-acceptance-workflow.md) 與 [commit-workflow.md](references/commit-workflow.md)；建立 Verification 時再讀 [verification-template.md](references/verification-template.md) |
 
-若 mode 是 `sequential-package`，上述 Grilling、Boundary Gate、Spec／Plan、Implementation 與 AI Verification 路由另外完整讀取 [development-package-workflow.md](references/development-package-workflow.md)，由其決定可自動進行的 handoff 與停止點。
+若 mode 是 `sequential-package`，上述 Grilling、Boundary Gate、Spec／Plan、Implementation 與 AI Verification 路由另外完整讀取 [development-package-workflow.md](references/development-package-workflow.md)，由其決定可自動進行的 handoff 與停止點。若 mode 是 `controlled-parallel`，還必須完整讀取 [controlled-parallel-workflow.md](references/controlled-parallel-workflow.md)，由其決定 Wave、Worker、review queue 與 integration gate；不得只套用單 Slice package 規則。
 
 同一 continuous sequence 只需讀取 commit workflow 一次；中斷後以 `$cogito` 恢復時重新讀取。只有新的 `$cogito` 訊息明確啟動下一階段時才載入其 workflow，不預載或自動 handoff。
 
@@ -94,7 +95,8 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 ```
 
 - `awaiting-approval`、`approved`、`in-progress`、`awaiting-human` 為 active status。
-- `blocked` 保存阻礙前狀態、原因與恢復條件；阻礙前狀態為 active 時，Blueprint 的 Active Feature Slice 保持該 ID。
+- `legacy-staged`／`sequential-package` 的 blueprint 記錄單一 Active Feature Slice；`controlled-parallel` 記錄最多三個 Active Feature Slices 與最多一個 Integration Candidate。
+- `blocked` 保存阻礙前狀態、原因與恢復條件；阻礙前狀態為 active 時，Blueprint 的 active 欄位保持該 ID。
 - `withdrawn` 為終止狀態；保留 ID 與文件。
 - 狀態轉移同步更新 blueprint 的 Status、Status Note 與 Last Updated；建立文件時同步 Documents link。
 
@@ -104,6 +106,7 @@ proposed -> awaiting-approval -> approved -> in-progress -> awaiting-human -> ac
 - `legacy-staged` 的 Spec／Plan 核准同時核准 Commit Plan 與 Approval Documentation commit，單獨核准不授權實作；核准完成後停止，Implementation 必須由新的 `$cogito` 訊息啟動。
 - `legacy-staged` 的 `continuous` implementation 授權只涵蓋尚未完成的已核准 batches 與各 batch Required Verification；完整 AI Verification 與 Verification Documentation 屬於新的 AI Verification 階段。
 - `sequential-package` 的準備、執行、獨立 review 與 Final Approval 權限只依 Development Package reference；Package Approval 之前不得實作，Final Approval 仍只由使用者確認。
+- `controlled-parallel` 的相容性分析、Wave Approval、Worker 隔離、序列 review／integration 與兩小時到期規則只依受控平行 reference；不得從 Development Package 核准推論多 Slice 執行權限。
 - Rolling Adoption 與 Maintenance 的授權只涵蓋各自 Proposal 列出的 batch、檔案、證明與 commit。
 - 每個步驟以已授權產出完成、必要檢查實際執行、狀態與文件一致為完成條件。
 - 同階段等待回答、修正、說明或核准時，直接提出要求，不要求 `$cogito`。跨階段或中斷恢復時，提供包含 `$cogito` 的精確啟動句，例如：`請以 $cogito 開始 FS-001 implementation`。

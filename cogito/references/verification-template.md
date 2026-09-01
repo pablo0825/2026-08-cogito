@@ -44,7 +44,7 @@ Gate 在此表只使用 `required` 或 `advisory`；`human` 項目記錄於 Huma
 
 ## Independent Code Review
 
-`Execution Mode: legacy-staged` 且沒有獨立 review 要求時填寫 `Not applicable — legacy-staged`。`sequential-package` 必須由未參與實作的獨立 Review Agent 完整填寫；無法取得 Reviewer 時不得建立自我審查結果。
+`Execution Mode: legacy-staged` 且沒有獨立 review 要求時填寫 `Not applicable — legacy-staged`。`sequential-package` 與 `controlled-parallel` 必須由未參與該 Slice 實作的獨立 Review Agent 完整填寫；無法取得 Reviewer 時不得建立自我審查結果。parallel mode 另須保存 Wave 與 integration evidence。
 
 - Review Status: `pending | passed | blocked`
 - Reviewer: `<independent agent identity or pending>`
@@ -54,6 +54,11 @@ Gate 在此表只使用 `required` 或 `advisory`；`human` 項目記錄於 Huma
 - Recommendation: `approve | fix | block`
 - Conformance: <Spec／Plan、Scope、Files 與停止條件的一致性結論>
 - Test Adequacy: <Acceptance coverage 與 evidence 缺口>
+- Wave / Queue: `<Wave ID and review queue position or not-applicable>`
+- Worker Baseline: `<Base Revision, worker branch and actual Write Set or not-applicable>`
+- Integration Status: `not-applicable | queued | awaiting-human-code-review | integrated | blocked`
+- Integration Baseline: `<post-integration revision or pending>`
+- Integration Checks: `<commands and current results or pending>`
 
 ### Risk Hotspots
 

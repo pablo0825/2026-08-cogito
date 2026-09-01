@@ -83,7 +83,7 @@ Readiness: ready | blocked
 
 ## 確認效力與保存
 
-摘要確認只建立內容基線，不構成新的後續工作授權。確認後的摘要持續有效，直到使用者明確修改或撤回。`sequential-package` 若已由使用者在 project level 核准，後續可逆準備依既有 Preparation Authority 進行，而不是由本次摘要確認臨時取得授權。
+摘要確認只建立內容基線，不構成新的後續工作授權。確認後的摘要持續有效，直到使用者明確修改或撤回。`sequential-package` 或 `controlled-parallel` 若已由使用者在 project level 核准，後續可逆準備依既有 Preparation Authority 進行，而不是由本次摘要確認臨時取得授權。
 
 完整問答留在對話中；Canonical 文件只在取得適用授權後保存目前有效的結論，不建立 Requirement Interview history 文件。
 
@@ -106,6 +106,16 @@ Readiness: ready | blocked
 `sequential-package` 使用：
 
 請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確；專案已核准的 Preparation Authority 會接著準備 Boundary Gate、Slice、Spec、Plan 與 Development Package，但 Package Approval 前不會 stage、commit 或實作。
+
+若摘要正確，可直接回覆：
+
+```text
+同意
+```
+
+`controlled-parallel` 使用：
+
+請確認這份 Shared Understanding 是否正確。確認只表示摘要內容正確；專案已核准的 Preparation Authority 會接著準備 Boundary Gate、候選 Slice、Spec／Plan、相容性分析與 Parallel Wave Proposal，但 Wave Approval 前不會 stage、commit、建立 Worker／worktree 或實作。
 
 若摘要正確，可直接回覆：
 

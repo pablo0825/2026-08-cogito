@@ -95,8 +95,9 @@ AI 查找可取得的事實；只有外部資訊確實無法取得且影響決�
 
 - `confirmed + ready` 且 `Execution Mode: legacy-staged`：確認後停止；Boundary Gate 是下一個新階段，要求使用者以新的 `$cogito` 訊息啟動，再完整讀取 [spec-plan-workflow.md](spec-plan-workflow.md) 執行。
 - `confirmed + ready` 且 `Execution Mode: sequential-package`：完整讀取 [development-package-workflow.md](development-package-workflow.md) 與 [spec-plan-workflow.md](spec-plan-workflow.md)，依既有 project-level Preparation Authority 自動執行 Boundary Gate 並準備 Development Package，然後等待 Package Approval。
+- `confirmed + ready` 且 `Execution Mode: controlled-parallel`：另完整讀取 [controlled-parallel-workflow.md](controlled-parallel-workflow.md)，準備各候選 Development Package、Parallel Readiness Analysis 與未到期 Wave Proposal，然後等待 Wave Approval；不得先建立 Worker 或 worktree。
 - `confirmed + blocked`：摘要可以正確，但不得建立或修訂 Spec。
 
-摘要確認本身只確認內容正確；`legacy-staged` 下不授權修改文件、實作或 commit。`sequential-package` 的可逆 draft preparation 來自專案已核准的 Preparation Authority，不來自本次「同意」，且 Package Approval 前仍不得 stage、commit 或實作。Gate 與拆分的 package-mode 行為只依 development package reference。
+摘要確認本身只確認內容正確；`legacy-staged` 下不授權修改文件、實作或 commit。package／parallel mode 的可逆 draft preparation 來自專案已核准的 Preparation Authority，不來自本次「同意」，且 Package／Wave Approval 前仍不得 stage、commit、建立隔離環境或實作。Gate、拆分與平行相容性只依適用 reference。
 
 若後續核准文件超出已確認摘要，原 Gate 結果失效；以新的 `$cogito` 訊息重新進入 Grilling，確認後停止，再以另一個新的 `$cogito` 訊息重跑 Boundary Gate。

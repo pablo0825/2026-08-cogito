@@ -16,7 +16,7 @@
 - Boundary Gate: `passed | provisional-split`
 - Boundary Basis: `Slice Brief and Source References at Draft commit or package preparation baseline`
 
-Document Status 使用 `draft`、`approved`、`completed`。`provisional-split` 只允許 `sequential-package` 在拆分結構尚待 Package Approval 時準備 candidate draft；不得核准或實作，Package Approval commit 前必須依核准結構改為 `passed`。accepted Slice 的 completed Spec 是不可變快照；後續 change 的取代關係只記錄於新 Slice、blueprint 與新 Spec。
+Document Status 使用 `draft`、`approved`、`completed`。`provisional-split` 只允許 package／parallel mode 在拆分結構尚待適用 Package／Wave Approval 時準備 candidate draft；不得核准或實作，Approval commit 前必須依核准結構改為 `passed`。accepted Slice 的 completed Spec 是不可變快照；後續 change 的取代關係只記錄於新 Slice、blueprint 與新 Spec。
 
 ## Change Information
 

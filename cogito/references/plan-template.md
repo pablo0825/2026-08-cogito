@@ -77,9 +77,9 @@
 
 ## Development Package
 
-`Execution Mode: legacy-staged` 時填寫 `Not applicable — legacy-staged`，並省略本節其餘欄位。`sequential-package` 必須完整填寫，作為 Package Approval 的一部分。
+`Execution Mode: legacy-staged` 時填寫 `Not applicable — legacy-staged`，並省略本節其餘欄位。`sequential-package` 與 `controlled-parallel` 必須完整填寫，分別作為 Package Approval 或 Parallel Wave Approval 的一部分。
 
-- Execution Mode: `sequential-package`
+- Execution Mode: `sequential-package | controlled-parallel`
 - Approved Baseline: `Approval Documentation commit containing this approved Plan`
 - Package Handoff: `automatic-to-awaiting-human`
 - Independent Review: `required`
@@ -101,6 +101,27 @@
 - Approval Effect: <核准後自動執行的範圍與最後停止點>
 
 任何 Agent 新增的假設、Scope Delta、前置 Slice、風險或未驗證的重要事實都必須出現在 Approval Summary，不能只放在其他章節。
+
+### Parallel Wave
+
+`controlled-parallel` 必須填寫；其他 mode 填寫 `Not applicable`。
+
+- Wave ID: `<stable wave ID>`
+- Wave Status: `proposed | approved | expired | running | review-queue | completed | blocked`
+- Prepared At: `<ISO 8601 with timezone>`
+- Approval Expires At: `<Prepared At + 2 hours>`
+- Worker Limit: `1 | 2 | 3`
+- Worktree / Branch: `<exact path and branch for this Slice>`
+- Base Revision: `<immutable revision or pending until approval>`
+- Read Set: `<contracts, shared modules, schema, configuration, generated artifacts>`
+- Write Set: `<exact files / internal areas>`
+- Integration Surface: `<shared contracts, state, data, build or high-fan-out modules>`
+- Compatibility: `independent | coordinated-overlap | shared-predecessor-required | serial-only`
+- Conflict Strategy: `<merge order, owner, resolution and stop boundary>`
+- Review Queue Order: `<dependency-safe position and rationale>`
+- Integration Budget: `<only approved internal implementation/test conflict fixes>`
+
+Wave 摘要另附所有 candidates 的 compatibility matrix、共同前置工作、修改前／後 Slice 結構與排除原因。新增拆分、前置 Slice、依賴或順序一律等待使用者核准，不可只寫入此表後自行執行。
 
 ## Verification Gates
 
@@ -124,7 +145,7 @@ Gate 只使用 `required`、`advisory`、`human`。`Applicability` 使用 `alway
 
 ## Commit Plan
 
-`legacy-staged` 的 Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 pending 狀態限制。`sequential-package` 的 Preparation Authority 只建立 unstaged drafts，不建立 Draft commit；Package Approval 後才建立 Approval commit。
+`legacy-staged` 的 Draft Documentation Batch 由建立 Spec／Plan 的要求授權，不受下列 pending 狀態限制。package／parallel mode 的 Preparation Authority 只建立 unstaged drafts，不建立 Draft commit；適用 Package／Wave Approval 後才建立 Approval commit。
 
 - Commit Plan Approval: `pending`
 - Approved By: `pending`
@@ -143,7 +164,7 @@ Gate 只使用 `required`、`advisory`、`human`。`Applicability` 使用 `alway
 
 Commit Plan 的 `Required Verification` 是 batch commit gate，不取代上方控制 Slice 狀態的完整 Verification Gates。
 
-`sequential-package` 的 Review Fix 不預先建立空白 batch row；核准的 Development Package 已限制其輪數、Files／Internal Areas 與停止條件。實際修正每輪使用一個 `fix` commit，不能藉此改變尚未完成 Commit Plan。
+package／parallel mode 的 Review Fix 不預先建立空白 batch row；核准的 Development Package 或 Parallel Wave 已限制其輪數、Files／Internal Areas 與停止條件。實際修正每輪使用一個 `fix` commit，不能藉此改變尚未完成 Commit Plan。
 
 ## Approval
 

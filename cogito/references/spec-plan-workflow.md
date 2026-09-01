@@ -4,7 +4,7 @@
 
 ## Mode Routing
 
-`Execution Mode: legacy-staged` 使用本文件原有的逐階段停止點。`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)；其 Preparation Authority、未提交 drafts、Package Approval 與自動 handoff 規則覆蓋本文件的 Boundary／Draft／Approval 停止點，其餘 canonical、Boundary、Spec、Plan、mapping 與核准完整性規則全部保留。
+`Execution Mode: legacy-staged` 使用本文件原有的逐階段停止點。`Execution Mode: sequential-package` 另外完整讀取 [development-package-workflow.md](development-package-workflow.md)；`Execution Mode: controlled-parallel` 同時完整讀取該文件與 [controlled-parallel-workflow.md](controlled-parallel-workflow.md)。適用的 Preparation Authority、未提交 drafts、Package／Wave Approval 與自動 handoff 規則覆蓋本文件的 Boundary／Draft／Approval 停止點，其餘 canonical、Boundary、Spec、Plan、mapping 與核准完整性規則全部保留。
 
 ## 入口分類
 
@@ -30,8 +30,8 @@
 直接核准 draft 前確認全部條件：
 
 - Spec metadata 記錄 `Shared Understanding: confirmed`、`Boundary Gate: passed` 與 Boundary Basis。
-- `legacy-staged` 的 Spec／Plan 與相關 Brief、blueprint 自 Draft commit 後沒有未授權變更；`sequential-package` 的 current working-tree drafts 必須與 immediately preceding unresolved Development Package 所呈現的 exact paths／內容一致。
-- `legacy-staged` 自 Draft commit 後、`sequential-package` 自 package preparation 後，canonical sources 與 Brief 都沒有產品語義漂移。
+- `legacy-staged` 的 Spec／Plan 與相關 Brief、blueprint 自 Draft commit 後沒有未授權變更；package／parallel mode 的 current working-tree drafts 必須與 immediately preceding unresolved Package／Wave Proposal 所呈現的 exact paths／內容一致。
+- `legacy-staged` 自 Draft commit 後、package／parallel mode 自 preparation 後，canonical sources 與 Brief 都沒有產品語義漂移。
 - 使用者核准的是目前 exact draft，且同一訊息沒有附帶產品或技術內容變更。
 - Commit Plan、Files、Verification mappings 與 approvals 仍內部一致。
 
@@ -41,7 +41,7 @@
 
 建立或實質修訂 Spec 前，完整讀取並執行 [grilling-workflow.md](grilling-workflow.md)。先使用需求來源、Slice Brief 與有效 Spec 避免重問已確定內容；修改舊功能或判斷 Bug 時，再以程式、測試與必要 Git 歷史調查現況和差異，不從這些證據發明需求。
 
-只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才具備 Pre-Spec Boundary Gate 資格。`legacy-staged` 在 Grilling 確認後必須停止，Boundary Gate 必須由新的 `$cogito` 訊息啟動；`sequential-package` 依已核准的 Preparation Authority 自動繼續準備。`Readiness: blocked` 時兩種 mode 都停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容；package mode 的可逆準備權來自 project-level mode 核准，不授權 commit 或實作。
+只有 `Shared Understanding: confirmed` 且 `Readiness: ready` 才具備 Pre-Spec Boundary Gate 資格。`legacy-staged` 在 Grilling 確認後必須停止，Boundary Gate 必須由新的 `$cogito` 訊息啟動；package／parallel mode 依已核准的 Preparation Authority 自動繼續準備。`Readiness: blocked` 時所有 mode 都停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit。共同理解摘要的確認只核對內容；可逆準備權來自 project-level mode 核准，不授權 commit、Worker 或實作。
 
 Boundary Gate 必須是共同理解確認後的下一個產品工作步驟。Gate 通過前不得提出或套用 `docs/project/` 修改、建立或修訂 Blueprint、Spec 或 Plan。若同一份 confirmed 摘要與 Scope 已通過 Gate，後續建立 Spec 時沿用該結果；不要重複執行。需求文件或 Proposal 超出該摘要時，原結果失效；以新的 `$cogito` 訊息回到 Grilling，確認後停止，再以另一個新的 `$cogito` 訊息啟動 Boundary Gate。
 
@@ -68,7 +68,7 @@ Gate 未通過時：
 
 多個畫面、步驟、狀態、檔案、測試或 implementation batches 本身不是拆分理由。若它們共同完成一個不可分割、只有整體才有價值的使用者結果，維持單一 Slice。拆分只能依使用者結果，不得依技術層或為降低檔案數而切分。
 
-`legacy-staged` 在 Boundary Gate 通過後停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit；回報 Gate basis 與結果，提示使用者以新的 `$cogito` 訊息啟動 Spec／Plan 階段。`sequential-package` 則在同一 preparation sequence 建立未 stage 的 Spec／Plan drafts 與 Development Package，然後等待 Package Approval。
+`legacy-staged` 在 Boundary Gate 通過後停止，不建立或修訂 Spec／Plan，也不建立 Draft Documentation commit；回報 Gate basis 與結果，提示使用者以新的 `$cogito` 訊息啟動 Spec／Plan 階段。package／parallel mode 則在同一 preparation sequence 建立未 stage 的 Spec／Plan drafts；前者等待 Package Approval，後者完成相容性分析後等待 Wave Approval。
 
 ## 建立 Spec 與 Plan
 
@@ -79,7 +79,7 @@ Gate 未通過時：
 5. 讓新 Plan 使用 `Implementation Execution: continuous`，並依序列出 Approval、一個以上 implementation batches、Verification 與 Final。
 6. Scope Delta 預設填寫 `None`；只有技術限制需要不同實作表達時才記錄差異，產品 Scope 改變則先修訂 Spec。
 7. 將 Spec／Plan 設為 `draft`，在 Spec 保存 Shared Understanding 與 Boundary Gate provenance，blueprint 設為 `awaiting-approval`，確認 canonical sources、Brief boundary、Acceptance IDs、Verification mappings、檔案與 batch 一致。
-8. `legacy-staged` 建立 `docs(<ID>): draft <feature> specification` commit，回報 Scope、風險與 Open Questions，然後停止。`sequential-package` 不 stage、不建立 Draft commit；完成 Development Package 摘要後等待 Package Approval。
+8. `legacy-staged` 建立 `docs(<ID>): draft <feature> specification` commit，回報 Scope、風險與 Open Questions，然後停止。package／parallel mode 不 stage、不建立 Draft commit；完成適用摘要後等待 Package／Wave Approval。
 
 每個 implementation batch 回答一個清楚的審查問題並對應一個 commit。不要為增加 commit 數量拆開不可分割的工作。
 
@@ -124,7 +124,7 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
 
 ## 核准
 
-只接受明確核准。`legacy-staged` 的 Spec／Plan 核准同時核准 Commit Plan、核准者與時間，並授權 Approval Documentation commit，單獨核准不授權實作。`sequential-package` 只有對目前完整 Development Package 的明確核准才構成 Package Approval；授權範圍與停止條件依 development package workflow，不從簡短或含糊回覆推論。
+只接受明確核准。`legacy-staged` 的 Spec／Plan 核准同時核准 Commit Plan、核准者與時間，並授權 Approval Documentation commit，單獨核准不授權實作。`sequential-package` 只有對目前完整 Development Package 的明確核准才構成 Package Approval；`controlled-parallel` 只有對目前完整且未到期 Wave Proposal 的明確核准才構成 Wave Approval。授權範圍與停止條件依適用 workflow，不從簡短、含糊或過期回覆推論。
 
 核准後：
 
@@ -135,7 +135,7 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
    - 兩種情況均更新 Plan 的 `Commit Plan`：`Commit Plan Approval: approved`、`Approved By`、`Approved At`。同一次核准沿用相同核准者與時間；Approval Note 說明各文件的核准範圍，不要求逐字相同。
 3. `change` 只在新 Slice、blueprint 與新 Spec 保存 `Revises`／Previous Spec lineage；`correction` 只在新 Slice 保存 `Corrects`／Authoritative Spec lineage。兩者都不修改舊 accepted Spec。
 4. 執行下列核准完整性檢查，再建立 `docs(<ID>): approve <feature> specification` commit。
-5. `legacy-staged` 回報 Commit ID，提供新的 `$cogito` Implementation 階段啟動句，然後停止；即使核准訊息同時要求開始實作，也不得跨階段執行。`sequential-package` 將此 Approval commit 記為 Approved Baseline，回報簡短 checkpoint 後依 Package Approval 直接進入 implementation，不再詢問。
+5. `legacy-staged` 回報 Commit ID，提供新的 `$cogito` Implementation 階段啟動句，然後停止；即使核准訊息同時要求開始實作，也不得跨階段執行。`sequential-package` 將此 Approval commit 記為 Approved Baseline 後直接進入 implementation；`controlled-parallel` 完成 Wave 的所有必要 Approval commits 後才建立隔離環境並啟動 Workers，不再逐 Slice 詢問。
 
 ### 核准完整性檢查
 
@@ -145,4 +145,4 @@ Spec 的 Goal、Rules、Input／Output、Included／Excluded、Integration Contr
 
 完成條件是上述核准完整性檢查通過、文件與 blueprint 狀態一致，且 Approval commit 已建立。package mode 只有在 Approved Baseline 可唯一識別後才能自動 handoff。
 
-`legacy-staged` 停止時使用明確階段啟動句：`請以 $cogito 開始 <ID> implementation`；Plan 核准不跨階段授權 Implementation。`sequential-package` 不使用此 handoff prompt，改依 development package workflow 繼續。
+`legacy-staged` 停止時使用明確階段啟動句：`請以 $cogito 開始 <ID> implementation`；Plan 核准不跨階段授權 Implementation。package／parallel mode 不使用此 handoff prompt，改依適用 workflow 繼續。

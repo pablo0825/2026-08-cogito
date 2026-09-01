@@ -6,14 +6,16 @@
 
 ## Document Information
 
-- Schema Version: `3`
+- Schema Version: `4`
 - Document Status: `active`
 - Requirements Root: `docs/project/`
 - Adoption Mode: `complete | rolling`
 - Coverage: `complete | partial`
-- Execution Mode: `legacy-staged | sequential-package`
+- Execution Mode: `legacy-staged | sequential-package | controlled-parallel`
 - Last Reconciled: `<YYYY-MM-DD>`
 - Active Feature Slice: `<ID or none>`
+- Active Feature Slices: `<comma-separated IDs or none>`
+- Integration Candidate: `<ID or none>`
 
 ## Purpose
 
@@ -21,7 +23,7 @@
 
 Rolling Adoption 且 Coverage 為 `partial` 時，明確寫出：Feature Slice Index 只列已收編或正在收編的能力；未列出不代表產品不存在該功能。完整模式省略此警示。
 
-`Execution Mode` 缺少時依相容性規則視為 `legacy-staged`。新建或升級為 `sequential-package` 前必須讓使用者核准 mode 影響；mode 變更不修改 accepted snapshots。
+`Execution Mode` 缺少時依相容性規則視為 `legacy-staged`。`legacy-staged`／`sequential-package` 使用 `Active Feature Slice`，並將 `Active Feature Slices` 與 `Integration Candidate` 填為 `none`；`controlled-parallel` 將前者填為 `none`，使用最多三個 ID 的 `Active Feature Slices` 與最多一個 ID 的 `Integration Candidate`。切換 mode 前必須讓使用者核准授權、active-slot、隔離與回復影響；mode 變更不修改 accepted snapshots。
 
 ## Requirement Sources
 
