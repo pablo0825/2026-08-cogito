@@ -144,12 +144,6 @@ class GateSafetyTests(unittest.TestCase):
             with self.assertRaises(self.runtime.CogitoError):
                 store.transition("review-fix-required", {"scope_within_contract": True})
 
-    def test_feature_review_cannot_use_maintenance_exemption(self) -> None:
-        store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-        store.approved_package = lambda: package()
-        with self.assertRaises(self.runtime.CogitoError):
-            store._validate_review({"approved": True, "review_exemption": True})
-
     def test_missing_evidence_fails_before_loading_ledger_or_git(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = self.runtime.RunStore.__new__(self.runtime.RunStore)
@@ -279,33 +273,6 @@ class GateSafetyTests(unittest.TestCase):
                 validation.validate_evidence(
                     value, [item], [], lambda: ledger, run_dir
                 )
-
-    def test_maintenance_review_exemption_advances_verified_tasks(self) -> None:
-        store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-        store.approved_package = lambda: package("maintenance")
-        store.load = lambda: {"tasks": {"T-1": {"status": "verified"}, "T-2": {"status": "integrated"}}}
-        payload = {"review_exemption": True}
-        store._validate_review(payload)
-        self.assertEqual(payload["reviews"], ["T-1"])
-        self.assertTrue(payload["approved"])
-        self.assertFalse(payload["independent"])
-
-    def test_feature_review_is_derived_from_recorded_result_identity(self) -> None:
-        store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-        store.approved_package = lambda: package()
-        store.load = lambda: {
-            "tasks": {"T-1": {"id": "T-1", "slice_id": "FS-1", "status": "verified", "agent_id": "implementer-1"}},
-            "agent_results": [{"task_id": "T-1", "role": "reviewer", "status": "complete", "agent_id": "reviewer-1", "reviewed_implementer": "implementer-1", "requested_transition": "review-approved"}],
-        }
-        payload: dict = {}
-        store._validate_review(payload)
-        self.assertTrue(payload["independent"])
-        store.load = lambda: {
-            "tasks": {"T-1": {"id": "T-1", "slice_id": "FS-1", "status": "verified", "agent_id": "implementer-1"}},
-            "agent_results": [{"task_id": "T-1", "role": "reviewer", "status": "complete", "agent_id": "implementer-1", "reviewed_implementer": "implementer-1", "requested_transition": "review-approved"}],
-        }
-        with self.assertRaises(self.runtime.CogitoError):
-            store._validate_review({})
 
     def test_frozen_human_predicate_cannot_be_disabled_by_event_payload(self) -> None:
         store = self.runtime.RunStore.__new__(self.runtime.RunStore)

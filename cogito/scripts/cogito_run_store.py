@@ -8,7 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Sequence, cast
+from typing import Any, Mapping, Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -29,7 +29,7 @@ from cogito_git import GitRepository
 from cogito_gate_validation import (
     validate_evidence as validate_gate_evidence,
     validate_policy as validate_gate_policy,
-    validate_review as validate_gate_review,
+    derive_review_decision,
 )
 from cogito_projection import reduce_events
 from cogito_project_graph import formalize_project_graph, validate_project_graph
@@ -138,7 +138,11 @@ class RunStore:
             payload["tasks_complete"] = bool(completed) and not active and not dispatchable and completed <= implemented
             payload["task_ids"] = sorted(completed)
         if event == "review-approved":
-            self._validate_review(payload)
+            decision = derive_review_decision(
+                self.approved_package(), current,
+                review_exemption=payload.get("review_exemption") is True,
+            )
+            payload = {**payload, **decision}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, request_hash=request_hash)
 
@@ -822,12 +826,6 @@ class RunStore:
 
     def _validate_policy(self, package: Mapping[str, Any]) -> None:
         validate_gate_policy(self.root, package)
-
-    def _validate_review(self, payload: Mapping[str, Any]) -> None:
-        package = self.approved_package()
-        validate_gate_review(
-            package, self.load, cast(MutableMapping[str, Any], payload)
-        )
 
     def _validate_evidence(self, package: Mapping[str, Any], evidence: Sequence[Mapping[str, Any]], require_current_head: bool = False) -> None:
         events = read_events(self.events_path)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Mapping, MutableMapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_contract_fields import GIT_OBJECT_RE
@@ -78,28 +78,28 @@ def _validate_environment_policy(
             raise CogitoError("Package check environment exceeds Project Policy")
 
 
-def validate_review(
+def derive_review_decision(
     package: Mapping[str, Any],
-    load_state: Callable[[], Mapping[str, Any]],
-    payload: MutableMapping[str, Any],
-) -> None:
-    """Derive the Gate-owned review verdict for the current verification wave."""
-    if payload.get("review_exemption") is True:
+    state: Mapping[str, Any],
+    *, review_exemption: bool = False,
+) -> dict[str, Any]:
+    """Return the current wave's Gate verdict without IO or input mutation.
+
+    Inputs are the validated Package and recorded run state. Approval and
+    reviewer independence are derived here, never accepted from a request.
+    """
+    if review_exemption is True:
         if package["kind"] != "maintenance" or not all(package["maintenance_guards"].values()):
             raise CogitoError(
                 "independent-review exemption is only valid for objectively low-risk Maintenance"
             )
-        state = load_state()
-        payload["reviews"] = sorted(
+        reviews = sorted(
             task_id for task_id, task in state["tasks"].items() if task.get("status") == "verified"
         )
-        if not payload["reviews"]:
+        if not reviews:
             raise CogitoError("review exemption requires verified Maintenance tasks")
-        payload["approved"] = True
-        payload["independent"] = False
-        return
+        return {"reviews": reviews, "approved": True, "independent": False}
 
-    state = load_state()
     expected = {
         task_id for task_id, task in state["tasks"].items() if task.get("status") == "verified"
     }
@@ -124,9 +124,7 @@ def validate_review(
         raise CogitoError(
             "every completed implementation task requires a Gate-recorded independent Reviewer Result"
         )
-    payload["reviews"] = sorted(closed)
-    payload["approved"] = True
-    payload["independent"] = True
+    return {"reviews": sorted(closed), "approved": True, "independent": True}
 
 
 def validate_evidence(

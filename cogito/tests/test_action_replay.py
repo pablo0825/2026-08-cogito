@@ -161,6 +161,29 @@ class ActionReplayTests(unittest.TestCase):
             with self.subTest(command=operation.__name__):
                 self.assert_conflict(operation, *args, action_id="implemented")
 
+    def test_review_event_uses_gate_decision_and_preserves_the_original_request(self) -> None:
+        pre = self.evidence("check")
+        self.store.complete_verification([pre], "verify")
+        forged = {"approved": True, "independent": True, "reviews": ["T-1"]}
+        before = self.store.events_path.read_bytes()
+        with self.assertRaisesRegex(CogitoError, "independent Reviewer Result"):
+            self.store.transition("review-approved", forged, "review")
+        self.assertEqual(self.store.events_path.read_bytes(), before)
+        self.assertEqual(forged, {"approved": True, "independent": True, "reviews": ["T-1"]})
+
+        request = {"review_exemption": True, "approved": False, "independent": True,
+                   "reviews": ["unrecorded-task"], "note": {"reason": "low risk"}}
+        original = copy.deepcopy(request)
+        state = self.store.transition("review-approved", request, "review")
+        self.assertEqual(state["tasks"]["T-1"]["status"], "reviewed")
+        event = read_events(self.store.events_path)[-1]
+        self.assertEqual(event["payload"], {
+            **original, "reviews": ["T-1"], "approved": True, "independent": False,
+        })
+        self.assertEqual(request, original)
+        self.assert_replay(self.store.transition, "review-approved", request, "review")
+        self.assert_conflict(self.store.transition, "review-approved", event["payload"], "review")
+
     def test_amendment_and_correction_replay_bind_their_original_arguments(self) -> None:
         amendment = {"id": "TA-1", "reason": "fix", "path_fixes": ["note.txt"]}
         self.store.add_amendment(amendment, "amend")
