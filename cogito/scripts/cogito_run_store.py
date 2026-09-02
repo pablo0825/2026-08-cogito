@@ -180,6 +180,8 @@ class RunStore:
         validate_package_with_limits(package, self.workflow["limits"])
         self._validate_policy(package)
         current = self.load()
+        if package["kind"] != current["kind"]:
+            raise CogitoError("Package kind must match the run kind")
         mini = package["kind"] in {"maintenance", "documentation"}
         if not mini and package["shared_understanding"]["hash"] != current.get("shared_understanding_hash"):
             raise CogitoError("Package is not bound to the confirmed Shared Understanding")
@@ -188,10 +190,13 @@ class RunStore:
         event = "mini-package-ready" if mini else "package-ready"
         expected_state = "preparing" if mini else "package-preparing"
         payload = {"package_valid": True, "candidate_package_hash": package_hash(package)}
-        if current["state"] != expected_state:
+        if current["state"] not in {expected_state, "awaiting-package-approval"}:
             raise CogitoError("Package preparation is not legal in the current state")
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
-        return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self.record(
+            event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash,
+            expected_previous_hash=current["last_event_hash"],
+        )
 
     def update_task(self, task_id: str, status: TaskStatus, agent_id: str, action_id: str | None = None) -> RunState:
         payload: TaskUpdatedPayload = {"task_id": task_id, "status": status, "agent_id": agent_id}
@@ -529,6 +534,8 @@ class RunStore:
         package["package_hash"] = digest
         tasks = tasks_with_dependencies(package["execution_dag"])
         current = self.load()
+        if package["kind"] != current["kind"]:
+            raise CogitoError("Package kind must match the run kind")
         if current["state"] != "awaiting-package-approval":
             raise CogitoError("Package approval is not legal in the current state")
         if current.get("candidate_package_hash") != digest:
@@ -547,6 +554,7 @@ class RunStore:
             record_approval=lambda: self.record(
                 "package-approved", event_payload, action_id,
                 self._GATE_AUTHORITY, request_hash=request_hash,
+                expected_previous_hash=current["last_event_hash"],
             ),
         )
 

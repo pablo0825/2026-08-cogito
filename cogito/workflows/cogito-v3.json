@@ -15,6 +15,8 @@
     {"from": "awaiting-shared-confirmation", "event": "shared-understanding-confirmed", "to": "boundary-analysis", "guard": "shared_confirmed"},
     {"from": "boundary-analysis", "event": "boundary-complete", "to": "package-preparing", "guard": "boundary_ready"},
     {"from": "package-preparing", "event": "package-ready", "to": "awaiting-package-approval", "guard": "package_valid"},
+    {"from": "awaiting-package-approval", "event": "package-ready", "to": "awaiting-package-approval", "guard": "package_valid"},
+    {"from": "awaiting-package-approval", "event": "mini-package-ready", "to": "awaiting-package-approval", "guard": "mini_package_valid"},
     {"from": "awaiting-package-approval", "event": "package-approved", "to": "start-gate", "guard": "package_approved"},
     {"from": "start-gate", "event": "start-gate-passed", "to": "executing", "guard": "start_ready"},
     {"from": "executing", "event": "implementation-complete", "to": "verifying", "guard": "tasks_complete"},
