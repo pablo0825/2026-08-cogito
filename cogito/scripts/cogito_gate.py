@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from cogito_runtime import CogitoError, RunStore, effective_contract_hash, package_hash, render_project_graph_mermaid, render_workflow_mermaid, validate_agent_result, validate_amendment, validate_package
+from cogito_runtime import CogitoError, RunStore, effective_contract_hash, package_hash, render_project_graph_mermaid, render_workflow_mermaid, validate_agent_result, validate_package
 
 
 def _json_arg(value: str | None) -> dict[str, Any]:
@@ -206,7 +206,6 @@ def main(argv: list[str] | None = None) -> int:
                 if not package:
                     raise CogitoError("--package is required for amendment validation")
                 prior = [_read_object(path) for path in args.prior]
-                validate_amendment(package, prior, value)
                 output = {"valid": True, "effective_contract_hash": effective_contract_hash(package, prior + [value])}
         elif args.command == "render":
             if args.type == "workflow":

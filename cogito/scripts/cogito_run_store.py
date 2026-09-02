@@ -20,7 +20,7 @@ from cogito_contracts import (
     effective_contract_hash, materialize_contract, package_hash,
     path_allowed as _path_allowed, required as _required,
     safe_repo_path as _safe_repo_path, validate_agent_result,
-    validate_amendment, validate_package,
+    validate_package,
 )
 from cogito_events import append_event, read_events
 from cogito_evidence_contract import validate_check_evidence
@@ -492,7 +492,7 @@ class RunStore:
         if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification"}:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
         prior = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
-        validate_amendment(package, prior, amendment)
+        digest = effective_contract_hash(package, [*prior, amendment])
         # Correction tasks must finish before verification/integration can resume.
         # A cross-Slice predecessor cannot reach integrated inside this cycle.
         added_tasks = amendment.get("added_tasks", [])
@@ -504,7 +504,6 @@ class RunStore:
                 same_slice = (predecessor.get("slice_id") or "mini-package") == task["slice_id"]
                 if not same_slice and predecessor.get("status") != "integrated":
                     raise CogitoError("amendment cross-Slice dependencies must already be integrated")
-        digest = effective_contract_hash(package, [*prior, amendment])
         payload = {"amendment": dict(amendment), "effective_contract_hash": digest}
         return self.record(
             "technical-amendment-added",

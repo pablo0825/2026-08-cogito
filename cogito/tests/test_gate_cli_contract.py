@@ -10,12 +10,39 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_runtime_contract import minimal_package
+from cogito_common import hash_json
+from cogito_contracts import package_hash
+
 
 COGITO = Path(__file__).resolve().parents[1]
 GATE = COGITO / "scripts" / "cogito_gate.py"
 
 
 class GateCliContractTests(unittest.TestCase):
+    def test_amendment_validation_returns_hash_only_for_a_valid_history(self) -> None:
+        package = minimal_package()
+        prior = {"id": "TA-1", "reason": "add check", "added_checks": [{"id": "C-2", "argv": ["python3", "-V"]}]}
+        amendment = {"id": "TA-2", "reason": "repair path", "path_fixes": ["src"]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in (("package", package), ("prior", prior), ("amendment", amendment)):
+                (root / f"{name}.json").write_text(json.dumps(value))
+            args = ("validate", "--type", "amendment", "--package", str(root / "package.json"),
+                    "--prior", str(root / "prior.json"), "--input", str(root / "amendment.json"))
+            result = self.invoke(root, *args)
+            self.assertEqual(json.loads(result.stdout)["data"], {
+                "valid": True, "effective_contract_hash": hash_json({
+                    "base_package_hash": package_hash(package), "amendments": [prior, amendment],
+                }),
+            })
+            prior["added_checks"][0]["id"] = "C-1"
+            (root / "prior.json").write_text(json.dumps(prior))
+            result = self.invoke(root, *args, ok=False)
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(json.loads(result.stderr)["ok"])
+            self.assertEqual(result.stdout, "")
+
     def invoke(self, repo: Path, *args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
         result = subprocess.run([sys.executable, str(GATE), "--repo", str(repo), *args], text=True, capture_output=True)
         if ok and result.returncode != 0:
