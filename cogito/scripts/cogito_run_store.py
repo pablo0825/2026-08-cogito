@@ -149,10 +149,24 @@ class RunStore:
             payload["tasks_complete"] = bool(completed) and not active and not dispatchable and completed <= implemented
             payload["task_ids"] = sorted(completed)
         if event == "review-approved":
+            review_state = current
+            if payload.get("review_exemption") is not True:
+                events = self._events.read()
+                cycle = max((item["sequence"] for item in events
+                             if item["type"] == "verification-passed"), default=0)
+                review_state = cast(RunState, {**current, "agent_results": [
+                    item["payload"]["result"] for item in events
+                    if item["type"] == "agent-result-recorded" and item["sequence"] > cycle
+                ]})
             decision = derive_review_decision(
-                self.approved_package(), current,
+                self.approved_package(), review_state,
                 review_exemption=payload.get("review_exemption") is True,
             )
+            if payload.get("review_exemption") is not True:
+                worktrees = {Path(current["tasks"][task_id]["worktree"]) for task_id in decision["reviews"]}
+                for worktree in worktrees:
+                    _, content_tree = capture_index_and_worktree_trees(worktree)
+                    self._validate_review_content(worktree, content_tree)
             payload = {**payload, **decision}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(
@@ -292,7 +306,20 @@ class RunStore:
         if result["role"] == "reviewer" and result.get("reviewed_implementer") != task.get("agent_id"):
             raise CogitoError("Reviewer Result is not bound to the task implementer")
         worktree = Path(str(task.get("worktree", "")))
-        if not worktree.is_dir() or result["base_commit"] != task.get("base_commit") or result["head_commit"] != self._git_at(worktree, "rev-parse", "HEAD"):
+        if not worktree.is_dir() or result["base_commit"] != task.get("base_commit"):
+            raise CogitoError("Agent Result commits are not bound to the leased worktree")
+        current_head = self._git_at(worktree, "rev-parse", "HEAD")
+        if result["role"] == "reviewer" and package["kind"] != "maintenance":
+            implemented = [item for item in state["agent_results"]
+                           if item["task_id"] == result["task_id"] and item["role"] == "implementer"
+                           and item["status"] == "complete"]
+            if (not implemented or result["base_commit"] != implemented[-1]["base_commit"]
+                    or result["head_commit"] != implemented[-1]["head_commit"]):
+                raise CogitoError("Reviewer Result must name the recorded task implementation range")
+            self._git_at(worktree, "merge-base", "--is-ancestor", result["head_commit"], current_head)
+            _, content_tree = capture_index_and_worktree_trees(worktree)
+            self._validate_review_content(worktree, content_tree)
+        elif result["head_commit"] != current_head:
             raise CogitoError("Agent Result commits are not bound to the leased worktree")
         if self._git_at(worktree, "branch", "--show-current") != task.get("branch"):
             raise CogitoError("Agent Result worktree is not on its leased branch")
@@ -359,11 +386,25 @@ class RunStore:
             raise CogitoError("review requires recorded verification")
         paths = verified[-1]["payload"]["evidence"]
         evidence = [_load_json(Path(path)) for path in paths]
-        self._validate_evidence(self.approved_package(), evidence, snapshot=snapshot, phase="implementation")
         head = self._git_at(worktree, "rev-parse", "HEAD")
         matching = [item for item in evidence if item["head_commit"] == head]
         if not matching or any(item["worktree_binding"].get("content_tree") != content_tree for item in matching):
             raise CogitoError("review worktree differs from verified content; rerun verification")
+        amendments = [event["payload"]["amendment"] for event in snapshot.events
+                      if event["type"] == "technical-amendment-added"]
+        effective = materialize_contract_with_limits(self.approved_package(), amendments, self.workflow["limits"])
+        checks = {check["id"]: check for check in effective["checks"]}
+        anchor = max((event["sequence"] for event in snapshot.events
+                      if event["type"] in {"implementation-complete", "technical-correction-complete", "review-fix-complete"}), default=0)
+        for item in matching:
+            entry = snapshot.state["evidence"].get(item["evidence_path"])
+            check = checks.get(item["check_id"])
+            if (not entry or not check or entry["evidence_hash"] != hash_json(item)
+                    or not anchor < (entry.get("event_sequence") or 0) < verified[-1]["sequence"]
+                    or item.get("passed") is not True or item["check_hash"] != hash_json(check)
+                    or item["effective_contract_hash"] != effective["effective_contract_hash"]):
+                raise CogitoError("review evidence is not bound to this verification cycle")
+        self._validate_evidence(self.approved_package(), matching, snapshot=snapshot, phase="implementation")
 
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)
