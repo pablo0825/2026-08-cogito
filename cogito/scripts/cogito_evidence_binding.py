@@ -10,23 +10,6 @@ from typing import Any
 from cogito_common import CogitoError, hash_json
 
 
-def git(worktree: Path, *args: str) -> str:
-    """Run a bounded, read-only Git command used for evidence binding."""
-    try:
-        process = subprocess.run(
-            ["git", "-C", str(worktree), *args],
-            shell=False,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=15,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise CogitoError(f"cannot establish Git evidence binding: {exc}") from exc
-    return process.stdout.strip()
-
-
 def safe_file(worktree: Path, relative: str) -> Path:
     """Resolve a regular file without allowing worktree escape."""
     root = worktree.resolve()
@@ -72,8 +55,19 @@ def working_tree_binding(worktree: Path) -> dict[str, Any]:
             stderr=subprocess.PIPE,
             timeout=30,
         ).stdout
+        head = subprocess.run(
+            ["git", "-C", str(worktree), "rev-parse", "HEAD", "HEAD^{tree}"],
+            shell=False,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        ).stdout.splitlines()
     except (OSError, subprocess.SubprocessError) as exc:
         raise CogitoError(f"cannot snapshot working tree: {exc}") from exc
+    if len(head) != 2:
+        raise CogitoError("cannot snapshot worktree HEAD and tree")
 
     untracked: list[dict[str, str]] = []
     for raw in filter(None, untracked_raw.split(b"\0")):
@@ -89,7 +83,8 @@ def working_tree_binding(worktree: Path) -> dict[str, Any]:
         untracked.append({"path": relative, "sha256": digest.hexdigest()})
 
     binding = {
-        "head_tree": git(worktree, "rev-parse", "HEAD^{tree}"),
+        "head_commit": head[0],
+        "head_tree": head[1],
         "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
         "untracked": sorted(untracked, key=lambda item: item["path"]),
     }

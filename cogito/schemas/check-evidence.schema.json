@@ -3,7 +3,7 @@
   "$id": "https://cogito.local/schemas/check-evidence.schema.json",
   "title": "Cogito Controlled Check Evidence",
   "type": "object",
-  "required": ["schema_version", "run_id", "check_id", "status", "passed", "exit_code", "timed_out", "output_limit_exceeded", "termination_degraded", "output_limit_bytes", "stdout_bytes", "stderr_bytes", "duration_seconds", "started_at", "head_commit", "tree_hash", "worktree_snapshot_hash", "worktree_binding", "check_hash", "effective_contract_hash", "argv", "cwd", "stdout", "stderr", "truncated", "evidence_path"],
+  "required": ["schema_version", "run_id", "check_id", "status", "passed", "exit_code", "timed_out", "output_limit_exceeded", "termination_degraded", "output_limit_bytes", "stdout_bytes", "stderr_bytes", "duration_seconds", "started_at", "head_commit", "tree_hash", "worktree_snapshot_hash", "pre_worktree_snapshot_hash", "post_worktree_snapshot_hash", "worktree_changed_during_check", "worktree_binding", "check_hash", "effective_contract_hash", "argv", "cwd", "stdout", "stderr", "truncated", "evidence_path"],
   "properties": {
     "schema_version": {"const": "3.0"},
     "run_id": {"type": "string", "pattern": "^(DEV|MNT)-[A-Za-z0-9._-]+$"},
@@ -22,6 +22,9 @@
     "head_commit": {"$ref": "#/$defs/gitObject"},
     "tree_hash": {"$ref": "#/$defs/contentHash"},
     "worktree_snapshot_hash": {"$ref": "#/$defs/contentHash"},
+    "pre_worktree_snapshot_hash": {"$ref": "#/$defs/contentHash"},
+    "post_worktree_snapshot_hash": {"$ref": "#/$defs/contentHash"},
+    "worktree_changed_during_check": {"type": "boolean"},
     "worktree_binding": {"type": "object"},
     "check_hash": {"$ref": "#/$defs/contentHash"},
     "effective_contract_hash": {"$ref": "#/$defs/contentHash"},

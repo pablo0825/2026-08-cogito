@@ -199,6 +199,14 @@ def validate_evidence(
         binding_body = {key: value for key, value in binding.items() if key != "snapshot_hash"}
         if hash_json(binding_body) != binding["snapshot_hash"]:
             raise CogitoError(f"working-tree binding hash is invalid for {check_id}")
+        if (
+            item.get("worktree_changed_during_check") is not False
+            or item.get("pre_worktree_snapshot_hash") != item.get("post_worktree_snapshot_hash")
+            or item.get("post_worktree_snapshot_hash") != item.get("worktree_snapshot_hash")
+            or item.get("worktree_snapshot_hash") != item.get("tree_hash")
+            or binding.get("head_commit") != item.get("head_commit")
+        ):
+            raise CogitoError(f"evidence worktree stability binding failed for {check_id}")
         if load_current_head is not None and item.get("head_commit") != load_current_head():
             raise CogitoError(
                 f"post-integration evidence is not bound to current HEAD for {check_id}"

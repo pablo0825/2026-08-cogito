@@ -25,7 +25,6 @@ from cogito_contracts import (
     validate_package,
 )
 from cogito_evidence_binding import (
-    git as _git,
     safe_cwd as _safe_cwd,
     safe_file as _safe_file,
     working_tree_binding as _working_tree_binding,
@@ -71,6 +70,7 @@ def run_check(
     env = {key: value for key, value in os.environ.items() if key in allowed}
     started_at = datetime.now(timezone.utc).isoformat()
     start = time.monotonic()
+    pre_binding = _working_tree_binding(worktree)
     output_limit = int(
         package["policy_snapshot"].get(
             "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES
@@ -91,19 +91,30 @@ def run_check(
     if not isinstance(patterns, list):
         raise CogitoError("redact_patterns must be an array")
     stdout, stderr = _redact(stdout, patterns), _redact(stderr, patterns)
-    binding = _working_tree_binding(worktree)
+    post_binding = _working_tree_binding(worktree)
+    worktree_changed = pre_binding["snapshot_hash"] != post_binding["snapshot_hash"]
+    passed = (
+        capture.exit_code == 0
+        and not capture.timed_out
+        and not capture.output_limit_exceeded
+        and not worktree_changed
+    )
     evidence = {
         "schema_version": "3.0", "run_id": package["run_id"], "check_id": check_id,
-        "status": "passed" if capture.exit_code == 0 and not capture.timed_out and not capture.output_limit_exceeded else "failed",
-        "passed": capture.exit_code == 0 and not capture.timed_out and not capture.output_limit_exceeded,
+        "status": "passed" if passed else "failed", "passed": passed,
         "exit_code": capture.exit_code, "timed_out": capture.timed_out,
         "output_limit_exceeded": capture.output_limit_exceeded,
         "termination_degraded": capture.termination_degraded,
         "output_limit_bytes": output_limit,
         "stdout_bytes": capture.stdout_bytes, "stderr_bytes": capture.stderr_bytes,
         "duration_seconds": round(duration, 6),
-        "started_at": started_at, "head_commit": _git(worktree, "rev-parse", "HEAD"),
-        "tree_hash": binding["snapshot_hash"], "worktree_snapshot_hash": binding["snapshot_hash"], "worktree_binding": binding, "check_hash": hash_json(check),
+        "started_at": started_at, "head_commit": post_binding["head_commit"],
+        "tree_hash": post_binding["snapshot_hash"],
+        "worktree_snapshot_hash": post_binding["snapshot_hash"],
+        "pre_worktree_snapshot_hash": pre_binding["snapshot_hash"],
+        "post_worktree_snapshot_hash": post_binding["snapshot_hash"],
+        "worktree_changed_during_check": worktree_changed,
+        "worktree_binding": post_binding, "check_hash": hash_json(check),
         "effective_contract_hash": effective["effective_contract_hash"],
         "argv": argv, "cwd": str(cwd.relative_to(worktree)) or ".",
         "stdout": stdout, "stderr": stderr,

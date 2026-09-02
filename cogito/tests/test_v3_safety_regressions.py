@@ -201,6 +201,57 @@ class GateSafetyTests(unittest.TestCase):
                     value, [item], [], lambda: ledger, run_dir
                 )
 
+    def test_gate_rejects_evidence_from_a_changed_worktree(self) -> None:
+        validation = load("cogito_gate_validation")
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            evidence_path = run_dir / "evidence" / "changed.json"
+            evidence_path.parent.mkdir()
+            value = package()
+            effective = self.runtime.materialize_contract(value, [])
+            binding_body = {
+                "head_commit": "a" * 40,
+                "head_tree": "b" * 40,
+                "tracked_diff_sha256": "c" * 64,
+                "untracked": [],
+            }
+            post_hash = self.runtime.hash_json(binding_body)
+            item = {
+                "schema_version": "3.0",
+                "run_id": value["run_id"],
+                "check_id": "C-1",
+                "passed": True,
+                "check_hash": self.runtime.hash_json(value["checks"][0]),
+                "effective_contract_hash": effective["effective_contract_hash"],
+                "output_limit_exceeded": False,
+                "termination_degraded": False,
+                "output_limit_bytes": 10 * 1024 * 1024,
+                "head_commit": "a" * 40,
+                "tree_hash": post_hash,
+                "worktree_snapshot_hash": post_hash,
+                "pre_worktree_snapshot_hash": "d" * 64,
+                "post_worktree_snapshot_hash": post_hash,
+                "worktree_changed_during_check": True,
+                "worktree_binding": {**binding_body, "snapshot_hash": post_hash},
+                "evidence_path": str(evidence_path),
+            }
+            evidence_path.write_text(json.dumps(item))
+            ledger = {
+                "evidence": {
+                    str(evidence_path.resolve()): {
+                        "check_id": "C-1",
+                        "evidence_hash": self.runtime.hash_json(item),
+                        "event_sequence": 1,
+                    }
+                }
+            }
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "worktree stability binding failed"
+            ):
+                validation.validate_evidence(
+                    value, [item], [], lambda: ledger, run_dir
+                )
+
     def test_maintenance_review_exemption_advances_verified_tasks(self) -> None:
         store = self.runtime.RunStore.__new__(self.runtime.RunStore)
         store.approved_package = lambda: package("maintenance")

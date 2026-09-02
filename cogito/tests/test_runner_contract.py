@@ -116,6 +116,41 @@ class ControlledRunnerContractTests(unittest.TestCase):
             self.assertIn("tree_hash", evidence)
             self.assertIn("check_hash", evidence)
             self.assertEqual(evidence["output_limit_bytes"], 10 * 1024 * 1024)
+            self.assertFalse(evidence["worktree_changed_during_check"])
+            self.assertEqual(
+                evidence["pre_worktree_snapshot_hash"],
+                evidence["post_worktree_snapshot_hash"],
+            )
+            self.assertEqual(evidence["worktree_binding"]["head_commit"], commit)
+
+    def test_runner_rejects_evidence_when_check_changes_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-mutating",
+                    "argv": [
+                        sys.executable,
+                        "-c",
+                        "from pathlib import Path; Path('tracked.txt').write_text('changed\\n')",
+                    ],
+                }],
+            )
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-mutating", repo, evidence_dir)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
+            self.assertEqual(evidence["exit_code"], 0)
+            self.assertEqual(evidence["status"], "failed")
+            self.assertFalse(evidence["passed"])
+            self.assertTrue(evidence["worktree_changed_during_check"])
+            self.assertNotEqual(
+                evidence["pre_worktree_snapshot_hash"],
+                evidence["post_worktree_snapshot_hash"],
+            )
 
     def test_runner_timeout_is_a_failed_machine_evidence_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
