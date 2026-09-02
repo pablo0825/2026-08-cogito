@@ -7,9 +7,7 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,21 +18,21 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from cogito_common import ID_RE, CogitoError, atomic_write_json, hash_json
-from cogito_contracts import materialize_contract, validate_package
+from cogito_contracts import (
+    DEFAULT_MAX_CHECK_OUTPUT_BYTES,
+    materialize_contract,
+    validate_package,
+)
 from cogito_evidence_binding import (
     git as _git,
     safe_cwd as _safe_cwd,
     safe_file as _safe_file,
     working_tree_binding as _working_tree_binding,
 )
+from cogito_process_capture import run_bounded_process
 
 OUTPUT_CAP = 64 * 1024
 BASE_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "PATHEXT")
-
-
-def _limited(value: bytes, cap: int) -> tuple[str, bool]:
-    truncated = len(value) > cap
-    return value[:cap].decode("utf-8", errors="replace"), truncated
 
 
 def _redact(text: str, patterns: Sequence[str]) -> str:
@@ -69,27 +67,22 @@ def run_check(
     env = {key: value for key, value in os.environ.items() if key in allowed}
     started_at = datetime.now(timezone.utc).isoformat()
     start = time.monotonic()
-    timed_out = False
-    exit_code: int | None
-    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
-        try:
-            proc = subprocess.run(
-                argv, cwd=cwd, env=env, shell=False, stdin=subprocess.DEVNULL,
-                stdout=stdout_file, stderr=stderr_file, timeout=timeout, check=False,
-            )
-            exit_code = proc.returncode
-        except subprocess.TimeoutExpired:
-            timed_out, exit_code = True, None
-        except OSError as exc:
-            exit_code = 127
-            stderr_file.write(str(exc).encode("utf-8", errors="replace"))
-        stdout_file.seek(0)
-        stderr_file.seek(0)
-        stdout_raw = stdout_file.read(cap + 1)
-        stderr_raw = stderr_file.read(cap + 1)
+    output_limit = int(
+        package["policy_snapshot"].get(
+            "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES
+        )
+    )
+    capture = run_bounded_process(
+        argv,
+        cwd=cwd,
+        env=env,
+        timeout_seconds=timeout,
+        evidence_cap=cap,
+        output_limit=output_limit,
+    )
     duration = time.monotonic() - start
-    stdout, out_truncated = _limited(stdout_raw, cap)
-    stderr, err_truncated = _limited(stderr_raw, cap)
+    stdout = capture.stdout.decode("utf-8", errors="replace")
+    stderr = capture.stderr.decode("utf-8", errors="replace")
     patterns = check.get("redact_patterns", [])
     if not isinstance(patterns, list):
         raise CogitoError("redact_patterns must be an array")
@@ -97,13 +90,20 @@ def run_check(
     binding = _working_tree_binding(worktree)
     evidence = {
         "schema_version": "3.0", "run_id": package["run_id"], "check_id": check_id,
-        "status": "passed" if exit_code == 0 and not timed_out else "failed", "passed": exit_code == 0 and not timed_out,
-        "exit_code": exit_code, "timed_out": timed_out, "duration_seconds": round(duration, 6),
+        "status": "passed" if capture.exit_code == 0 and not capture.timed_out and not capture.output_limit_exceeded else "failed",
+        "passed": capture.exit_code == 0 and not capture.timed_out and not capture.output_limit_exceeded,
+        "exit_code": capture.exit_code, "timed_out": capture.timed_out,
+        "output_limit_exceeded": capture.output_limit_exceeded,
+        "termination_degraded": capture.termination_degraded,
+        "output_limit_bytes": output_limit,
+        "stdout_bytes": capture.stdout_bytes, "stderr_bytes": capture.stderr_bytes,
+        "duration_seconds": round(duration, 6),
         "started_at": started_at, "head_commit": _git(worktree, "rev-parse", "HEAD"),
         "tree_hash": binding["snapshot_hash"], "worktree_snapshot_hash": binding["snapshot_hash"], "worktree_binding": binding, "check_hash": hash_json(check),
         "effective_contract_hash": effective["effective_contract_hash"],
         "argv": argv, "cwd": str(cwd.relative_to(worktree)) or ".",
-        "stdout": stdout, "stderr": stderr, "truncated": out_truncated or err_truncated,
+        "stdout": stdout, "stderr": stderr,
+        "truncated": capture.stdout_truncated or capture.stderr_truncated or capture.output_limit_exceeded,
     }
     return evidence
 

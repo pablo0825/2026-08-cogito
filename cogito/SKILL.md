@@ -15,7 +15,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 - Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
 - Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
 - Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免獨立審查。
-- 正式 checks 只由 controlled runner 執行；Agent 敘述不是證據。證據衝突時依「核准契約 > machine evidence > Agent description」保守處理。
+- 正式 checks 只由 controlled runner 執行；Agent 敘述不是證據。runner 只保留 bounded head/tail 診斷輸出，合計輸出超過 Policy/Package 固定上限時終止 check 並 fail closed。證據衝突時依「核准契約 > machine evidence > Agent description」保守處理。
 - 核准、Boundary、check closure、獨立審查、human applicability 與狀態轉移等敏感 verdict 只能由 runtime CLI 根據可驗證輸入計算。Agent 只回報觀察、證據與建議，不得用 boolean 自行宣告 guard 通過。
 - 沒有適用的 Human Integration、Human Acceptance 或高風險 hotspot 時，完成 `finalizing` 後自動 `accepted`，只向使用者提供結案報告；否則停在單一 human gate。
 

@@ -10,6 +10,11 @@ from typing import Any, Mapping, Sequence
 
 from cogito_common import ID_RE, CogitoError, hash_json
 from cogito_scheduler import edge_pair, ready_tasks
+
+
+DEFAULT_MAX_CHECK_OUTPUT_BYTES = 10 * 1024 * 1024
+MIN_MAX_CHECK_OUTPUT_BYTES = 1024
+MAX_MAX_CHECK_OUTPUT_BYTES = 100 * 1024 * 1024
 from cogito_workflow import load_workflow
 
 
@@ -188,6 +193,12 @@ def _validate_policy_snapshot(package: Mapping[str, Any], check_ids: Sequence[An
         raise CogitoError("Package omits checks frozen by its policy snapshot")
     if any(set(check.get("env_allowlist", [])) - set(allowed_environment) for check in package["checks"]):
         raise CogitoError("Package check environment exceeds its frozen policy snapshot")
+    output_limit = policy.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES)
+    if (
+        type(output_limit) is not int
+        or not MIN_MAX_CHECK_OUTPUT_BYTES <= output_limit <= MAX_MAX_CHECK_OUTPUT_BYTES
+    ):
+        raise CogitoError("policy_snapshot max_check_output_bytes must be between 1 KiB and 100 MiB")
 
 
 def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, Any]], amendment: Mapping[str, Any]) -> None:

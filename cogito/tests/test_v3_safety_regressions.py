@@ -90,6 +90,28 @@ class GateSafetyTests(unittest.TestCase):
                 store.transition("package-approved", {"approved": True})
             self.assertEqual(store.events_path.read_bytes(), before)
 
+    def test_package_cannot_loosen_project_check_output_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            policy_path = root / "docs" / "cogito" / "project-policy.json"
+            policy_path.parent.mkdir(parents=True)
+            project_policy = {
+                "schema_version": "3.0",
+                "max_check_output_bytes": 1024 * 1024,
+            }
+            policy_path.write_text(json.dumps(project_policy))
+            value = package()
+            value["policy_snapshot"].update({
+                "hash": self.runtime.hash_json(project_policy),
+                "max_check_output_bytes": 2 * 1024 * 1024,
+            })
+            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
+            store.root = root
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "output limit is looser"
+            ):
+                store._validate_policy(value)
+
     def test_blocked_run_cannot_resume_to_arbitrary_later_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = self.runtime.RunStore(directory, "DEV-safe-001")
@@ -136,6 +158,48 @@ class GateSafetyTests(unittest.TestCase):
                 self.runtime.CogitoError, "required verification evidence is missing"
             ):
                 store._validate_evidence(package(), [], require_current_head=True)
+
+    def test_legacy_evidence_without_output_policy_binding_is_rejected(self) -> None:
+        validation = load("cogito_gate_validation")
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            evidence_path = run_dir / "evidence" / "legacy.json"
+            evidence_path.parent.mkdir()
+            value = package()
+            effective = self.runtime.materialize_contract(value, [])
+            binding_body = {
+                "head_tree": "a" * 40,
+                "tracked_diff_sha256": "b" * 64,
+                "untracked": [],
+            }
+            snapshot_hash = self.runtime.hash_json(binding_body)
+            item = {
+                "schema_version": "3.0",
+                "run_id": value["run_id"],
+                "check_id": "C-1",
+                "passed": True,
+                "check_hash": self.runtime.hash_json(value["checks"][0]),
+                "effective_contract_hash": effective["effective_contract_hash"],
+                "tree_hash": snapshot_hash,
+                "worktree_binding": {**binding_body, "snapshot_hash": snapshot_hash},
+                "evidence_path": str(evidence_path),
+            }
+            evidence_path.write_text(json.dumps(item))
+            ledger = {
+                "evidence": {
+                    str(evidence_path.resolve()): {
+                        "check_id": "C-1",
+                        "evidence_hash": self.runtime.hash_json(item),
+                        "event_sequence": 1,
+                    }
+                }
+            }
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "output policy binding failed"
+            ):
+                validation.validate_evidence(
+                    value, [item], [], lambda: ledger, run_dir
+                )
 
     def test_maintenance_review_exemption_advances_verified_tasks(self) -> None:
         store = self.runtime.RunStore.__new__(self.runtime.RunStore)

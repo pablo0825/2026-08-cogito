@@ -18,7 +18,7 @@ Boundary 階段只建立 provisional Slice IDs。Package 核准時才正式寫�
 - required/advisory/human checks、固定 applicability predicates。
 - Human Integration、Human Acceptance、高風險 hotspots。
 - correction/review-fix/retry 上限與 stop conditions。
-- 適用的 global/project policy snapshot。
+- 適用的 global/project policy snapshot，包括 `max_check_output_bytes`；預設為 10 MiB，Package 只能採用相同或更嚴格的上限。
 
 Package approval 是唯一正式開發核准。核准後 Package JSON 不可變；任何後續 overlay 必須是 Technical Amendment。Package 不包含文件 status/approval metadata，也不包含 Commit Plan。
 

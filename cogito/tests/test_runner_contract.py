@@ -60,6 +60,7 @@ class ControlledRunnerContractTests(unittest.TestCase):
             text=True,
             capture_output=True,
             env=env,
+            timeout=15,
         )
 
     def write_package(self, root: Path, commit: str, checks: list[dict]) -> Path:
@@ -114,6 +115,7 @@ class ControlledRunnerContractTests(unittest.TestCase):
             self.assertRegex(evidence["effective_contract_hash"], r"^[0-9a-f]{64}$")
             self.assertIn("tree_hash", evidence)
             self.assertIn("check_hash", evidence)
+            self.assertEqual(evidence["output_limit_bytes"], 10 * 1024 * 1024)
 
     def test_runner_timeout_is_a_failed_machine_evidence_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -149,7 +151,7 @@ class ControlledRunnerContractTests(unittest.TestCase):
                     "argv": [
                         sys.executable,
                         "-c",
-                        "print('SECRET-1234'); print('x' * 70000)",
+                        "print('SECRET-1234'); print('x' * 70000); print('TAIL-MARKER')",
                     ],
                     "redact_patterns": [r"SECRET-\d+"],
                 }],
@@ -160,8 +162,139 @@ class ControlledRunnerContractTests(unittest.TestCase):
             evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
             self.assertNotIn("SECRET-1234", evidence["stdout"])
             self.assertIn("[REDACTED]", evidence["stdout"])
+            self.assertTrue(evidence["stdout"].rstrip().endswith("TAIL-MARKER"))
             self.assertTrue(evidence["truncated"])
             self.assertLessEqual(len(evidence["stdout"].encode()), 64 * 1024)
+
+    def test_runner_stops_a_check_that_exceeds_the_hard_output_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-output-limit",
+                    "argv": [
+                        sys.executable,
+                        "-u",
+                        "-c",
+                        "import sys\nwhile True:\n sys.stdout.write('x' * 8192)\n sys.stdout.flush()",
+                    ],
+                    "timeout_seconds": 5,
+                }],
+            )
+            value = json.loads(package.read_text())
+            value["policy_snapshot"]["max_check_output_bytes"] = 32 * 1024
+            package.write_text(json.dumps(value))
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-output-limit", repo, evidence_dir)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
+            self.assertEqual(evidence["status"], "failed")
+            self.assertTrue(evidence["output_limit_exceeded"])
+            self.assertFalse(evidence["timed_out"])
+            self.assertIsNone(evidence["exit_code"])
+            self.assertEqual(evidence["output_limit_bytes"], 32 * 1024)
+            self.assertGreater(evidence["stdout_bytes"], 32 * 1024)
+            self.assertTrue(evidence["truncated"])
+            self.assertLessEqual(len(evidence["stdout"].encode()), 64 * 1024)
+
+    def test_output_limit_stops_descendants_after_the_direct_child_exits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            child = (
+                "import sys\n"
+                "while True:\n"
+                " sys.stdout.write('x' * 8192)\n"
+                " sys.stdout.flush()"
+            )
+            parent = (
+                "import subprocess, sys\n"
+                f"subprocess.Popen([sys.executable, '-u', '-c', {child!r}])"
+            )
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-descendant-limit",
+                    "argv": [sys.executable, "-c", parent],
+                    "timeout_seconds": 5,
+                }],
+            )
+            value = json.loads(package.read_text())
+            value["policy_snapshot"]["max_check_output_bytes"] = 32 * 1024
+            package.write_text(json.dumps(value))
+            result = self.invoke(
+                package, "C-descendant-limit", repo, root / "evidence"
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)
+            evidence = json.loads(next((root / "evidence").glob("*.json")).read_text())
+            self.assertTrue(evidence["output_limit_exceeded"])
+            self.assertFalse(evidence["timed_out"])
+
+    def test_output_limit_does_not_hang_on_an_escaped_descendant(self) -> None:
+        if sys.platform == "win32":
+            self.skipTest("POSIX escaped-session regression")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            child = (
+                "import sys\n"
+                "while True:\n"
+                " sys.stdout.write('x' * 8192)\n"
+                " sys.stdout.flush()"
+            )
+            parent = (
+                "import subprocess, sys\n"
+                f"subprocess.Popen([sys.executable, '-u', '-c', {child!r}], start_new_session=True)"
+            )
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-escaped-limit",
+                    "argv": [sys.executable, "-c", parent],
+                    "timeout_seconds": 5,
+                }],
+            )
+            value = json.loads(package.read_text())
+            value["policy_snapshot"]["max_check_output_bytes"] = 32 * 1024
+            package.write_text(json.dumps(value))
+            result = self.invoke(package, "C-escaped-limit", repo, root / "evidence")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            evidence = json.loads(next((root / "evidence").glob("*.json")).read_text())
+            self.assertTrue(evidence["output_limit_exceeded"])
+
+    def test_stdout_and_stderr_share_one_hard_output_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            package = self.write_package(
+                root,
+                commit,
+                [{
+                    "id": "C-combined-limit",
+                    "argv": [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.stdout.write('o' * 20000); sys.stdout.flush(); sys.stderr.write('e' * 20000)",
+                    ],
+                }],
+            )
+            value = json.loads(package.read_text())
+            value["policy_snapshot"]["max_check_output_bytes"] = 32 * 1024
+            package.write_text(json.dumps(value))
+            result = self.invoke(package, "C-combined-limit", repo, root / "evidence")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            evidence = json.loads(next((root / "evidence").glob("*.json")).read_text())
+            self.assertLess(evidence["stdout_bytes"], 32 * 1024)
+            self.assertLess(evidence["stderr_bytes"], 32 * 1024)
+            self.assertGreater(
+                evidence["stdout_bytes"] + evidence["stderr_bytes"], 32 * 1024
+            )
+            self.assertTrue(evidence["output_limit_exceeded"])
 
     def test_runner_exposes_only_allowlisted_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, MutableMapping, Sequence
 
 from cogito_common import CogitoError, hash_json, load_json
-from cogito_contracts import materialize_contract
+from cogito_contracts import (
+    DEFAULT_MAX_CHECK_OUTPUT_BYTES,
+    MAX_MAX_CHECK_OUTPUT_BYTES,
+    MIN_MAX_CHECK_OUTPUT_BYTES,
+    materialize_contract,
+)
 
 
 def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
@@ -16,6 +21,8 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
     if not policy_path.exists():
         if snapshot.get("fetch_allowed") is not False:
             raise CogitoError("fetch is not authorized without Project Policy")
+        if snapshot.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES) > DEFAULT_MAX_CHECK_OUTPUT_BYTES:
+            raise CogitoError("Package check output limit is looser than the default Project Policy")
         return
 
     project = load_json(policy_path)
@@ -27,6 +34,18 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
         raise CogitoError("Package max_workers is looser than Project Policy")
     if snapshot.get("fetch_allowed") is True and project.get("fetch_allowed") is not True:
         raise CogitoError("Package cannot authorize fetch beyond Project Policy")
+    project_output_limit = project.get(
+        "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES
+    )
+    if (
+        type(project_output_limit) is not int
+        or not MIN_MAX_CHECK_OUTPUT_BYTES
+        <= project_output_limit
+        <= MAX_MAX_CHECK_OUTPUT_BYTES
+    ):
+        raise CogitoError("Project Policy max_check_output_bytes must be between 1 KiB and 100 MiB")
+    if snapshot.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES) > project_output_limit:
+        raise CogitoError("Package check output limit is looser than Project Policy")
 
     required_checks = set(project.get("required_checks", []))
     if not required_checks <= {item["id"] for item in package["checks"]}:
@@ -164,6 +183,16 @@ def validate_evidence(
             or item.get("effective_contract_hash") != effective["effective_contract_hash"]
         ):
             raise CogitoError(f"evidence binding failed for {check_id}")
+        expected_output_limit = package["policy_snapshot"].get(
+            "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES
+        )
+        recorded_output_limit = item.get("output_limit_bytes")
+        if (
+            item.get("output_limit_exceeded") is not False
+            or item.get("termination_degraded") is not False
+            or recorded_output_limit != expected_output_limit
+        ):
+            raise CogitoError(f"evidence output policy binding failed for {check_id}")
         binding = item.get("worktree_binding")
         if not isinstance(binding, dict) or binding.get("snapshot_hash") != item.get("tree_hash"):
             raise CogitoError(f"working-tree binding is missing for {check_id}")
