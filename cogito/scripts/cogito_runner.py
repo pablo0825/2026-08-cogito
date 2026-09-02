@@ -97,6 +97,7 @@ def run_check(
         capture.exit_code == 0
         and not capture.timed_out
         and not capture.output_limit_exceeded
+        and not capture.termination_degraded
         and not worktree_changed
     )
     evidence = {
