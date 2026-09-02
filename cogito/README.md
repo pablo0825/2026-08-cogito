@@ -51,6 +51,8 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 
 整合決策由 `cogito_integration_rules.py` 根據已收集的狀態與事件，判定目標任務、來源 commits、前次 delivery HEAD 與下一個整合事件；`RunStore` 負責 Git 事實驗證與事件提交。純規則可直接用資料測試，Git ancestry 與 action replay 仍由整合測試保護。
 
+Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快照，並執行程序；`cogito_runner_evidence.build_evidence()` 只用這些資料判定通過／失敗、遮罩輸出並組裝 evidence。結果判定可不建立 Git repository 或啟動程序就完成單元測試，程序終止與不可變 evidence 發布仍有獨立整合測試。
+
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。

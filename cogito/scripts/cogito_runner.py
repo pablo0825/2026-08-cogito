@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -30,6 +29,7 @@ from cogito_evidence_binding import (
 )
 from cogito_evidence_contract import validate_check_evidence
 from cogito_process_capture import run_bounded_process
+from cogito_runner_evidence import build_evidence
 
 OUTPUT_CAP = 64 * 1024
 BASE_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "PATHEXT")
@@ -41,12 +41,6 @@ class EvidenceAlreadyExists(CogitoError):
     def __init__(self, path: Path):
         super().__init__("immutable evidence record already exists")
         self.path = path
-
-
-def _redact(text: str, patterns: Sequence[str]) -> str:
-    for pattern in patterns:
-        text = re.sub(pattern, "[REDACTED]", text)
-    return text
 
 
 def run_check(
@@ -87,41 +81,14 @@ def run_check(
         output_limit=output_limit,
     )
     duration = time.monotonic() - start
-    stdout = capture.stdout.decode("utf-8", errors="replace")
-    stderr = capture.stderr.decode("utf-8", errors="replace")
-    patterns = check.get("redact_patterns", [])
-    stdout, stderr = _redact(stdout, patterns), _redact(stderr, patterns)
     post_binding = _working_tree_binding(worktree)
-    worktree_changed = pre_binding["snapshot_hash"] != post_binding["snapshot_hash"]
-    passed = (
-        capture.exit_code == 0
-        and not capture.timed_out
-        and not capture.output_limit_exceeded
-        and not capture.termination_degraded
-        and not worktree_changed
+    return build_evidence(
+        run_id=package["run_id"], check_id=check_id, check=check,
+        effective_contract_hash=effective["effective_contract_hash"], capture=capture,
+        pre_binding=pre_binding, post_binding=post_binding,
+        started_at=started_at, duration_seconds=duration,
+        cwd=str(cwd.relative_to(worktree)) or ".", output_limit_bytes=output_limit,
     )
-    evidence = {
-        "schema_version": "3.0", "run_id": package["run_id"], "check_id": check_id,
-        "status": "passed" if passed else "failed", "passed": passed,
-        "exit_code": capture.exit_code, "timed_out": capture.timed_out,
-        "output_limit_exceeded": capture.output_limit_exceeded,
-        "termination_degraded": capture.termination_degraded,
-        "output_limit_bytes": output_limit,
-        "stdout_bytes": capture.stdout_bytes, "stderr_bytes": capture.stderr_bytes,
-        "duration_seconds": round(duration, 6),
-        "started_at": started_at, "head_commit": post_binding["head_commit"],
-        "tree_hash": post_binding["snapshot_hash"],
-        "worktree_snapshot_hash": post_binding["snapshot_hash"],
-        "pre_worktree_snapshot_hash": pre_binding["snapshot_hash"],
-        "post_worktree_snapshot_hash": post_binding["snapshot_hash"],
-        "worktree_changed_during_check": worktree_changed,
-        "worktree_binding": post_binding, "check_hash": hash_json(check),
-        "effective_contract_hash": effective["effective_contract_hash"],
-        "argv": argv, "cwd": str(cwd.relative_to(worktree)) or ".",
-        "stdout": stdout, "stderr": stderr,
-        "truncated": capture.stdout_truncated or capture.stderr_truncated or capture.output_limit_exceeded,
-    }
-    return evidence
 
 
 def write_evidence_once(directory: str | Path, record_id: str, evidence: Mapping[str, Any]) -> Path:
