@@ -26,6 +26,8 @@ cogito/
 
 Runtime 不接受 Agent 自行宣告核准、驗證通過或獨立審查成立；這些 verdict 由 CLI 從 Package、lease/result identity 與不可變 machine evidence 計算。Technical Amendments 先 materialize 為 effective contract，才能執行或驗證。Final commit 包含 Result 與 Project Graph，而該 commit 的 ID 由後續 event 與結案報告記錄，避免 Result 自我引用。
 
+Controlled runner 以獨立的暫存 Git index 記錄工作樹的 `content_tree`，不改動使用者的 staging 狀態。結案必須與最後驗證的內容一致，僅允許該 run 的 Result 與 Project Graph 在驗證後更新；Spec／Plan 變更必須在最後驗證前完成。Maintenance／documentation 的未提交內容也必須完整對應此快照。舊 evidence 缺少 `content_tree`，或本機快照 Git objects 已不可用時，必須重跑 checks，不補寫既有證據。
+
 ## 契約與 JSON 資料
 
 Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema。Package、Result、Project Graph 與 Agent Result 仍以 JSON 保存與交接；Spec／Plan 維持 Markdown。核准摘要與其他顯示 view 從同一份已驗證資料衍生，不另定規則，也不修改待核准內容。

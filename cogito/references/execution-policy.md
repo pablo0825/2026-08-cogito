@@ -25,6 +25,6 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 
 ## Finalizing
 
-以一個 final commit 原子保存 Result、Project Graph 最終 disposition、清除 `active_run_id`、當時已知的 commit/amendment 摘要及必要 Spec/Plan 合法更新。Result 不能內嵌包含自身的 final commit ID；commit 成功後，Gate 將實際 ID 追加到 event history 並用於結案報告，然後才能 `accepted`。失敗必須 `blocked`，不可先報結案。
+以一個 final commit 原子保存 Result、Project Graph 最終 disposition、清除 `active_run_id` 及當時已知的 commit/amendment 摘要。只有該 run 的 canonical Result 與 Project Graph 可以不同於最後驗證的 `content_tree`；必要 Spec/Plan 更新必須先完成再執行最後驗證。Feature／Change／Correction 的 final commit 也只能改這兩份結案紀錄。Maintenance／documentation 可提交已驗證的工作樹內容，但不能夾帶驗證後的修改或漏交檔案。缺少 `content_tree` 或其 Git object 時必須重跑 checks，不改寫既有 evidence。Result 不能內嵌包含自身的 final commit ID；commit 成功後，Gate 將實際 ID 追加到 event history 並用於結案報告，然後才能 `accepted`。失敗不可先報結案，應進入既有 blocked／修正流程。
 
 Maintenance 的 `single_commit` 指從 Start Gate HEAD 到 final commit 只有一個新 commit。實作與 checks 在目前 checkout 的 working-tree snapshot 上完成，Agent Result 可使用相同 base/head 並以實際 dirty/untracked path 回報；integration milestone 記錄該 Start HEAD 作為尚未提交的整合檢查點。最後才把產品變更、Result 與 Project Graph 一次提交。不得先提交產品變更再另做 metadata commit。

@@ -3,11 +3,45 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from cogito_common import CogitoError, hash_json
+
+
+def working_tree_content_tree(worktree: Path) -> str:
+    """Store a comparable Git tree without changing the caller's index.
+
+    Copy the index so staged additions (including explicitly added ignored files)
+    stay tracked, then stage current working files into only the temporary index.
+    The resulting objects are local snapshots, not commits or history changes.
+    """
+    try:
+        index = subprocess.run(
+            ["git", "-C", str(worktree), "rev-parse", "--git-path", "index"],
+            check=True, capture_output=True, text=True, timeout=15,
+        ).stdout.strip()
+        index_path = Path(index)
+        if not index_path.is_absolute():
+            index_path = worktree / index_path
+        with tempfile.TemporaryDirectory(prefix="cogito-snapshot-") as directory:
+            temporary_index = Path(directory) / "index"
+            shutil.copyfile(index_path, temporary_index)
+            env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
+            subprocess.run(
+                ["git", "-C", str(worktree), "add", "--all", "--", "."],
+                env=env, check=True, capture_output=True, timeout=30,
+            )
+            return subprocess.run(
+                ["git", "-C", str(worktree), "write-tree"],
+                env=env, check=True, capture_output=True, text=True, timeout=30,
+            ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CogitoError(f"cannot snapshot working-tree content: {exc}") from exc
 
 
 def safe_file(worktree: Path, relative: str) -> Path:
@@ -85,6 +119,7 @@ def working_tree_binding(worktree: Path) -> dict[str, Any]:
     binding = {
         "head_commit": head[0],
         "head_tree": head[1],
+        "content_tree": working_tree_content_tree(worktree),
         "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
         "untracked": sorted(untracked, key=lambda item: item["path"]),
     }

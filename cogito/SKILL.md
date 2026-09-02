@@ -74,6 +74,6 @@ Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，�
 
 ## 最終化
 
-進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id`、已知 amendment/commit 摘要及必要且合法的 Spec／Plan 更新。Result 不記錄包含自身的 final commit ID；commit 成功後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗為 `blocked`。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。
+進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗為 `blocked`。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。
 
 Maintenance 與 documentation-only adoption 使用同一引擎的 Mini Package profile，不建立 Slice、Spec 或 Plan，僅跳過 runtime 以客觀 guard 證明不適用的節點；不是另一套 workflow。Maintenance 還必須不改產品行為或契約、不改依賴/安全/資料邊界、路徑固定、可以 deterministic checks 覆蓋並以目前 checkout 單一 commit 完成；documentation-only 還必須只整理或引用既有語意。任一條無法證明即回到 Grilling／完整 Package。

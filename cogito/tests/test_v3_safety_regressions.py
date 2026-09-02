@@ -544,6 +544,12 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
 
 class MaintenanceEndToEndTests(unittest.TestCase):
     def test_single_commit_maintenance_auto_finalizes_and_reports(self) -> None:
+        self._run_maintenance()
+
+    def test_maintenance_cannot_commit_a_change_made_after_verification(self) -> None:
+        self._run_maintenance(change_after_verification=True)
+
+    def _run_maintenance(self, change_after_verification: bool = False) -> None:
         runtime = load("cogito_runtime")
         load("cogito_runner")
         with tempfile.TemporaryDirectory() as directory:
@@ -602,9 +608,18 @@ class MaintenanceEndToEndTests(unittest.TestCase):
                 "checks": [{"id": "C-1", "status": "passed", "evidence": post["evidence_path"]}],
                 "reviews": [], "amendments": [], "human_gate": {"required": False, "outcome": "not-required"}, "remaining_risks": [],
             }))
+            if change_after_verification:
+                (repo / "note.txt").write_text("unverified replacement\n")
             git(repo, "add", "note.txt", "docs/cogito/project-graph.json", f"docs/cogito/results/{run_id}.json")
             git(repo, "commit", "-qm", "maintenance result")
             final_commit = git(repo, "rev-parse", "HEAD")
+            if change_after_verification:
+                events_before = store.events_path.read_bytes()
+                with self.assertRaisesRegex(runtime.CogitoError, "unverified content"):
+                    store.finalize(f"docs/cogito/results/{run_id}.json", "docs/cogito/project-graph.json", final_commit, "finalize")
+                self.assertEqual(store.events_path.read_bytes(), events_before)
+                self.assertEqual(store.load()["state"], "finalizing")
+                return
             store.finalize(f"docs/cogito/results/{run_id}.json", "docs/cogito/project-graph.json", final_commit, "finalize")
             self.assertEqual(store.completion_report()["final_commit"], final_commit)
 

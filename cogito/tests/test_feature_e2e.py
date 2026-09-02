@@ -37,6 +37,12 @@ def sha256(path: Path) -> str:
 
 class FeatureMultiSliceEndToEndTests(unittest.TestCase):
     def test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted(self) -> None:
+        self._run_feature()
+
+    def test_final_commit_cannot_include_unverified_product_changes(self) -> None:
+        self._run_feature(change_after_verification=True)
+
+    def _run_feature(self, change_after_verification: bool = False) -> None:
         runtime = load_script("cogito_runtime")
         load_script("cogito_runner")
         with tempfile.TemporaryDirectory() as directory:
@@ -178,8 +184,18 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
                 "remaining_risks": [],
             }))
             git(repo, "add", "docs/cogito/project-graph.json", f"docs/cogito/results/{run_id}.json")
+            if change_after_verification:
+                (repo / "src/a.txt").write_text("unverified replacement\n")
+                git(repo, "add", "src/a.txt")
             git(repo, "commit", "-qm", "finalize Cogito feature")
             final_commit = git(repo, "rev-parse", "HEAD")
+            if change_after_verification:
+                events_before = store.events_path.read_bytes()
+                with self.assertRaisesRegex(runtime.CogitoError, "unverified content"):
+                    store.finalize(f"docs/cogito/results/{run_id}.json", "docs/cogito/project-graph.json", final_commit)
+                self.assertEqual(store.events_path.read_bytes(), events_before)
+                self.assertEqual(store.load()["state"], "finalizing")
+                return
             store.finalize(f"docs/cogito/results/{run_id}.json", "docs/cogito/project-graph.json", final_commit)
             report = store.completion_report()
             self.assertEqual(report["status"], "accepted")

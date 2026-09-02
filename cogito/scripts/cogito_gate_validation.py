@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, MutableMapping, Sequence
 
 from cogito_common import CogitoError, hash_json, load_json
+from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
@@ -139,6 +140,10 @@ def validate_evidence(
     """Validate controlled-runner evidence against its contract and event cycle."""
     for item in evidence:
         validate_check_evidence(item)
+        if load_current_head is not None:
+            tree = item["worktree_binding"].get("content_tree")
+            if not isinstance(tree, str) or not GIT_OBJECT_RE.fullmatch(tree):
+                raise CogitoError("post-integration evidence lacks a content tree; rerun controlled checks")
     prior = [
         item["payload"]["amendment"]
         for item in events

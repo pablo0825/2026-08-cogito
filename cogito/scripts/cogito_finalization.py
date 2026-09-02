@@ -6,13 +6,53 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from cogito_common import CogitoError
+from cogito_common import CogitoError, hash_json, load_json
+from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import materialize_contract, package_hash
+from cogito_evidence_contract import validate_check_evidence
 from cogito_project_graph import validate_project_graph
 from cogito_result_contract import validate_result
 
 
 GitCommand = Callable[..., str]
+
+
+def validate_final_content_changes(changed_paths: Sequence[str], metadata_paths: set[str]) -> None:
+    """Only the two canonical closure records may differ from verified content."""
+    unexpected = sorted(set(changed_paths) - metadata_paths)
+    if unexpected:
+        raise CogitoError(f"final commit changes unverified content: {unexpected}")
+
+
+def validate_verified_content(
+    *, final_commit: str, evidence_paths: set[str], state: Mapping[str, Any],
+    metadata_paths: set[str], git: GitCommand,
+) -> None:
+    """Read immutable runner snapshots and compare their trees with delivery."""
+    for evidence_path in sorted(evidence_paths):
+        ledger = state.get("evidence", {}).get(evidence_path)
+        if not ledger:
+            raise CogitoError("final verification evidence is missing from the runner ledger")
+        evidence = load_json(Path(evidence_path))
+        validate_check_evidence(evidence)
+        if (hash_json(evidence) != ledger.get("evidence_hash")
+                or evidence["passed"] is not True
+                or evidence["effective_contract_hash"] != state["effective_contract_hash"]):
+            raise CogitoError("final verification evidence no longer matches the runner ledger")
+        binding = evidence["worktree_binding"]
+        body = {key: value for key, value in binding.items() if key != "snapshot_hash"}
+        if (hash_json(body) != binding.get("snapshot_hash")
+                or binding.get("snapshot_hash") != evidence["worktree_snapshot_hash"]):
+            raise CogitoError("final verification snapshot hash is invalid")
+        tree = binding.get("content_tree")
+        if not isinstance(tree, str) or not GIT_OBJECT_RE.fullmatch(tree):
+            raise CogitoError("final verification lacks a content tree; rerun controlled checks")
+        try:
+            git("cat-file", "-e", f"{tree}^{{tree}}")
+        except CogitoError as exc:
+            raise CogitoError("final verification content tree is unavailable; rerun controlled checks") from exc
+        changed = git("diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z", tree, final_commit, "--")
+        validate_final_content_changes(list(filter(None, changed.split("\0"))), metadata_paths)
 
 
 def validate_finalization(
@@ -150,6 +190,15 @@ def validate_finalization(
         "rev-parse", f"{final_commit}^"
     ) != post_events[-1]["payload"].get("delivery_head"):
         raise CogitoError("final commit must directly follow the post-verification delivery HEAD")
+
+    metadata_paths = {result_rel.as_posix(), graph_rel.as_posix()}
+    if package["kind"] not in {"maintenance", "documentation"}:
+        changed = git("diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z", f"{final_commit}^", final_commit, "--")
+        validate_final_content_changes(list(filter(None, changed.split("\0"))), metadata_paths)
+    validate_verified_content(
+        final_commit=final_commit, evidence_paths=expected_evidence, state=state,
+        metadata_paths=metadata_paths, git=git,
+    )
 
     human_was_required = any(item["type"] == "human-review-required" for item in events)
     if human_was_required and not any(item["type"] == "human-approved" for item in events):

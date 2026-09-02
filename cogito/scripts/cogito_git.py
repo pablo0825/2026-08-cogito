@@ -23,4 +23,5 @@ class GitRepository:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise CogitoError(f"{error_prefix}: {exc}") from exc
-        return result.stdout.strip()
+        # NUL-delimited paths may begin with whitespace; do not normalize them.
+        return result.stdout if "-z" in args else result.stdout.strip()

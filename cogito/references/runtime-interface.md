@@ -20,6 +20,6 @@ Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 
 
 Agent Result 至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
 
-Finalization 先產生不含自身 final commit ID 的 Result 與 Project Graph，以單一 commit 寫入。Commit 成功後，Gate 才把實際 ID 追加到 event history 與結案報告並轉為 `accepted`；不得為了讓 Result 記錄自身 commit 而 amend 或重寫該 commit。
+Finalization 先產生不含自身 final commit ID 的 Result 與 Project Graph，以單一 commit 寫入。Gate 比對 final commit 與最後驗證 evidence 的 `worktree_binding.content_tree`，僅允許該 run 的 canonical Result 與 Project Graph 不同；Spec／Plan 必須在最後驗證前更新。舊 evidence 沒有此 tree 或其 Git object 不可用時，需重跑 controlled checks。Commit 成功且內容驗證通過後，Gate 才把實際 ID 追加到 event history 與結案報告並轉為 `accepted`；不得為了讓 Result 記錄自身 commit 而 amend 或重寫該 commit。
 
 Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證據遺失、hash 不符、DAG 有環、超出允許路徑或 action 無法對帳時，一律 `blocked`；不要用自然語言推測下一狀態。
