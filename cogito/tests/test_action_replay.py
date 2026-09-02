@@ -269,6 +269,7 @@ class ActionReplayTests(GitTestCase):
         ]}, "amend")
         self.store.update_task("T-2", "leased", "worker", "lease-fix")
         self.store.update_task("T-2", "running", "worker", "run-fix")
+        (self.repo / "note.txt").write_text("review fix\n")
         commit = self.head
         self.store.submit_agent_result({**self.result, "task_id": "T-2", "head_commit": commit}, "fix-result")
         self.store.update_task("T-2", "complete", "worker", "fix-complete")

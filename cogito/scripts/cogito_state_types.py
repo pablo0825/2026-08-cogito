@@ -20,6 +20,10 @@ class _OptionalTaskFields(TypedDict, total=False):
     worktree: str
     branch: str
     base_commit: str
+    maintenance_start_tree: str
+    maintenance_start_index_tree: str
+    maintenance_end_tree: str
+    maintenance_end_index_tree: str
     released_by: str
 
 

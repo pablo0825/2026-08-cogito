@@ -509,9 +509,9 @@ class MaintenanceEndToEndTests(GitTestCase):
             store.prepare_package(draft, "prepare")
             store.approve_package(draft, "approve")
             store.start_gate("start")
-            (repo / "note.txt").write_text("wrong\n" if invalid_product else "after\n")
             store.update_task("T-1", "leased", "worker-1", "lease")
             store.update_task("T-1", "running", "worker-1", "running")
+            (repo / "note.txt").write_text("wrong\n" if invalid_product else "after\n")
             store.submit_agent_result({
                 "schema_version": "3.0", "run_id": run_id, "task_id": "T-1", "agent_id": "worker-1",
                 "role": "implementer", "status": "complete", "base_commit": baseline, "head_commit": baseline,

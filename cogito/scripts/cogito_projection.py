@@ -56,6 +56,13 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                 raise CogitoError("agent-result-recorded requires a structured result")
             result_payload = cast(AgentResultRecordedPayload, payload)
             projection["agent_results"].append(result_payload["result"])
+            if result.get("role") == "implementer":
+                task = projection["tasks"].get(result.get("task_id", ""))
+                if task is not None:
+                    if "maintenance_end_tree" in result_payload:
+                        task["maintenance_end_tree"] = result_payload["maintenance_end_tree"]
+                    if "maintenance_end_index_tree" in result_payload:
+                        task["maintenance_end_index_tree"] = result_payload["maintenance_end_index_tree"]
         elif event_type == "check-evidence-recorded":
             if not _required(payload, "check_id", "evidence_path", "evidence_hash"):
                 raise CogitoError("check-evidence-recorded is incomplete")
@@ -128,6 +135,8 @@ def _apply_task_update(projection: RunState, payload: Mapping[str, Any]) -> None
     if task_payload["status"] == "pending":
         updated["released_by"] = task_payload["agent_id"]
         updated.pop("agent_id", None)
+        updated.pop("maintenance_end_tree", None)
+        updated.pop("maintenance_end_index_tree", None)
     projection["tasks"][task_id] = updated
     active_slices = {
         effective_slice_id(item) for item in projection["tasks"].values()

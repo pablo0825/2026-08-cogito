@@ -34,6 +34,7 @@ from cogito_correction_rules import validate_correction_completion, validate_rev
 from cogito_delivery_scope import validate_committed_scope
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
+from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
 from cogito_integration_rules import derive_integration_decision
@@ -231,6 +232,36 @@ class RunStore:
             if base_commit != expected_base:
                 raise CogitoError("a Slice worktree must start from the latest delivery HEAD")
             payload.update({"worktree": str(worktree), "branch": branch, "base_commit": base_commit})
+            if package["kind"] == "maintenance":
+                index_tree, content_tree = capture_index_and_worktree_trees(worktree)
+                retained_tree = task.get("maintenance_start_tree")
+                retained_index = task.get("maintenance_start_index_tree")
+                if bool(retained_tree) != bool(retained_index):
+                    raise CogitoError("Maintenance task has incomplete lease snapshots")
+                if retained_tree and retained_index:
+                    controls = {current.get("package_path"), "docs/cogito/project-graph.json"}
+                    for before, after in ((retained_tree, content_tree), (retained_index, index_tree)):
+                        changes = self._git_at(worktree, "diff", "--name-only", "--no-renames",
+                                               "--no-ext-diff", "-z", before, after, "--")
+                        if any(path not in controls and not path.startswith(".cogito/")
+                               and not _path_allowed(path, task.get("paths", []))
+                               for path in filter(None, changes.split("\0"))):
+                            raise CogitoError("Maintenance handoff exceeds its task path responsibility")
+                elif current["state"] == "executing":
+                    completed = [item for item in current["agent_results"]
+                                 if item["role"] == "implementer" and item["status"] == "complete"]
+                    predecessor = current["tasks"].get(completed[-1]["task_id"], {}) if completed else {}
+                    expected_tree = predecessor.get("maintenance_end_tree", base_commit)
+                    expected_index = predecessor.get("maintenance_end_index_tree", base_commit)
+                    controls = {current.get("package_path"), "docs/cogito/project-graph.json"}
+                    for before, after in ((expected_tree, content_tree), (expected_index, index_tree)):
+                        changes = self._git_at(worktree, "diff", "--name-only", "--no-renames",
+                                               "--no-ext-diff", "-z", before, after, "--")
+                        if any(path not in controls and not path.startswith(".cogito/")
+                               for path in filter(None, changes.split("\0"))):
+                            raise CogitoError("Maintenance work changed outside a recorded task before lease")
+                payload.update({"maintenance_start_tree": retained_tree or content_tree,
+                                "maintenance_start_index_tree": retained_index or index_tree})
         return self._record_gate_event(
             TaskUpdatedEvent(type="task-updated", payload=payload), action_id,
             request_hash=request_hash,
@@ -268,20 +299,53 @@ class RunStore:
         self._git("cat-file", "-e", f"{result['base_commit']}^{{commit}}")
         self._git("cat-file", "-e", f"{result['head_commit']}^{{commit}}")
         self._git("merge-base", "--is-ancestor", result["base_commit"], result["head_commit"])
-        diff_options = ("diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z")
+        diff_options = ("--no-optional-locks", "diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z")
         actual_paths = set(filter(None, self._git_at(
             worktree, *diff_options, result["base_commit"], result["head_commit"], "--",
         ).split("\0")))
         if package["kind"] == "maintenance":
-            # Include both index and working files. Their changes can cancel
-            # each other relative to HEAD, but neither may hide a staged path.
+            index_tree, content_tree = capture_index_and_worktree_trees(worktree)
+            control_paths = {state.get("package_path"), "docs/cogito/project-graph.json"}
+
+            def changed_paths(base: str, head: str) -> set[str]:
+                paths = self._git_at(worktree, *diff_options, base, head, "--")
+                return {path for path in filter(None, paths.split("\0"))
+                        if path not in control_paths and not path.startswith(".cogito/")}
+
+            cumulative = (changed_paths(result["base_commit"], content_tree)
+                          | changed_paths(result["base_commit"], index_tree))
+            live_paths: set[str] = set()
             for options in ((), ("--cached",)):
-                actual_paths.update(filter(None, self._git_at(
+                live_paths.update(filter(None, self._git_at(
                     worktree, *diff_options, *options, result["base_commit"], "--",
                 ).split("\0")))
-            actual_paths.update(filter(None, self._git_at(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
-            control_paths = {self.load().get("package_path"), "docs/cogito/project-graph.json"}
-            actual_paths = {path for path in actual_paths if path not in control_paths and not path.startswith(".cogito/")}
+            live_paths = {path for path in live_paths if path not in control_paths and not path.startswith(".cogito/")}
+            # A dirty submodule can differ without a representable tree delta.
+            # Do not silently drop a path detected by Git's live comparison.
+            if live_paths - cumulative:
+                raise CogitoError("Maintenance changes cannot be represented by task snapshots")
+            if any(not _path_allowed(path, package["approved_paths"]) for path in cumulative):
+                raise CogitoError("Maintenance working tree exceeds approved paths")
+            start_tree = task.get("maintenance_start_tree")
+            start_index = task.get("maintenance_start_index_tree")
+            if bool(start_tree) != bool(start_index):
+                raise CogitoError("Maintenance task has incomplete lease snapshots")
+            if not start_tree or not start_index:
+                # Old events remain usable under their original, conservative
+                # whole-worktree responsibility check. Never fabricate a lease.
+                actual_paths = cumulative
+            elif result["role"] == "reviewer":
+                end_tree = task.get("maintenance_end_tree")
+                end_index = task.get("maintenance_end_index_tree")
+                if not end_tree or not end_index:
+                    raise CogitoError("Maintenance review lacks recorded implementation snapshots")
+                self._validate_review_content(worktree, content_tree)
+                actual_paths = changed_paths(start_tree, end_tree) | changed_paths(start_index, end_index)
+            else:
+                end_tree, end_index = content_tree, index_tree
+                payload.update({"maintenance_end_tree": end_tree,
+                                "maintenance_end_index_tree": end_index})
+                actual_paths = changed_paths(start_tree, end_tree) | changed_paths(start_index, end_index)
         if result["role"] != "reviewer" and set(result["changed_paths"]) != actual_paths:
             raise CogitoError("Agent Result changed_paths do not match its commit range")
         if any(not _path_allowed(path, task.get("paths", [])) for path in actual_paths):
@@ -290,6 +354,20 @@ class RunStore:
             AgentResultRecordedEvent(type="agent-result-recorded", payload=payload), action_id,
             request_hash=request_hash,
         )
+
+    def _validate_review_content(self, worktree: Path, content_tree: str) -> None:
+        """A task review must refer to the current wave's verified content."""
+        snapshot = self._events.snapshot()
+        verified = [event for event in snapshot.events if event["type"] == "verification-passed"]
+        if not verified:
+            raise CogitoError("review requires recorded verification")
+        paths = verified[-1]["payload"]["evidence"]
+        evidence = [_load_json(Path(path)) for path in paths]
+        self._validate_evidence(self.approved_package(), evidence, snapshot=snapshot, phase="implementation")
+        head = self._git_at(worktree, "rev-parse", "HEAD")
+        matching = [item for item in evidence if item["head_commit"] == head]
+        if not matching or any(item["worktree_binding"].get("content_tree") != content_tree for item in matching):
+            raise CogitoError("review worktree differs from verified content; rerun verification")
 
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)

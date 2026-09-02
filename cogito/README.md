@@ -29,6 +29,8 @@ Runtime 不接受 Agent 自行宣告核准、驗證通過或獨立審查成立�
 
 Controlled runner 以獨立的暫存 Git index 記錄工作樹的 `content_tree`，不改動使用者的 staging 狀態。結案必須與最後驗證的內容一致，僅允許該 run 的 Result 與 Project Graph 在驗證後更新；Spec／Plan 變更必須在最後驗證前完成。Maintenance／documentation 的未提交內容也必須完整對應此快照。舊 evidence 缺少 `content_tree`，或本機快照 Git objects 已不可用時，必須重跑 checks，不補寫既有證據。
 
+Maintenance 每個新 task lease 保存 index 與 working tree 的起始快照，Result 只核對該 task 的增量，整體交付仍檢查 Package 範圍。任務中斷後釋放並重新 lease 時保留原始快照，避免接手者漏算半成品；任務間未登錄的修改則拒絕帶入新 lease。獨立 review 使用該 task 的完成快照並綁定本輪已驗證內容。舊 lease 沒有快照時維持原本保守的累積範圍檢查，不倒填歷史資料。
+
 Gate 事件另存原始命令與參數的 `request_hash`，不以衍生 verdict 比對重送請求。同一 `action_id` 與相同輸入可返回目前狀態，不重做已完成操作；不同命令或輸入則拒絕。舊事件仍可讀取，但缺少指紋的舊 action 不會自動重播，需先確認既有結果。Controlled check 以每個 action 的鎖與不可變 attempt 紀錄防止重複執行；證據已發布而事件未追加時可補登錄，程序可能已執行卻沒有證據時則回報結果未知，必須先人工確認，不能盲目重跑。
 
 ## 契約與 JSON 資料

@@ -20,6 +20,8 @@ class _OptionalTaskUpdatedFields(TypedDict, total=False):
     worktree: str
     branch: str
     base_commit: str
+    maintenance_start_tree: str
+    maintenance_start_index_tree: str
 
 
 class TaskUpdatedPayload(_OptionalTaskUpdatedFields):
@@ -28,7 +30,12 @@ class TaskUpdatedPayload(_OptionalTaskUpdatedFields):
     agent_id: str
 
 
-class AgentResultRecordedPayload(TypedDict):
+class _OptionalAgentResultRecordedFields(TypedDict, total=False):
+    maintenance_end_tree: str
+    maintenance_end_index_tree: str
+
+
+class AgentResultRecordedPayload(_OptionalAgentResultRecordedFields):
     result: AgentResult
 
 

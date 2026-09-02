@@ -21,6 +21,11 @@ def working_tree_content_tree(worktree: Path) -> str:
     Preserve its timestamp so Git still rechecks racily clean stat entries.
     The resulting objects are local snapshots, not commits or history changes.
     """
+    return capture_index_and_worktree_trees(worktree)[1]
+
+
+def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
+    """Snapshot staging and working content using one private copy of the index."""
     try:
         index = subprocess.run(
             ["git", "-C", str(worktree), "rev-parse", "--git-path", "index"],
@@ -39,14 +44,22 @@ def working_tree_content_tree(worktree: Path) -> str:
                 shutil.copyfileobj(source, target)
             os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
             env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
+            index_tree = subprocess.run(
+                ["git", "-C", str(worktree), "write-tree"],
+                env=env, check=True, capture_output=True, text=True, timeout=30,
+            ).stdout.strip()
+            # write-tree may update its cache extension and mtime. Retain the
+            # source timestamp before add so racy-clean entries are rechecked.
+            os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
             subprocess.run(
                 ["git", "-C", str(worktree), "add", "--all", "--", "."],
                 env=env, check=True, capture_output=True, timeout=30,
             )
-            return subprocess.run(
+            content_tree = subprocess.run(
                 ["git", "-C", str(worktree), "write-tree"],
                 env=env, check=True, capture_output=True, text=True, timeout=30,
             ).stdout.strip()
+            return index_tree, content_tree
     except (OSError, subprocess.SubprocessError) as exc:
         raise CogitoError(f"cannot snapshot working-tree content: {exc}") from exc
 
