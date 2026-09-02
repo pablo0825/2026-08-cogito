@@ -124,7 +124,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
                 raise OSError("injected graph write failure")
             atomic_write_json(path, value)
 
-        with mock.patch("cogito_run_store.atomic_write_json", side_effect=fail_graph):
+        with mock.patch("cogito_approval.atomic_write_json", side_effect=fail_graph):
             with self.assertRaises(CogitoError):
                 self.store.approve_package(self.package, "approve")
         self.assertFalse(self.package_path.exists())
@@ -155,7 +155,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
             if path == self.graph_path:
                 raise OSError("injected error after graph publication")
 
-        with mock.patch("cogito_run_store.atomic_write_json", side_effect=write_then_fail):
+        with mock.patch("cogito_approval.atomic_write_json", side_effect=write_then_fail):
             with self.assertRaisesRegex(CogitoError, "approval was not recorded"):
                 self.store.approve_package(self.package, "approve")
         self.assertFalse(self.package_path.exists())

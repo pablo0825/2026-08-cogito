@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from cogito_common import CogitoError, atomic_create_json, atomic_write_json, hash_json, load_json
+from cogito_approval import ApprovalArtifacts, publish_approval, restore_approval_permissions
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
 from cogito_contracts import (
     effective_contract_hash, materialize_contract, package_hash,
@@ -521,13 +522,7 @@ class RunStore:
         target = self.root / relative
         replay = self._replay(action_id, "package-approved", request_hash)
         if replay is not None:
-            try:
-                target.chmod(0o444)
-            except OSError as exc:
-                raise CogitoError(
-                    "Package approval is recorded, but its file could not be made read-only; "
-                    "retry with the same action_id after resolving the storage error"
-                ) from exc
+            restore_approval_permissions(target)
             return replay
         package = json.loads(json.dumps(draft))
         if package.get("run_id") != self.run_id:
@@ -548,69 +543,16 @@ class RunStore:
         # exclusive, so rollback can distinguish our file from an existing one.
         graph = self._formalize_project_graph(package, graph_path)
         event_payload = {"approved": True, "package_path": relative.as_posix(), "package_hash": digest, "tasks": tasks, "max_workers": package["policy_snapshot"]["max_workers"], "project_graph_hash": hash_json(graph), "project_graph_snapshot": graph, "limits": package["limits"]}
-        package_created = False
-        graph_write_attempted = False
-        try:
-            package_created = atomic_create_json(target, package)
-            if not package_created and package_hash(_load_json(target)) != digest:
-                raise CogitoError("canonical immutable Package already exists with different content")
-            graph_write_attempted = True
-            atomic_write_json(graph_path, graph)
-            state = self.record(
-                "package-approved",
-                event_payload,
-                action_id, self._GATE_AUTHORITY, request_hash=request_hash,
-            )
-            target.chmod(0o444)
-        except Exception as exc:
-            # record() appends the authoritative event BEFORE refreshing the
-            # cache. An exception does not imply that approval was rolled back.
-            try:
-                history = read_events(self.events_path)
-                reduce_events(history, self.workflow)
-                if (len(history) < current["sequence"]
-                        or history[current["sequence"] - 1]["event_hash"] != current["last_event_hash"]):
-                    raise CogitoError("event history no longer contains the pre-approval state")
-            except Exception as history_error:
-                raise CogitoError(
-                    "cannot determine Package approval outcome; artifacts were preserved; "
-                    "inspect event history before retrying"
-                ) from history_error
-            if any(item["type"] == "package-approved" for item in history):
-                raise CogitoError(
-                    "Package approval is recorded; artifacts were preserved, but follow-up "
-                    "work failed; retry with the same action_id after resolving the error: "
-                    f"{exc}"
-                ) from exc
-            self._rollback_uncommitted_approval(
-                target, package_created, graph_path, graph_before,
-                graph if graph_write_attempted else None,
-            )
-            raise CogitoError(f"Package approval was not recorded: {exc}") from exc
-        return state
-
-    def _rollback_uncommitted_approval(
-        self, target: Path, package_created: bool, graph_path: Path,
-        graph_before: bytes | None, attempted_graph: Mapping[str, Any] | None,
-    ) -> None:
-        """Undo our publication only after confirming no approval was recorded."""
-        try:
-            if attempted_graph is not None:
-                actual = graph_path.read_bytes() if graph_path.exists() else None
-                if actual != graph_before:
-                    # Do not overwrite an unrelated replacement during recovery.
-                    if actual is None or json.loads(actual) != attempted_graph:
-                        raise CogitoError("Project Graph changed during approval recovery")
-                    if graph_before is None:
-                        graph_path.unlink()
-                    else:
-                        graph_path.write_bytes(graph_before)
-            if package_created:
-                target.unlink()
-        except (OSError, ValueError) as exc:
-            raise CogitoError(
-                f"Package approval was not recorded, but cleanup is incomplete; inspect artifacts: {exc}"
-            ) from exc
+        return publish_approval(
+            ApprovalArtifacts(target, package, graph_path, graph, graph_before),
+            prior_state=current,
+            workflow=self.workflow,
+            load_events=lambda: read_events(self.events_path),
+            record_approval=lambda: self.record(
+                "package-approved", event_payload, action_id,
+                self._GATE_AUTHORITY, request_hash=request_hash,
+            ),
+        )
 
     def start_gate(self, action_id: str | None = None) -> dict[str, Any]:
         request_hash = request_fingerprint("start")
