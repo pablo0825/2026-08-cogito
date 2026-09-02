@@ -28,14 +28,20 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 - Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改 check、worktree 或執行契約。已發布 evidence 可在事件追加失敗後補登錄。若 attempt 已開始但沒有完整 evidence，結果視為未知，先確認程序與外部副作用再處理，不以自動重跑假裝恢復成功。
 - 每一執行波依 `complete -> verified -> reviewed -> integrated` 推進；Reviewer closure 逐 task 計算，不能用一筆結果關閉整個 Slice。Coordinator 串行記錄每個 Slice 的 source heads、前一 delivery head 與 integration commit。相依 Slice 只在這一步完成後解鎖。所有 Slice 整合完成後，在最新 delivery branch 重跑 post-integration checks；失敗共用 correction 預算，修正完直接回到 post-integration verification，不重做已完成的 integration。
 
+整合 Gate 除了檢查 source heads 與祖先關係，也比對前一 delivery HEAD 到 integration commit 的實際差異，拒絕超出 Package `approved_paths` 的產品檔案。此範圍包含合法 Technical Amendment 的修正，不另外縮限成原 task 路徑聯集。路徑以 NUL 分隔並將 rename 視為原路徑刪除與新路徑新增，檢查不改動 index。
+
+核准後需隨合法 commit 保存的控制文件只按精確路徑例外處理：本 run 的凍結 Package 必須內容相符，整合時的 Project Graph 必須符合核准 hash；Package 指定的 Spec／Plan 可依既有政策在最後驗證前更新；source registry 中 `adopted`／`updated` 的來源若依賴控制文件例外提交，必須符合凍結的原始 bytes hash，已在 `approved_paths` 的來源則可按核准範圍更新。其他文件不能因位於 `docs/` 就取得例外。
+
 沒有適用的人工作業或判斷時直接 `finalizing`。有適用 `HI-*`、`HA-*` 或高風險 hotspot 時，彙整成唯一一次 `awaiting-human` 門閥。
 
 ## Finalizing
 
 以一個 final commit 原子保存 Result、Project Graph 最終 disposition、清除 `active_run_id` 及當時已知的 commit/amendment 摘要。只有該 run 的 canonical Result 與 Project Graph 可以不同於最後驗證的 `content_tree`；必要 Spec/Plan 更新必須先完成再執行最後驗證。Feature／Change／Correction 的 final commit 也只能改這兩份結案紀錄。Maintenance／documentation 可提交已驗證的工作樹內容，但不能夾帶驗證後的修改或漏交檔案。缺少 `content_tree` 或其 Git object 時必須重跑 checks，不改寫既有 evidence。Result 不能內嵌包含自身的 final commit ID；commit 成功後，Gate 將實際 ID 追加到 event history 並用於結案報告，然後才能 `accepted`。失敗不可先報結案，應進入既有 blocked／修正流程。
 
+所有 Package kind 結案時都再次檢查 Start Gate HEAD 到 final commit 的完整交付範圍，套用上述精確控制文件規則，再驗證 Result／Project Graph 結案內容。已通過 integration、post checks 或符合 verified content tree，都不能取代核准範圍檢查。
+
 Maintenance 的 `single_commit` 指從 Start Gate HEAD 到 final commit 只有一個新 commit。實作與 checks 在目前 checkout 的 working-tree snapshot 上完成，Agent Result 可使用相同 base/head 並以實際 dirty/untracked path 回報；integration milestone 記錄該 Start HEAD 作為尚未提交的整合檢查點。最後才把產品變更、Result 與 Project Graph 一次提交。不得先提交產品變更再另做 metadata commit。
 
-Maintenance Agent Result 的 `changed_paths` 必須完整列出 staged、unstaged 與 untracked 的產品路徑，不能因 base/head 相同或內容已 staged 而省略；rename 按原路徑刪除與新路徑新增一起檢查。Gate 讀取 staging 狀態但不改動 index。結案另外比對 Start HEAD 到 final commit 的全部差異，除該 run 的 Result、Project Graph 及內容完全相符的凍結 Package 外，都必須在核准路徑內；通過 checks 或與 verified content tree 相同不代表可以擴張範圍。
+Maintenance Agent Result 的 `changed_paths` 必須完整列出 staged、unstaged 與 untracked 的產品路徑，不能因 base/head 相同或內容已 staged 而省略；rename 按原路徑刪除與新路徑新增一起檢查。Gate 讀取 staging 狀態但不改動 index。結案另外比對 Start HEAD 到 final commit 的全部差異，除上述精確控制文件例外外，都必須在核准路徑內；通過 checks 或與 verified content tree 相同不代表可以擴張範圍。
 
 Maintenance 的 technical correction、review-fix 與 post-integration correction 也維持此規則：completion 命令的 `--commit-id` 使用不變的 Start Gate HEAD，Gate 記錄修正工作樹的 `content_tree` 與 `completion_mode: working-tree`，不要求先建立修正 commit。新增任務仍須完成 lease／Implementer Result；完成後依原流程重跑 controlled checks 與適用的獨立審查，快照本身不代表驗證通過。Result 的對應 amendment 使用 `{id, base_commit, content_tree}`，三者必須與 completion event 一致；不填尚未存在的 final commit ID。唯一 final commit 必須以 Start HEAD 為唯一 parent，並帶齊各 amendment 的 `Cogito-Amendment: <ID>` trailer。Gate 驗證結案後，僅在衍生結案報告補上這些 amendment 的實際 final commit ID，不改寫 Result。其他 kind 仍使用原本先建立修正 commit 的流程。

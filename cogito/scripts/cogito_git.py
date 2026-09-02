@@ -15,6 +15,16 @@ class GitRepository:
     def run(self, *args: str) -> str:
         return self.run_at(self.root, *args, error_prefix="Git validation failed")
 
+    def read_blob(self, commit_id: str, path: str) -> bytes:
+        """Read exact committed bytes, preserving binary data and line endings."""
+        try:
+            return subprocess.run(
+                ["git", "-C", str(self.root), "cat-file", "blob", f"{commit_id}:{path}"],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
+            ).stdout
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise CogitoError(f"cannot read committed blob {path}: {exc}") from exc
+
     def run_at(self, directory: str | Path, *args: str, error_prefix: str = "worktree Git validation failed") -> str:
         try:
             result = subprocess.run(

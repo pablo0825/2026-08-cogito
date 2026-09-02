@@ -31,6 +31,7 @@ from cogito_contracts import (
     validate_package_with_limits,
 )
 from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
+from cogito_delivery_scope import validate_committed_scope
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
@@ -523,6 +524,11 @@ class RunStore:
         for source_head in decision.source_heads:
             self._git("merge-base", "--is-ancestor", source_head, commit_id)
         self._git("merge-base", "--is-ancestor", decision.previous_delivery_head, commit_id)
+        validate_committed_scope(
+            package, decision.previous_delivery_head, commit_id, self._git,
+            {"docs/cogito/project-graph.json"}, self._git_repo.read_blob,
+            graph_hash=current["project_graph_hash"],
+        )
         payload: IntegrationCompletedPayload = {
             "commit_id": commit_id, "slice_id": slice_id or "mini-package",
             "task_ids": list(decision.task_ids), "source_heads": list(decision.source_heads),
@@ -743,6 +749,7 @@ class RunStore:
             project_graph_path=project_graph_path,
             final_commit=final_commit,
             git=self._git,
+            read_blob=self._git_repo.read_blob,
             workflow_limits=self.workflow["limits"],
         )
         validate_transition(self.workflow, current["state"], "finalization-complete", payload, current["counters"])

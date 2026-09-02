@@ -11,9 +11,10 @@ from cogito_common import CogitoError, load_json
 from cogito_contracts import materialize_contract, materialize_contract_with_limits
 from cogito_project_graph import validate_project_graph
 from cogito_result_contract import validate_result
+from cogito_delivery_scope import BlobReader, validate_committed_scope
 from cogito_finalization_rules import (
     FinalizationContext, validate_final_content_changes,
-    validate_finalization_records, validate_verification_snapshot, validate_delivery_paths,
+    validate_finalization_records, validate_verification_snapshot,
 )
 
 
@@ -49,6 +50,7 @@ def validate_finalization(
     project_graph_path: str,
     final_commit: str,
     git: GitCommand,
+    read_blob: BlobReader | None = None,
     workflow_limits: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Validate final committed artifacts and return the Gate event payload."""
@@ -86,8 +88,7 @@ def validate_finalization(
     _validate_commit_history(context, final_commit, git)
 
     metadata_paths = {result_rel.as_posix(), graph_rel.as_posix()}
-    if package["kind"] == "maintenance":
-        _validate_maintenance_delivery_scope(context, final_commit, metadata_paths, git)
+    _validate_delivery_scope(context, final_commit, metadata_paths, git, read_blob)
     if package["kind"] not in {"maintenance", "documentation"}:
         changed = git("diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z", f"{final_commit}^", final_commit, "--")
         validate_final_content_changes(list(filter(None, changed.split("\0"))), metadata_paths)
@@ -104,25 +105,15 @@ def validate_finalization(
     }
 
 
-def _validate_maintenance_delivery_scope(
+def _validate_delivery_scope(
     context: FinalizationContext, final_commit: str, metadata_paths: set[str], git: GitCommand,
+    read_blob: BlobReader | None = None,
 ) -> None:
     starts = [item for item in context.events if item["type"] == "start-gate-passed"]
-    # The single-parent check above has already established exactly one Start.
+    if len(starts) != 1:
+        raise CogitoError("delivery scope requires exactly one Start Gate head")
     base = starts[0]["payload"]["delivery_head"]
-    changed = set(filter(None, git(
-        "diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none",
-        "-z", base, final_commit, "--",
-    ).split("\0")))
-    package_path = f"docs/cogito/packages/{context.run_id}.json"
-    validate_delivery_paths(sorted(changed), context.package["approved_paths"], metadata_paths | {package_path})
-    if package_path in changed:
-        try:
-            committed_package = json.loads(git("show", f"{final_commit}:{package_path}"))
-        except json.JSONDecodeError as exc:
-            raise CogitoError("committed Package is not valid JSON") from exc
-        if committed_package != context.package:
-            raise CogitoError("Maintenance final commit changes the frozen Package")
+    validate_committed_scope(context.package, base, final_commit, git, metadata_paths, read_blob)
 
 
 def _validate_commit_history(context: FinalizationContext, final_commit: str, git: GitCommand) -> None:

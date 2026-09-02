@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 from cogito_state_types import RunState
 from cogito_common import CogitoError, hash_json
 from cogito_contract_fields import GIT_OBJECT_RE
-from cogito_contracts import package_hash, path_allowed
+from cogito_contracts import package_hash
 from cogito_evidence_contract import validate_check_evidence
 
 
@@ -30,18 +30,6 @@ def validate_final_content_changes(changed_paths: Sequence[str], metadata_paths:
     unexpected = sorted(set(changed_paths) - metadata_paths)
     if unexpected:
         raise CogitoError(f"final commit changes unverified content: {unexpected}")
-
-
-def validate_delivery_paths(
-    changed_paths: Sequence[str], approved_paths: Sequence[str], control_paths: set[str],
-) -> None:
-    """Verification cannot authorize files outside the frozen delivery scope."""
-    unexpected = sorted(
-        path for path in changed_paths
-        if path not in control_paths and not path_allowed(path, approved_paths)
-    )
-    if unexpected:
-        raise CogitoError(f"Maintenance final commit exceeds approved paths: {unexpected}")
 
 
 def validate_verification_snapshot(
