@@ -267,10 +267,18 @@ class RunStore:
         self._git("cat-file", "-e", f"{result['base_commit']}^{{commit}}")
         self._git("cat-file", "-e", f"{result['head_commit']}^{{commit}}")
         self._git("merge-base", "--is-ancestor", result["base_commit"], result["head_commit"])
-        actual_paths = set(filter(None, self._git_at(worktree, "diff", "--name-only", result["base_commit"], result["head_commit"], "--").splitlines()))
+        diff_options = ("diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none", "-z")
+        actual_paths = set(filter(None, self._git_at(
+            worktree, *diff_options, result["base_commit"], result["head_commit"], "--",
+        ).split("\0")))
         if package["kind"] == "maintenance":
-            actual_paths.update(filter(None, self._git_at(worktree, "diff", "--name-only", "--").splitlines()))
-            actual_paths.update(filter(None, self._git_at(worktree, "ls-files", "--others", "--exclude-standard").splitlines()))
+            # Include both index and working files. Their changes can cancel
+            # each other relative to HEAD, but neither may hide a staged path.
+            for options in ((), ("--cached",)):
+                actual_paths.update(filter(None, self._git_at(
+                    worktree, *diff_options, *options, result["base_commit"], "--",
+                ).split("\0")))
+            actual_paths.update(filter(None, self._git_at(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
             control_paths = {self.load().get("package_path"), "docs/cogito/project-graph.json"}
             actual_paths = {path for path in actual_paths if path not in control_paths and not path.startswith(".cogito/")}
         if result["role"] != "reviewer" and set(result["changed_paths"]) != actual_paths:
