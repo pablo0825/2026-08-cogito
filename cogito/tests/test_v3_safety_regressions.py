@@ -7,8 +7,11 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest import mock
 
 
 COGITO = Path(__file__).resolve().parents[1]
@@ -413,6 +416,90 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
                 self.runner.write_evidence_once(evidence_dir, "C-1", {"different": True})
             with self.assertRaises(self.runtime.CogitoError):
                 self.runner.write_evidence_once(evidence_dir, "../escape", {"x": 1})
+
+    def test_concurrent_evidence_publication_has_exactly_one_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            evidence_dir = Path(directory) / "evidence"
+            barrier = threading.Barrier(2)
+
+            def publish(label: str):
+                barrier.wait()
+                try:
+                    path = self.runner.write_evidence_once(
+                        evidence_dir, "C-race", {"winner": label}
+                    )
+                except self.runner.EvidenceAlreadyExists as exc:
+                    return "collision", exc.path
+                return "created", path
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(publish, ("A", "B")))
+
+            self.assertEqual([status for status, _ in results].count("created"), 1)
+            self.assertEqual([status for status, _ in results].count("collision"), 1)
+            paths = {path for _, path in results}
+            self.assertEqual(paths, {evidence_dir.resolve() / "C-race.json"})
+            published_path = next(iter(paths))
+            recorded = json.loads(published_path.read_text())
+            self.assertIn(recorded["winner"], {"A", "B"})
+            self.assertEqual(recorded["evidence_path"], str(published_path))
+            self.assertEqual(list(evidence_dir.glob(".C-race.json.*")), [])
+
+    def test_immutable_publication_fails_closed_without_hard_link_support(self) -> None:
+        common = sys.modules["cogito_common"]
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "record.json"
+            with mock.patch.object(common.os, "link", side_effect=OSError("unsupported")):
+                with self.assertRaisesRegex(
+                    self.runtime.CogitoError, "cannot publish immutable JSON record"
+                ):
+                    common.atomic_create_json(destination, {"complete": True})
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_concurrent_check_loser_reuses_the_winning_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worktree = root / "worker"
+            worktree.mkdir()
+            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
+            store.root = root
+            store.run_dir = root / ".cogito" / "runs" / "DEV-race"
+            store.events_path = store.run_dir / "events.jsonl"
+            store._replay = lambda *_args: None
+            store.approved_package = lambda: {"run_id": "DEV-race"}
+            store.load = lambda: {
+                "state": "verifying",
+                "tasks": {
+                    "T-1": {"status": "complete", "worktree": str(worktree)}
+                },
+            }
+            store.record = lambda _event, payload, *_args: payload
+
+            winner = {
+                "check_id": "C-1",
+                "head_commit": "a" * 40,
+                "effective_contract_hash": "b" * 64,
+            }
+
+            def collide(target, record_id, _evidence):
+                path = Path(target) / f"{record_id}.json"
+                path.parent.mkdir(parents=True)
+                winner["evidence_path"] = str(path)
+                path.write_text(json.dumps(winner))
+                raise self.runner.EvidenceAlreadyExists(path)
+
+            with (
+                mock.patch.object(self.runner, "run_check", return_value={"loser": True}),
+                mock.patch.object(self.runner, "write_evidence_once", side_effect=collide),
+            ):
+                payload = store.run_controlled_check(
+                    "C-1", worktree, "verify:T-1:C-1"
+                )
+
+            self.assertEqual(payload["check_id"], "C-1")
+            self.assertEqual(payload["head_commit"], "a" * 40)
+            self.assertEqual(payload["effective_contract_hash"], "b" * 64)
 
     def test_snapshot_hash_includes_unstaged_worktree_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

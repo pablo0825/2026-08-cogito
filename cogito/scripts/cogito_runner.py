@@ -17,7 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from cogito_common import ID_RE, CogitoError, atomic_write_json, hash_json
+from cogito_common import ID_RE, CogitoError, atomic_create_json, hash_json
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
@@ -33,6 +33,14 @@ from cogito_process_capture import run_bounded_process
 
 OUTPUT_CAP = 64 * 1024
 BASE_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "PATHEXT")
+
+
+class EvidenceAlreadyExists(CogitoError):
+    """Raised when another writer has already published an evidence record."""
+
+    def __init__(self, path: Path):
+        super().__init__("immutable evidence record already exists")
+        self.path = path
 
 
 def _redact(text: str, patterns: Sequence[str]) -> str:
@@ -133,12 +141,10 @@ def write_evidence_once(directory: str | Path, record_id: str, evidence: Mapping
         destination.relative_to(root)
     except ValueError as exc:  # defensive in case identifier policy changes
         raise CogitoError("evidence path escapes evidence directory") from exc
-    if destination.exists():
-        raise CogitoError("immutable evidence record already exists")
     value = dict(evidence)
     value["evidence_path"] = str(destination)
-    atomic_write_json(destination, value)
-    destination.chmod(0o444)
+    if not atomic_create_json(destination, value):
+        raise EvidenceAlreadyExists(destination)
     return destination
 
 

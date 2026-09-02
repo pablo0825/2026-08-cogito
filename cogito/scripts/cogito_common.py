@@ -48,3 +48,30 @@ def atomic_write_json(path: Path, value: Any) -> None:
             os.unlink(name)
         except FileNotFoundError:
             pass
+
+
+def atomic_create_json(path: Path, value: Any) -> bool:
+    """Publish a complete read-only JSON file without replacing an existing path."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(name, 0o444)
+        try:
+            os.link(name, path)
+        except FileExistsError:
+            return False
+        except OSError as exc:
+            raise CogitoError(
+                f"cannot publish immutable JSON record {path}: {exc}"
+            ) from exc
+        return True
+    finally:
+        try:
+            os.unlink(name)
+        except FileNotFoundError:
+            pass

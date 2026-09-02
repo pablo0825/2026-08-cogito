@@ -264,14 +264,17 @@ class RunStore:
             raise CogitoError("controlled checks are not legal in the current state")
         prior = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
         try:
-            from cogito_runner import run_check, write_evidence_once
+            from cogito_runner import EvidenceAlreadyExists, run_check, write_evidence_once
         except ImportError as exc:  # pragma: no cover - installation failure
             raise CogitoError(f"controlled runner is unavailable: {exc}") from exc
         record_id = f"{check_id}-{hash_json({'action_id': action_id})[:16]}"
         path = self.run_dir / "evidence" / f"{record_id}.json"
         if not path.exists():
             evidence = run_check(package, check_id, supplied_worktree, prior)
-            path = write_evidence_once(self.run_dir / "evidence", record_id, evidence)
+            try:
+                path = write_evidence_once(self.run_dir / "evidence", record_id, evidence)
+            except EvidenceAlreadyExists as collision:
+                path = collision.path
         recorded = _load_json(path)
         payload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
         return self.record("check-evidence-recorded", payload, action_id, self._GATE_AUTHORITY)
