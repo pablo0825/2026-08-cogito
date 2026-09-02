@@ -10,6 +10,8 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 `render --type workflow` 與 `render --type project` 可由權威 JSON 即時產生 Mermaid 狀態圖或 Slice 相依圖。圖是衍生 view，不得反向編輯或取代 workflow／Project Graph。
 
+`transition --payload-json` 可直接接 JSON object 字串或 UTF-8 JSON 檔案路徑；CLI 優先解析 inline JSON，不會把合法長 JSON 當檔名查詢。若檔名本身恰為合法 JSON（例如 `null`），使用 `./null` 或絕對路徑明確指定檔案。兩種輸入都必須解析為 object；格式、編碼或讀取失敗會回傳結構化錯誤。
+
 Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 Markdown。Package 核准前，從已通過 `prepare-package` 的相同草稿呈現範圍、Spec／Plan 路徑、checks 與風險；核准與執行須綁定同一 candidate hash。顯示層不得補預設值或改寫契約；草稿有變動時重新驗證並確認核准。Python contract 不轉型、不修改輸入；格式錯誤不可透過改寫已凍結資料來掩蓋。
 
 在 `awaiting-package-approval` 修改尚未核准的草稿後，以新的 `action_id` 再呼叫 `prepare-package`。Gate 重新驗證完整草稿，追加新的 candidate hash 並繼續等待核准；舊候選不能再核准。相同操作重送沿用原 ID，不能用舊 ID 提交新內容。候選修訂與核准都比對事件版本，若期間有其他操作則拒絕，重新查詢後重試。正式核准後不再接受此類修訂，須依 Technical Amendment 或既有停止流程處理。

@@ -15,11 +15,15 @@ from cogito_runtime import CogitoError, RunStore, effective_contract_hash, packa
 def _json_arg(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
-    candidate = Path(value)
     try:
-        raw = candidate.read_text(encoding="utf-8") if candidate.is_file() else value
-        parsed = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as exc:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            candidate = Path(value)
+            if not candidate.is_file():
+                raise
+            parsed = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
         raise CogitoError(f"invalid JSON payload: {exc}") from exc
     if not isinstance(parsed, dict):
         raise CogitoError("JSON payload must be an object")
