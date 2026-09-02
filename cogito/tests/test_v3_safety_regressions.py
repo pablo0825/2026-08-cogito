@@ -460,10 +460,15 @@ class MaintenanceEndToEndTests(unittest.TestCase):
     def test_single_commit_maintenance_auto_finalizes_and_reports(self) -> None:
         self._run_maintenance()
 
+    def test_wrong_product_content_cannot_pass_verification(self) -> None:
+        self._run_maintenance(invalid_product=True)
+
     def test_maintenance_cannot_commit_a_change_made_after_verification(self) -> None:
         self._run_maintenance(change_after_verification=True)
 
-    def _run_maintenance(self, change_after_verification: bool = False) -> None:
+    def _run_maintenance(
+        self, change_after_verification: bool = False, *, invalid_product: bool = False
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             init_repo(repo, branch="main")
@@ -478,13 +483,21 @@ class MaintenanceEndToEndTests(unittest.TestCase):
                 "run_id": run_id, "baseline_commit": baseline, "delivery_branch": "main",
                 "approved_paths": ["note.txt"],
                 "execution_dag": {"tasks": [{"id": "T-1", "paths": ["note.txt"]}], "edges": []},
+                "checks": [{
+                    "id": "C-1", "required": True,
+                    "argv": [
+                        sys.executable, "-I", "-c",
+                        "from pathlib import Path; from unittest import TestCase; "
+                        "TestCase().assertEqual(Path('note.txt').read_text(), 'after\\n')",
+                    ],
+                }],
             })
             store = runtime.RunStore(repo, run_id)
             store.create("maintenance")
             store.prepare_package(draft, "prepare")
             store.approve_package(draft, "approve")
             store.start_gate("start")
-            (repo / "note.txt").write_text("after\n")
+            (repo / "note.txt").write_text("wrong\n" if invalid_product else "after\n")
             store.update_task("T-1", "leased", "worker-1", "lease")
             store.update_task("T-1", "running", "worker-1", "running")
             store.submit_agent_result({
@@ -497,12 +510,35 @@ class MaintenanceEndToEndTests(unittest.TestCase):
             store.run_controlled_check("C-1", repo, "check-pre")
             evidence_files = list((store.run_dir / "evidence").glob("C-1-*.json"))
             pre = json.loads(evidence_files[0].read_text())
+            self.assertFalse(pre["worktree_changed_during_check"])
+            if invalid_product:
+                self.assertEqual(pre["status"], "failed")
+                self.assertFalse(pre["passed"])
+                self.assertNotEqual(pre["exit_code"], 0)
+                self.assertIn("AssertionError", pre["stderr"])
+                state_before = store.load()
+                events_before = store.events_path.read_bytes()
+                with self.assertRaisesRegex(runtime.CogitoError, "evidence binding failed"):
+                    store.complete_verification([pre], "verified")
+                self.assertEqual(store.events_path.read_bytes(), events_before)
+                self.assertEqual(store.load(), state_before)
+                self.assertEqual(state_before["state"], "verifying")
+                self.assertEqual(state_before["tasks"]["T-1"]["status"], "complete")
+                self.assertEqual(git(repo, "rev-parse", "HEAD"), baseline)
+                return
+            self.assertEqual(pre["status"], "passed")
+            self.assertTrue(pre["passed"])
+            self.assertEqual(pre["exit_code"], 0)
             store.complete_verification([pre], "verified")
             store.transition("review-approved", {"review_exemption": True}, "reviewed")
             store.complete_integration(baseline, None, "integrated")
             store.run_controlled_check("C-1", repo, "check-post")
             post_path = next(path for path in (store.run_dir / "evidence").glob("C-1-*.json") if path not in evidence_files)
             post = json.loads(post_path.read_text())
+            self.assertEqual(post["status"], "passed")
+            self.assertTrue(post["passed"])
+            self.assertEqual(post["exit_code"], 0)
+            self.assertFalse(post["worktree_changed_during_check"])
             store.decide_post_verification([post], False, "post-verified")
             canonical = store.approved_package()
             graph_path = repo / "docs/cogito/project-graph.json"
@@ -532,6 +568,10 @@ class MaintenanceEndToEndTests(unittest.TestCase):
                 return
             store.finalize(f"docs/cogito/results/{run_id}.json", "docs/cogito/project-graph.json", final_commit, "finalize")
             self.assertEqual(store.completion_report()["final_commit"], final_commit)
+            self.assertEqual(store.load()["state"], "accepted")
+            self.assertEqual(git(repo, "show", f"{final_commit}:note.txt"), "after")
+            self.assertEqual(git(repo, "cat-file", "-s", f"{final_commit}:note.txt"), "6")
+            self.assertEqual(git(repo, "rev-list", "--count", f"{baseline}..{final_commit}"), "1")
 
 
 if __name__ == "__main__":

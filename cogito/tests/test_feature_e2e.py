@@ -23,19 +23,29 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
     def test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted(self) -> None:
         self._run_feature()
 
+    def test_incorrect_slice_content_fails_checks_and_cannot_pass_verification(self) -> None:
+        for slice_name in ("a", "b"):
+            with self.subTest(slice=slice_name):
+                self._run_feature(invalid_product=slice_name)
+
     def test_final_commit_cannot_include_unverified_product_changes(self) -> None:
         self._run_feature(change_after_verification=True)
 
-    def _run_feature(self, change_after_verification: bool = False) -> None:
+    def _run_feature(
+        self, change_after_verification: bool = False, *, invalid_product: str | None = None,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             init_repo(repo, branch="main")
 
             (repo / "src").mkdir()
             (repo / "docs").mkdir()
+            (repo / "tests").mkdir()
             (repo / ".gitignore").write_text(".cogito/\ndocs/cogito/packages/\n")
             (repo / "src/a.txt").write_text("a0\n")
             (repo / "src/b.txt").write_text("b0\n")
+            self._write_product_test(repo, "a", "a0\n")
+            self._write_product_test(repo, "b", "b0\n")
             for name in ("a-spec", "a-plan", "b-spec", "b-plan"):
                 (repo / f"docs/{name}.md").write_text(f"# {name}\n")
             git(repo, "add", ".")
@@ -57,24 +67,24 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
                         "id": "FS-A", "type": "feature",
                         "spec": {"path": "docs/a-spec.md", "hash": sha256(repo / "docs/a-spec.md")},
                         "plan": {"path": "docs/a-plan.md", "hash": sha256(repo / "docs/a-plan.md")},
-                        "worker": {"branch": "codex/fs-a", "worktree": ".cogito/worktrees/FS-A", "allowed_paths": ["src/a.txt"]},
+                        "worker": {"branch": "codex/fs-a", "worktree": ".cogito/worktrees/FS-A", "allowed_paths": ["src/a.txt", "tests/test_a.py"]},
                     },
                     {
                         "id": "FS-B", "type": "feature",
                         "spec": {"path": "docs/b-spec.md", "hash": sha256(repo / "docs/b-spec.md")},
                         "plan": {"path": "docs/b-plan.md", "hash": sha256(repo / "docs/b-plan.md")},
-                        "worker": {"branch": "codex/fs-b", "worktree": ".cogito/worktrees/FS-B", "allowed_paths": ["src/b.txt"]},
+                        "worker": {"branch": "codex/fs-b", "worktree": ".cogito/worktrees/FS-B", "allowed_paths": ["src/b.txt", "tests/test_b.py"]},
                     },
                 ],
                 "execution_dag": {
                     "tasks": [
-                        {"id": "T-A", "slice_id": "FS-A", "paths": ["src/a.txt"]},
-                        {"id": "T-B", "slice_id": "FS-B", "paths": ["src/b.txt"]},
+                        {"id": "T-A", "slice_id": "FS-A", "paths": ["src/a.txt", "tests/test_a.py"]},
+                        {"id": "T-B", "slice_id": "FS-B", "paths": ["src/b.txt", "tests/test_b.py"]},
                     ],
                     "edges": [{"from": "T-A", "to": "T-B"}],
                 },
-                "checks": [{"id": "C-1", "argv": [sys.executable, "-c", "print('ok')"], "required": True}],
-                "approved_paths": ["src/**"],
+                "checks": [{"id": "C-1", "argv": [sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-v"], "required": True}],
+                "approved_paths": ["src/**", "tests/**"],
                 "human_gate": {"predicates": [], "high_risk_hotspots": []},
                 "policy_snapshot": {"max_workers": 2, "fetch_allowed": False},
                 "limits": {"transient_retries": 2, "verification_corrections": 3, "review_fix_cycles": 3, "format_repairs": 2},
@@ -102,15 +112,21 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
             git(repo, "worktree", "remove", "--force", str(blocked_worktree_b))
             git(repo, "branch", "-D", "codex/fs-b")
 
-            (worktree_a / "src/a.txt").write_text("a1\n")
-            git(worktree_a, "add", "src/a.txt")
+            (worktree_a / "src/a.txt").write_text("incorrect\n" if invalid_product == "a" else "a1\n")
+            self._write_product_test(worktree_a, "a", "a1\n")
+            git(worktree_a, "add", "src/a.txt", "tests/test_a.py")
             git(worktree_a, "commit", "-qm", "implement FS-A")
             head_a = git(worktree_a, "rev-parse", "HEAD")
-            store.submit_agent_result(self._result(run_id, "T-A", "implementer-a", "implementer", baseline, head_a, ["src/a.txt"], "verifying"))
+            store.submit_agent_result(self._result(run_id, "T-A", "implementer-a", "implementer", baseline, head_a, ["src/a.txt", "tests/test_a.py"], "verifying"))
             store.update_task("T-A", "complete", "implementer-a")
             implemented_a = store.transition("implementation-complete", {}, "implemented-a")
             self.assertEqual(store.transition("implementation-complete", {}, "implemented-a"), implemented_a)
             pre_a = self._run_check(store, worktree_a, "pre-a")
+            if invalid_product == "a":
+                self._assert_product_rejected(store, pre_a, "T-A")
+                return
+            self.assertTrue(pre_a["passed"], pre_a["stderr"])
+            self.assertIn("Ran 2 tests", pre_a["stderr"])
             store.complete_verification([pre_a])
             store.submit_agent_result(self._result(run_id, "T-A", "reviewer-a", "reviewer", baseline, head_a, [], "review-approved", "implementer-a"))
             reviewed_a = store.transition("review-approved", {}, "reviewed-a")
@@ -125,15 +141,21 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
             git(repo, "worktree", "add", "-q", "-b", "codex/fs-b", str(worktree_b), integration_a)
             store.update_task("T-B", "leased", "implementer-b")
             store.update_task("T-B", "running", "implementer-b")
-            (worktree_b / "src/b.txt").write_text("b1\n")
-            git(worktree_b, "add", "src/b.txt")
+            (worktree_b / "src/b.txt").write_text("incorrect\n" if invalid_product == "b" else "b1\n")
+            self._write_product_test(worktree_b, "b", "b1\n")
+            git(worktree_b, "add", "src/b.txt", "tests/test_b.py")
             git(worktree_b, "commit", "-qm", "implement FS-B")
             head_b = git(worktree_b, "rev-parse", "HEAD")
-            store.submit_agent_result(self._result(run_id, "T-B", "implementer-b", "implementer", integration_a, head_b, ["src/b.txt"], "verifying"))
+            store.submit_agent_result(self._result(run_id, "T-B", "implementer-b", "implementer", integration_a, head_b, ["src/b.txt", "tests/test_b.py"], "verifying"))
             store.update_task("T-B", "complete", "implementer-b")
             implemented_b = store.transition("implementation-complete", {}, "implemented-b")
             self.assertEqual(store.transition("implementation-complete", {}, "implemented-b"), implemented_b)
             pre_b = self._run_check(store, worktree_b, "pre-b")
+            if invalid_product == "b":
+                self._assert_product_rejected(store, pre_b, "T-B")
+                return
+            self.assertTrue(pre_b["passed"], pre_b["stderr"])
+            self.assertIn("Ran 2 tests", pre_b["stderr"])
             store.complete_verification([pre_b])
             store.submit_agent_result(self._result(run_id, "T-B", "reviewer-b", "reviewer", integration_a, head_b, [], "review-approved", "implementer-b"))
             reviewed_b = store.transition("review-approved", {}, "reviewed-b")
@@ -144,6 +166,8 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
             self.assertEqual(state["state"], "post-integration-verification")
 
             post = self._run_check(store, repo, "post")
+            self.assertTrue(post["passed"], post["stderr"])
+            self.assertIn("Ran 2 tests", post["stderr"])
             state = store.decide_post_verification([post], reviewer_escalation=False)
             self.assertEqual(state["state"], "finalizing")
 
@@ -184,6 +208,8 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
             report = store.completion_report()
             self.assertEqual(report["status"], "accepted")
             self.assertEqual(report["final_commit"], final_commit)
+            self.assertEqual(git(repo, "show", f"{final_commit}:src/a.txt"), "a1")
+            self.assertEqual(git(repo, "show", f"{final_commit}:src/b.txt"), "b1")
             self.assertEqual({item["reviewer"] for item in report["reviews"]}, {"reviewer-a", "reviewer-b"})
             # Later edits and commits must not replace the recorded delivery report.
             (repo / f"docs/cogito/results/{run_id}.json").write_text("{invalid later result")
@@ -197,6 +223,32 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
                 load_state.assert_called_once_with()
             self.assertEqual(store.completion_report(), report)
             self.assertEqual(store.events_path.read_bytes(), before)
+
+    @staticmethod
+    def _write_product_test(repo: Path, name: str, expected: str) -> None:
+        # Each Slice owns its product assertion, which is merged with its change.
+        (repo / f"tests/test_{name}.py").write_text(
+            "from pathlib import Path\n"
+            "import unittest\n\n"
+            "class ProductContentTests(unittest.TestCase):\n"
+            "    def test_content(self):\n"
+            f"        self.assertEqual(Path('src/{name}.txt').read_text(), {expected!r})\n"
+        )
+
+    def _assert_product_rejected(self, store, evidence: dict, task_id: str) -> None:
+        self.assertEqual(evidence["status"], "failed")
+        self.assertFalse(evidence["passed"])
+        self.assertEqual(evidence["exit_code"], 1)
+        self.assertIn("AssertionError", evidence["stderr"])
+        self.assertFalse(evidence["worktree_changed_during_check"])
+        before = store.events_path.read_bytes()
+        state_before = store.load()
+        with self.assertRaisesRegex(runtime.CogitoError, "evidence binding failed"):
+            store.complete_verification([evidence])
+        self.assertEqual(store.events_path.read_bytes(), before)
+        self.assertEqual(store.load(), state_before)
+        self.assertEqual(state_before["state"], "verifying")
+        self.assertEqual(state_before["tasks"][task_id]["status"], "complete")
 
     @staticmethod
     def _result(run_id: str, task_id: str, agent_id: str, role: str, base: str, head: str,
