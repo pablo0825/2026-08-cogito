@@ -28,6 +28,8 @@ Runtime 不接受 Agent 自行宣告核准、驗證通過或獨立審查成立�
 
 Controlled runner 以獨立的暫存 Git index 記錄工作樹的 `content_tree`，不改動使用者的 staging 狀態。結案必須與最後驗證的內容一致，僅允許該 run 的 Result 與 Project Graph 在驗證後更新；Spec／Plan 變更必須在最後驗證前完成。Maintenance／documentation 的未提交內容也必須完整對應此快照。舊 evidence 缺少 `content_tree`，或本機快照 Git objects 已不可用時，必須重跑 checks，不補寫既有證據。
 
+Gate 事件另存原始命令與參數的 `request_hash`，不以衍生 verdict 比對重送請求。同一 `action_id` 與相同輸入可返回目前狀態，不重做已完成操作；不同命令或輸入則拒絕。舊事件仍可讀取，但缺少指紋的舊 action 不會自動重播，需先確認既有結果。Controlled check 以每個 action 的鎖與不可變 attempt 紀錄防止重複執行；證據已發布而事件未追加時可補登錄，程序可能已執行卻沒有證據時則回報結果未知，必須先人工確認，不能盲目重跑。
+
 ## 契約與 JSON 資料
 
 Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema。Package、Result、Project Graph 與 Agent Result 仍以 JSON 保存與交接；Spec／Plan 維持 Markdown。核准摘要與其他顯示 view 從同一份已驗證資料衍生，不另定規則，也不修改待核准內容。

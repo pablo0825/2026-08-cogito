@@ -316,7 +316,7 @@ class GateSafetyTests(unittest.TestCase):
         store.workflow = self.runtime.load_workflow()
         store._gate_authority = object()
         captured = {}
-        store.record = lambda event, payload, action_id=None, _authority=None: captured.update(event=event, payload=payload) or captured
+        store.record = lambda event, payload, action_id=None, _authority=None, **_kwargs: captured.update(event=event, payload=payload) or captured
         store.decide_post_verification([{"evidence_path": "e.json"}], reviewer_escalation=False)
         self.assertEqual(captured["event"], "human-review-required")
         self.assertTrue(captured["payload"]["human_required"])
@@ -499,6 +499,9 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             store.root = root
             store.run_dir = root / ".cogito" / "runs" / "DEV-race"
             store.events_path = store.run_dir / "events.jsonl"
+            self.runtime.append_event(store.events_path, {
+                "type": "run-created", "payload": {"run_id": value["run_id"], "kind": "feature"},
+            })
             store._replay = lambda *_args: None
             store.approved_package = lambda: value
             store.load = lambda: {
@@ -507,7 +510,7 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
                     "T-1": {"status": "complete", "worktree": str(worktree)}
                 },
             }
-            store.record = lambda _event, payload, *_args: payload
+            store.record = lambda _event, payload, *_args, **_kwargs: payload
 
             def collide(target, record_id, _evidence):
                 path = Path(target) / f"{record_id}.json"
