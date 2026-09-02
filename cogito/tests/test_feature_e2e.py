@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,23 +11,8 @@ from pathlib import Path
 from unittest import mock
 
 
-COGITO = Path(__file__).resolve().parents[1]
-
-
-def load_script(name: str, module_name: str | None = None):
-    path = COGITO / "scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(module_name or name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=repo, check=True, text=True, capture_output=True
-    ).stdout.strip()
+from cogito_test_support import git, init_repo
+import cogito_runtime as runtime
 
 
 def sha256(path: Path) -> str:
@@ -44,13 +27,9 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
         self._run_feature(change_after_verification=True)
 
     def _run_feature(self, change_after_verification: bool = False) -> None:
-        runtime = load_script("cogito_runtime")
-        load_script("cogito_runner")
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            git(repo, "init", "-q", "-b", "main")
-            git(repo, "config", "user.email", "cogito@example.invalid")
-            git(repo, "config", "user.name", "Cogito Test")
+            init_repo(repo, branch="main")
 
             (repo / "src").mkdir()
             (repo / "docs").mkdir()

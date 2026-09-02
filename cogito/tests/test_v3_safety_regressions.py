@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import subprocess
 import sys
 import tempfile
 import threading
@@ -14,75 +12,16 @@ from pathlib import Path
 from unittest import mock
 
 
-COGITO = Path(__file__).resolve().parents[1]
-
-
-def load(name: str):
-    path = COGITO / "scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def package(kind: str = "feature") -> dict:
-    mini = kind in {"maintenance", "documentation"}
-    value = {
-        "schema_version": "3.0",
-        "run_id": "DEV-safe-001",
-        "kind": kind,
-        "mini_package": mini,
-        "delivery_branch": "main",
-        "baseline_commit": "a" * 40,
-        "shared_understanding": {"hash": "b" * 64},
-        "slices": [],
-        "execution_dag": {"tasks": [{"id": "T-1", "paths": ["src"]}], "edges": []},
-        "checks": [{"id": "C-1", "argv": [sys.executable, "-c", "print('ok')"], "required": True}],
-        "approved_paths": ["src/**", "tests/**"],
-        "human_gate": {
-            "predicates": [{"id": "public-api", "applicable": True}],
-            "high_risk_hotspots": [],
-        },
-        "policy_snapshot": {"max_workers": 3, "fetch_allowed": False},
-        "limits": {
-            "transient_retries": 2,
-            "verification_corrections": 3,
-            "review_fix_cycles": 3,
-            "format_repairs": 2,
-        },
-        "stop_conditions": ["contract-boundary-change"],
-        "source_registry": [],
-    }
-    if mini:
-        value["human_gate"]["predicates"] = []
-        value["maintenance_guards"] = {
-                key: True for key in (
-                    "behavior_unchanged", "public_contract_unchanged",
-                    "data_model_unchanged", "security_boundary_unchanged",
-                    "slice_responsibility_unchanged", "deterministic_evidence",
-                    "single_commit",
-                )
-        }
-    else:
-        value["boundary"] = {"decision": "single-slice", "evidence": ["bounded"]}
-        value["execution_dag"]["tasks"][0]["slice_id"] = "FS-1"
-        value["slices"] = [{
-            "id": "FS-1", "type": kind, "spec": {"path": "docs/spec.md", "hash": "c" * 64},
-            "plan": {"path": "docs/plan.md", "hash": "d" * 64},
-            "worker": {"branch": "codex/fs-1", "worktree": ".cogito/worktrees/FS-1", "allowed_paths": ["src/**", "tests/**"]},
-        }]
-    return value
-
-
-def git(repo: Path, *argv: str) -> str:
-    return subprocess.run(["git", *argv], cwd=repo, check=True, text=True, capture_output=True).stdout.strip()
+from cogito_test_support import git, init_repo, package
+import cogito_common as common
+import cogito_gate_validation as validation
+import cogito_runner as runner
+import cogito_runtime as runtime
 
 
 class GateSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.runtime = load("cogito_runtime")
+        self.runtime = runtime
 
     def test_completion_report_rejects_unaccepted_runs_before_reading_history_or_git(self) -> None:
         for state in ("executing", "finalizing", "cancelled"):
@@ -168,7 +107,6 @@ class GateSafetyTests(unittest.TestCase):
                 store._validate_evidence(package(), [], require_current_head=True)
 
     def test_invalid_evidence_shape_fails_before_loading_ledger(self) -> None:
-        validation = load("cogito_gate_validation")
         with self.assertRaisesRegex(
             self.runtime.CogitoError, "check evidence is missing fields"
         ):
@@ -181,7 +119,6 @@ class GateSafetyTests(unittest.TestCase):
             )
 
     def test_legacy_evidence_without_executable_contract_fields_is_rejected(self) -> None:
-        validation = load("cogito_gate_validation")
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory)
             evidence_path = run_dir / "evidence" / "legacy.json"
@@ -223,7 +160,6 @@ class GateSafetyTests(unittest.TestCase):
                 )
 
     def test_gate_rejects_evidence_from_a_changed_worktree(self) -> None:
-        validation = load("cogito_gate_validation")
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory)
             evidence_path = run_dir / "evidence" / "changed.json"
@@ -339,15 +275,13 @@ class GateSafetyTests(unittest.TestCase):
 
 class PackageApprovalAndRunnerTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.runtime = load("cogito_runtime")
-        self.runner = load("cogito_runner")
+        self.runtime = runtime
+        self.runner = runner
 
     def _repo(self, root: Path) -> tuple[Path, str]:
         repo = root / "repo"
         repo.mkdir()
-        git(repo, "init", "-q")
-        git(repo, "config", "user.email", "cogito@example.invalid")
-        git(repo, "config", "user.name", "Cogito Test")
+        init_repo(repo)
         (repo / "tracked.txt").write_text("base\n")
         git(repo, "add", "tracked.txt")
         git(repo, "commit", "-qm", "base")
@@ -455,7 +389,6 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             self.assertEqual(list(evidence_dir.glob(".C-race.json.*")), [])
 
     def test_immutable_publication_fails_closed_without_hard_link_support(self) -> None:
-        common = sys.modules["cogito_common"]
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "record.json"
             with mock.patch.object(common.os, "link", side_effect=OSError("unsupported")):
@@ -531,13 +464,9 @@ class MaintenanceEndToEndTests(unittest.TestCase):
         self._run_maintenance(change_after_verification=True)
 
     def _run_maintenance(self, change_after_verification: bool = False) -> None:
-        runtime = load("cogito_runtime")
-        load("cogito_runner")
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            git(repo, "init", "-q", "-b", "main")
-            git(repo, "config", "user.email", "cogito@example.invalid")
-            git(repo, "config", "user.name", "Cogito Test")
+            init_repo(repo, branch="main")
             (repo / ".gitignore").write_text(".cogito/\ndocs/cogito/packages/\n")
             (repo / "note.txt").write_text("before\n")
             git(repo, "add", ".gitignore", "note.txt")

@@ -10,12 +10,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_runtime_contract import minimal_package
+from cogito_test_support import COGITO, git, init_repo, minimal_package
 from cogito_common import hash_json
 from cogito_contracts import package_hash
 
 
-COGITO = Path(__file__).resolve().parents[1]
 GATE = COGITO / "scripts" / "cogito_gate.py"
 
 
@@ -49,21 +48,16 @@ class GateCliContractTests(unittest.TestCase):
             self.fail(result.stderr)
         return result
 
-    def git(self, repo: Path, *args: str) -> str:
-        return subprocess.run(["git", *args], cwd=repo, check=True, text=True, capture_output=True).stdout.strip()
-
     def test_canonical_approval_start_and_resume_cannot_skip_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             repo = root / "repo"
             repo.mkdir()
-            self.git(repo, "init", "-q")
-            self.git(repo, "config", "user.email", "cogito@example.invalid")
-            self.git(repo, "config", "user.name", "Cogito Test")
+            init_repo(repo)
             (repo / ".gitignore").write_text(".cogito/\ndocs/cogito/packages/\n")
-            self.git(repo, "add", ".gitignore")
-            self.git(repo, "commit", "-qm", "baseline")
-            baseline = self.git(repo, "rev-parse", "HEAD")
+            git(repo, "add", ".gitignore")
+            git(repo, "commit", "-qm", "baseline")
+            baseline = git(repo, "rev-parse", "HEAD")
             run_id = "DEV-cli-001"
             (repo / "docs").mkdir()
             (repo / "docs/spec.md").write_text("spec\n")
@@ -72,7 +66,7 @@ class GateCliContractTests(unittest.TestCase):
             plan_hash = hashlib.sha256((repo / "docs/plan.md").read_bytes()).hexdigest()
             package = {
                 "schema_version": "3.0", "run_id": run_id, "kind": "feature", "mini_package": False,
-                "delivery_branch": self.git(repo, "branch", "--show-current"), "baseline_commit": baseline,
+                "delivery_branch": git(repo, "branch", "--show-current"), "baseline_commit": baseline,
                 "shared_understanding": {"hash": "a" * 64},
                 "boundary": {"decision": "single-slice", "evidence": ["bounded"]},
                 "slices": [
@@ -110,7 +104,7 @@ class GateCliContractTests(unittest.TestCase):
             started = self.invoke(repo, "start", "--run-id", run_id, "--action-id", "start-1")
             self.assertIn('"state": "executing"', started.stdout)
             for index in range(1, 5):
-                self.git(
+                git(
                     repo,
                     "worktree",
                     "add",

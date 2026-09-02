@@ -17,7 +17,7 @@ from cogito_contracts import package_hash
 from cogito_events import append_event, read_events
 from cogito_project_graph import formalize_project_graph
 from cogito_run_store import RunStore
-from test_runtime_contract import minimal_package
+from cogito_test_support import minimal_package
 
 
 class ApprovalPublicationTests(unittest.TestCase):

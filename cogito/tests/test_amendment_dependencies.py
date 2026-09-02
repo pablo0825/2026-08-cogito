@@ -17,8 +17,7 @@ from cogito_contracts import materialize_contract, package_hash, validate_amendm
 from cogito_scheduler import edge_pair
 from cogito_scheduler import ready_tasks
 from cogito_run_store import RunStore
-from test_runtime_contract import minimal_package
-from test_v3_safety_regressions import package as mini_package
+from cogito_test_support import minimal_package, package as mini_package
 
 
 def task(task_id: str, dependencies: list[str], slice_id: str = "FS-001") -> dict:

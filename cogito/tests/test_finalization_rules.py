@@ -14,8 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from cogito_common import CogitoError
 from cogito_contracts import package_hash
 from cogito_finalization_rules import FinalizationContext, validate_finalization_records
-from test_runtime_contract import minimal_package
-from test_v3_safety_regressions import package as mini_package
+from cogito_test_support import minimal_package, package as mini_package
 
 
 def context(kind: str = "feature") -> FinalizationContext:

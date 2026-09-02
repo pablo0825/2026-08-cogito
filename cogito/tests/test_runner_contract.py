@@ -11,24 +11,16 @@ import unittest
 from pathlib import Path
 
 
-COGITO = Path(__file__).resolve().parents[1]
-RUNNER = COGITO / "scripts" / "cogito_runner.py"
+from cogito_test_support import SCRIPTS, git, init_repo, minimal_package
 
-
-def git(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", *args], cwd=repo, check=True, text=True, capture_output=True
-    )
-    return result.stdout.strip()
+RUNNER = SCRIPTS / "cogito_runner.py"
 
 
 class ControlledRunnerContractTests(unittest.TestCase):
     def prepare_repo(self, root: Path) -> tuple[Path, str]:
         repo = root / "repo"
         repo.mkdir()
-        git(repo, "init", "-q")
-        git(repo, "config", "user.email", "cogito@example.invalid")
-        git(repo, "config", "user.name", "Cogito Test")
+        init_repo(repo)
         (repo / "tracked.txt").write_text("baseline\n")
         git(repo, "add", "tracked.txt")
         git(repo, "commit", "-qm", "baseline")
@@ -64,30 +56,8 @@ class ControlledRunnerContractTests(unittest.TestCase):
         )
 
     def write_package(self, root: Path, commit: str, checks: list[dict]) -> Path:
-        package = {
-            "schema_version": "3.0",
-            "run_id": "DEV-20260901-001",
-            "kind": "feature",
-            "mini_package": False,
-            "delivery_branch": "main",
-            "baseline_commit": commit,
-            "shared_understanding": {"hash": "a" * 64},
-            "boundary": {"decision": "single-slice", "evidence": ["small surface"]},
-            "slices": [{
-                "id": "FS-001", "type": "feature",
-                "spec": {"path": "docs/spec.md", "hash": "b" * 64},
-                "plan": {"path": "docs/plan.md", "hash": "c" * 64},
-                "worker": {"branch": "codex/fs-001", "worktree": ".cogito/worktrees/FS-001", "allowed_paths": ["src/**", "tests/**"]},
-            }],
-            "execution_dag": {"tasks": [{"id": "T-1", "slice_id": "FS-001", "paths": ["src"]}], "edges": []},
-            "approved_paths": ["src/**", "tests/**"],
-            "human_gate": {"predicates": [], "high_risk_hotspots": []},
-            "checks": checks,
-            "policy_snapshot": {"max_workers": 3, "fetch_allowed": False},
-            "limits": {"transient_retries": 2, "verification_corrections": 3, "review_fix_cycles": 3, "format_repairs": 2},
-            "stop_conditions": ["contract boundary change"],
-            "source_registry": [],
-        }
+        package = minimal_package()
+        package.update({"baseline_commit": commit, "checks": checks})
         path = root / "package.json"
         path.write_text(json.dumps(package))
         return path

@@ -7,7 +7,6 @@ the executable source of truth for state, retry, DAG, and amendment rules.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -16,53 +15,15 @@ import unittest
 from pathlib import Path
 
 
-COGITO = Path(__file__).resolve().parents[1]
-RUNTIME_PATH = COGITO / "scripts" / "cogito_runtime.py"
+from cogito_test_support import SCRIPTS, minimal_package
+import cogito_runtime as runtime
 
-
-def load_runtime():
-    spec = importlib.util.spec_from_file_location("cogito_runtime", RUNTIME_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {RUNTIME_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def minimal_package() -> dict:
-    return {
-        "schema_version": "3.0",
-        "run_id": "DEV-20260901-001",
-        "kind": "feature",
-        "delivery_branch": "main",
-        "baseline_commit": "a" * 40,
-        "shared_understanding": {"hash": "a" * 64},
-        "boundary": {"decision": "single-slice", "evidence": ["small surface"]},
-        "mini_package": False,
-        "slices": [{
-            "id": "FS-001", "type": "feature",
-            "spec": {"path": "docs/spec.md", "hash": "b" * 64},
-            "plan": {"path": "docs/plan.md", "hash": "c" * 64},
-            "worker": {"branch": "codex/fs-001", "worktree": ".cogito/worktrees/FS-001", "allowed_paths": ["src/**", "tests/**"]},
-        }],
-        "approved_paths": ["src/**", "tests/**"],
-        "checks": [{"id": "C-1", "argv": ["python3", "-m", "unittest"], "required": True}],
-        "execution_dag": {
-            "tasks": [{"id": "T-1", "slice_id": "FS-001", "paths": ["src"]}],
-            "edges": [],
-        },
-        "human_gate": {"predicates": [], "high_risk_hotspots": []},
-        "policy_snapshot": {"max_workers": 3, "fetch_allowed": False},
-        "limits": {"transient_retries": 2, "verification_corrections": 3, "review_fix_cycles": 3, "format_repairs": 2},
-        "stop_conditions": ["contract boundary change"],
-        "source_registry": [],
-    }
+RUNTIME_PATH = SCRIPTS / "cogito_runtime.py"
 
 
 class StateAndEventContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.runtime = load_runtime()
+        self.runtime = runtime
         self.workflow = self.runtime.load_workflow()
 
     def test_runtime_facade_loads_from_an_arbitrary_working_directory(self) -> None:
@@ -166,7 +127,7 @@ class StateAndEventContractTests(unittest.TestCase):
 
 class DagAndProfileContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.runtime = load_runtime()
+        self.runtime = runtime
 
     def test_ready_tasks_obey_dependencies_and_worker_cap(self) -> None:
         tasks = [
@@ -301,7 +262,7 @@ class DagAndProfileContractTests(unittest.TestCase):
 
 class AmendmentAndAgentContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.runtime = load_runtime()
+        self.runtime = runtime
         self.package = minimal_package()
 
     def test_amendment_may_add_checks_and_tasks(self) -> None:

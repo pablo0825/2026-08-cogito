@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 from cogito_common import CogitoError, atomic_write_json, hash_json, load_json
 from cogito_events import append_event, read_events
 from cogito_run_store import RunStore
-from test_runtime_contract import minimal_package
+from cogito_test_support import minimal_package
 
 
 class ApprovalRecoveryTests(unittest.TestCase):

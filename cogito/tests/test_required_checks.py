@@ -14,7 +14,7 @@ from cogito_common import CogitoError, atomic_write_json, hash_json
 from cogito_contracts import package_hash, validate_amendment, validate_package
 from cogito_gate_validation import validate_evidence, validate_policy
 from cogito_run_store import RunStore
-from test_runtime_contract import minimal_package
+from cogito_test_support import minimal_package
 
 
 class RequiredChecksTests(unittest.TestCase):

@@ -28,7 +28,7 @@ from cogito_project_graph import (
 from cogito_result_contract import validate_result
 from cogito_run_store import RunStore
 from cogito_runner import run_check
-from test_runtime_contract import minimal_package
+from cogito_test_support import minimal_package
 
 
 def agent_result() -> dict:

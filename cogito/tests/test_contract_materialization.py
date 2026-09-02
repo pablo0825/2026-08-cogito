@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import cogito_contracts as contracts
 from cogito_common import CogitoError, hash_json
 from cogito_scheduler import edge_pair
-from test_runtime_contract import minimal_package
+from cogito_test_support import minimal_package
 
 
 class ContractMaterializationTests(unittest.TestCase):

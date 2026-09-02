@@ -19,7 +19,7 @@ from cogito_common import CogitoError
 from cogito_events import append_event, read_events
 from cogito_git import GitRepository
 from cogito_run_store import RunStore
-from test_v3_safety_regressions import package
+from cogito_test_support import package
 
 
 class ActionReplayTests(unittest.TestCase):
