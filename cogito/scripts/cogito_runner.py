@@ -29,6 +29,7 @@ from cogito_evidence_binding import (
     safe_file as _safe_file,
     working_tree_binding as _working_tree_binding,
 )
+from cogito_evidence_contract import validate_check_evidence
 from cogito_process_capture import run_bounded_process
 
 OUTPUT_CAP = 64 * 1024
@@ -143,6 +144,7 @@ def write_evidence_once(directory: str | Path, record_id: str, evidence: Mapping
         raise CogitoError("evidence path escapes evidence directory") from exc
     value = dict(evidence)
     value["evidence_path"] = str(destination)
+    validate_check_evidence(value)
     if not atomic_create_json(destination, value):
         raise EvidenceAlreadyExists(destination)
     return destination

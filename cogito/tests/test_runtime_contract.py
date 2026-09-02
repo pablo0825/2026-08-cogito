@@ -71,7 +71,7 @@ class StateAndEventContractTests(unittest.TestCase):
             f"p={str(RUNTIME_PATH)!r}; "
             "s=importlib.util.spec_from_file_location('cogito_runtime_smoke', p); "
             "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
-            "assert m.RunStore and m.validate_package and m.render_workflow_mermaid; "
+            "assert m.RunStore and m.validate_package and m.validate_check_evidence and m.render_workflow_mermaid; "
             "assert m.DEFAULT_WORKFLOW == m.ROOT / 'workflows' / 'cogito-v3.json'"
         )
         with tempfile.TemporaryDirectory() as directory:

@@ -22,6 +22,7 @@ from cogito_contracts import (
     validate_amendment, validate_package,
 )
 from cogito_events import append_event, read_events
+from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
 from cogito_gate_validation import (
@@ -276,6 +277,7 @@ class RunStore:
             except EvidenceAlreadyExists as collision:
                 path = collision.path
         recorded = _load_json(path)
+        validate_check_evidence(recorded)
         payload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
         return self.record("check-evidence-recorded", payload, action_id, self._GATE_AUTHORITY)
 

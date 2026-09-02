@@ -12,6 +12,7 @@ from cogito_contracts import (
     MIN_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
 )
+from cogito_evidence_contract import validate_check_evidence
 
 
 def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
@@ -132,6 +133,8 @@ def validate_evidence(
     load_current_head: Callable[[], str] | None = None,
 ) -> None:
     """Validate controlled-runner evidence against its contract and event cycle."""
+    for item in evidence:
+        validate_check_evidence(item)
     prior = [
         item["payload"]["amendment"]
         for item in events
@@ -162,6 +165,7 @@ def validate_evidence(
         if not evidence_path.is_file():
             raise CogitoError(f"immutable evidence file is missing for {check_id}")
         recorded = load_json(evidence_path)
+        validate_check_evidence(recorded)
         if recorded != item:
             raise CogitoError(
                 f"evidence payload does not match its immutable file for {check_id}"

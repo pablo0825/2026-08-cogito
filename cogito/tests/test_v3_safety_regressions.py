@@ -162,7 +162,20 @@ class GateSafetyTests(unittest.TestCase):
             ):
                 store._validate_evidence(package(), [], require_current_head=True)
 
-    def test_legacy_evidence_without_output_policy_binding_is_rejected(self) -> None:
+    def test_invalid_evidence_shape_fails_before_loading_ledger(self) -> None:
+        validation = load("cogito_gate_validation")
+        with self.assertRaisesRegex(
+            self.runtime.CogitoError, "check evidence is missing fields"
+        ):
+            validation.validate_evidence(
+                package(),
+                [{"check_id": "C-1", "status": "banana"}],
+                [],
+                lambda: self.fail("invalid evidence must not load the ledger"),
+                Path("/must-not-be-read"),
+            )
+
+    def test_legacy_evidence_without_executable_contract_fields_is_rejected(self) -> None:
         validation = load("cogito_gate_validation")
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory)
@@ -198,7 +211,7 @@ class GateSafetyTests(unittest.TestCase):
                 }
             }
             with self.assertRaisesRegex(
-                self.runtime.CogitoError, "output policy binding failed"
+                self.runtime.CogitoError, "check evidence is missing fields"
             ):
                 validation.validate_evidence(
                     value, [item], [], lambda: ledger, run_dir
@@ -223,12 +236,19 @@ class GateSafetyTests(unittest.TestCase):
                 "schema_version": "3.0",
                 "run_id": value["run_id"],
                 "check_id": "C-1",
+                "status": "passed",
                 "passed": True,
+                "exit_code": 0,
+                "timed_out": False,
                 "check_hash": self.runtime.hash_json(value["checks"][0]),
                 "effective_contract_hash": effective["effective_contract_hash"],
                 "output_limit_exceeded": False,
                 "termination_degraded": False,
                 "output_limit_bytes": 10 * 1024 * 1024,
+                "stdout_bytes": 0,
+                "stderr_bytes": 0,
+                "duration_seconds": 0.1,
+                "started_at": "2026-09-02T00:00:00+00:00",
                 "head_commit": "a" * 40,
                 "tree_hash": post_hash,
                 "worktree_snapshot_hash": post_hash,
@@ -236,6 +256,11 @@ class GateSafetyTests(unittest.TestCase):
                 "post_worktree_snapshot_hash": post_hash,
                 "worktree_changed_during_check": True,
                 "worktree_binding": {**binding_body, "snapshot_hash": post_hash},
+                "argv": value["checks"][0]["argv"],
+                "cwd": ".",
+                "stdout": "",
+                "stderr": "",
+                "truncated": False,
                 "evidence_path": str(evidence_path),
             }
             evidence_path.write_text(json.dumps(item))
@@ -249,7 +274,7 @@ class GateSafetyTests(unittest.TestCase):
                 }
             }
             with self.assertRaisesRegex(
-                self.runtime.CogitoError, "worktree stability binding failed"
+                self.runtime.CogitoError, "passed check evidence contains"
             ):
                 validation.validate_evidence(
                     value, [item], [], lambda: ledger, run_dir
@@ -419,14 +444,20 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
 
     def test_concurrent_evidence_publication_has_exactly_one_winner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            evidence_dir = Path(directory) / "evidence"
+            root = Path(directory)
+            repo, commit = self._repo(root)
+            value = package()
+            value["baseline_commit"] = commit
+            base = self.runner.run_check(value, "C-1", repo)
+            evidence_dir = root / "evidence"
             barrier = threading.Barrier(2)
 
             def publish(label: str):
                 barrier.wait()
+                candidate = dict(base, stdout=label, stdout_bytes=1)
                 try:
                     path = self.runner.write_evidence_once(
-                        evidence_dir, "C-race", {"winner": label}
+                        evidence_dir, "C-race", candidate
                     )
                 except self.runner.EvidenceAlreadyExists as exc:
                     return "collision", exc.path
@@ -441,7 +472,7 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             self.assertEqual(paths, {evidence_dir.resolve() / "C-race.json"})
             published_path = next(iter(paths))
             recorded = json.loads(published_path.read_text())
-            self.assertIn(recorded["winner"], {"A", "B"})
+            self.assertIn(recorded["stdout"], {"A", "B"})
             self.assertEqual(recorded["evidence_path"], str(published_path))
             self.assertEqual(list(evidence_dir.glob(".C-race.json.*")), [])
 
@@ -460,14 +491,16 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
     def test_concurrent_check_loser_reuses_the_winning_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            worktree = root / "worker"
-            worktree.mkdir()
+            worktree, commit = self._repo(root)
+            value = package()
+            value["baseline_commit"] = commit
+            winner = self.runner.run_check(value, "C-1", worktree)
             store = self.runtime.RunStore.__new__(self.runtime.RunStore)
             store.root = root
             store.run_dir = root / ".cogito" / "runs" / "DEV-race"
             store.events_path = store.run_dir / "events.jsonl"
             store._replay = lambda *_args: None
-            store.approved_package = lambda: {"run_id": "DEV-race"}
+            store.approved_package = lambda: value
             store.load = lambda: {
                 "state": "verifying",
                 "tasks": {
@@ -476,17 +509,11 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             }
             store.record = lambda _event, payload, *_args: payload
 
-            winner = {
-                "check_id": "C-1",
-                "head_commit": "a" * 40,
-                "effective_contract_hash": "b" * 64,
-            }
-
             def collide(target, record_id, _evidence):
                 path = Path(target) / f"{record_id}.json"
                 path.parent.mkdir(parents=True)
-                winner["evidence_path"] = str(path)
-                path.write_text(json.dumps(winner))
+                recorded = dict(winner, evidence_path=str(path))
+                path.write_text(json.dumps(recorded))
                 raise self.runner.EvidenceAlreadyExists(path)
 
             with (
@@ -498,8 +525,10 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
                 )
 
             self.assertEqual(payload["check_id"], "C-1")
-            self.assertEqual(payload["head_commit"], "a" * 40)
-            self.assertEqual(payload["effective_contract_hash"], "b" * 64)
+            self.assertEqual(payload["head_commit"], winner["head_commit"])
+            self.assertEqual(
+                payload["effective_contract_hash"], winner["effective_contract_hash"]
+            )
 
     def test_snapshot_hash_includes_unstaged_worktree_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

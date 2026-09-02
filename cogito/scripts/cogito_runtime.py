@@ -27,6 +27,7 @@ from cogito_contracts import (
     validate_package,
 )
 from cogito_events import append_event, read_events
+from cogito_evidence_contract import validate_check_evidence
 from cogito_projection import reduce_events
 from cogito_project_graph import render_project_graph_mermaid
 from cogito_run_store import RunStore
@@ -62,6 +63,7 @@ __all__ = [
     "render_workflow_mermaid",
     "validate_agent_result",
     "validate_amendment",
+    "validate_check_evidence",
     "validate_package",
     "validate_transition",
 ]
