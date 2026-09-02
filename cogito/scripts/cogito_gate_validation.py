@@ -24,6 +24,7 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
             raise CogitoError("fetch is not authorized without Project Policy")
         if snapshot.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES) > DEFAULT_MAX_CHECK_OUTPUT_BYTES:
             raise CogitoError("Package check output limit is looser than the default Project Policy")
+        _validate_environment_policy(package, {})
         return
 
     project = load_json(policy_path)
@@ -41,10 +42,7 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
         raise CogitoError("Package check output limit is looser than Project Policy")
 
     validate_required_checks(package["checks"], project.get("required_checks", []), "Project Policy")
-    allowed_env = set(project.get("allowed_environment", []))
-    for check in package["checks"]:
-        if set(check.get("env_allowlist", [])) - allowed_env:
-            raise CogitoError("Package check environment exceeds Project Policy")
+    _validate_environment_policy(package, project)
 
     project_human = project.get("human_gate", {})
     package_predicates = {
@@ -61,6 +59,22 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
         package["human_gate"]["high_risk_hotspots"] or any(package_predicates.values())
     ):
         raise CogitoError("Project Policy requires a Human Gate")
+
+
+def _validate_environment_policy(
+    package: Mapping[str, Any], project: Mapping[str, Any],
+) -> None:
+    """Bound future Amendment permissions, not just checks already in the Package.
+
+    Missing Project Policy grants no additional environment access. The runner's
+    fixed base environment is separate and is not changed by these allowlists.
+    """
+    allowed_env = set(project.get("allowed_environment", []))
+    if set(package["policy_snapshot"].get("allowed_environment", [])) - allowed_env:
+        raise CogitoError("Package policy snapshot environment exceeds Project Policy")
+    for check in package["checks"]:
+        if set(check.get("env_allowlist", [])) - allowed_env:
+            raise CogitoError("Package check environment exceeds Project Policy")
 
 
 def validate_review(
