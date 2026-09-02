@@ -8,7 +8,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from cogito_state_types import RunState
 from cogito_common import CogitoError, load_json
-from cogito_contracts import materialize_contract
+from cogito_contracts import materialize_contract, materialize_contract_with_limits
 from cogito_project_graph import validate_project_graph
 from cogito_result_contract import validate_result
 from cogito_finalization_rules import (
@@ -49,6 +49,7 @@ def validate_finalization(
     project_graph_path: str,
     final_commit: str,
     git: GitCommand,
+    workflow_limits: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Validate final committed artifacts and return the Gate event payload."""
     result_rel, graph_rel = Path(result_path), Path(project_graph_path)
@@ -73,9 +74,13 @@ def validate_finalization(
     validate_project_graph(graph)
     events = load_events()
     amendments = [item["payload"]["amendment"] for item in events if item["type"] == "technical-amendment-added"]
+    effective = (
+        materialize_contract(package, amendments) if workflow_limits is None
+        else materialize_contract_with_limits(package, amendments, workflow_limits)
+    )
     context = FinalizationContext(
         run_id=run_id, package=package, state=state, events=events,
-        result=result, graph=graph, effective_contract=materialize_contract(package, amendments),
+        result=result, graph=graph, effective_contract=effective,
     )
     expected_evidence = validate_finalization_records(context)
     _validate_commit_history(context, final_commit, git)

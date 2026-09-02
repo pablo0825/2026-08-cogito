@@ -1,4 +1,4 @@
-"""Pure validation and materialization of Cogito contracts."""
+"""Contract rules with explicit limits and wrappers that load workflow settings."""
 
 from __future__ import annotations
 
@@ -48,8 +48,16 @@ def package_hash(package: Mapping[str, Any]) -> str:
 
 
 def validate_package(package: Mapping[str, Any]) -> None:
+    """Load default workflow limits and validate a Package without changing it."""
+    validate_package_with_limits(package, load_workflow()["limits"])
+
+
+def validate_package_with_limits(
+    package: Mapping[str, Any], workflow_limits: Mapping[str, int],
+) -> None:
     """Validate shape and Package invariants without rewriting caller data.
 
+    Workflow limits are supplied by the caller; this function performs no I/O.
     Extension fields and established optional defaults remain supported. JSON
     Schema files are not a second authority for this contract.
     """
@@ -94,11 +102,10 @@ def validate_package(package: Mapping[str, Any]) -> None:
     _validate_checks(package)
     validate_human_gate(package["human_gate"], frozen=True)
     limits = package["limits"]
-    global_limits = load_workflow()["limits"]
     retry_names = ("transient_retries", "verification_corrections", "review_fix_cycles", "format_repairs")
     require_object(limits, "limits", *retry_names)
     for key in retry_names:
-        require_integer(limits[key], f"limits.{key}", 0, global_limits[key])
+        require_integer(limits[key], f"limits.{key}", 0, workflow_limits[key])
     _validate_policy_snapshot(package)
     registry = package["source_registry"]
     dispositions = {"read-only-source", "adopted", "updated", "superseded", "not-touched"}
@@ -113,8 +120,7 @@ def validate_package(package: Mapping[str, Any]) -> None:
 
 
 def _validate_development_slices(package: Mapping[str, Any]) -> None:
-    boundary = package.get("boundary")
-    require_object(boundary, "boundary", "decision", "evidence")
+    boundary = require_object(package.get("boundary"), "boundary", "decision", "evidence")
     require_choice(boundary["decision"], "boundary.decision", {"single-slice", "split-required"})
     require_strings(boundary["evidence"], "boundary.evidence", nonempty=True)
     require_array(package["slices"], "slices", nonempty=True)
@@ -147,6 +153,7 @@ def _validate_execution_dag(package: Mapping[str, Any], mini: bool) -> None:
         _validate_task(task)
     for edge in dag["edges"]:
         # Keep the existing object and two-item sequence forms of DAG edges.
+        ends: Sequence[Any]
         if isinstance(edge, dict):
             require_object(edge, "DAG edge", "from", "to")
             ends = (edge["from"], edge["to"])
@@ -381,12 +388,21 @@ def effective_contract_hash(package: Mapping[str, Any], amendments: Sequence[Map
 
 
 def materialize_contract(package: Mapping[str, Any], amendments: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Load default workflow limits and materialize the effective contract."""
+    return materialize_contract_with_limits(package, amendments, load_workflow()["limits"])
+
+
+def materialize_contract_with_limits(
+    package: Mapping[str, Any], amendments: Sequence[Mapping[str, Any]],
+    workflow_limits: Mapping[str, int],
+) -> dict[str, Any]:
     """Validate the base once, apply amendments in order, and return data plus hash.
 
+    The caller supplies workflow limits, so materialization performs no I/O.
     Each prefix must be executable on its own: a later amendment cannot repair
     an earlier invalid dependency. Only raw inputs contribute to the digest.
     """
-    validate_package(package)
+    validate_package_with_limits(package, workflow_limits)
     base_hash = package_hash(package)
     effective = json.loads(json.dumps(package))
     frozen_dependencies = slice_dependencies(package["execution_dag"])
@@ -417,7 +433,10 @@ def materialize_contract(package: Mapping[str, Any], amendments: Sequence[Mappin
     return effective
 
 
-def validate_agent_result(result: Mapping[str, Any], package: Mapping[str, Any] | None = None) -> None:
+def validate_agent_result(
+    result: Mapping[str, Any], package: Mapping[str, Any] | None = None, *,
+    workflow_limits: Mapping[str, int] | None = None,
+) -> None:
     required_fields = {"schema_version", "run_id", "task_id", "agent_id", "role", "status", "base_commit", "head_commit", "changed_paths", "evidence", "risks", "requested_transition"}
     require_object(result, "agent result", *required_fields)
     require_choice(result["schema_version"], "agent result.schema_version", {"3.0"})
@@ -439,7 +458,10 @@ def validate_agent_result(result: Mapping[str, Any], package: Mapping[str, Any] 
     if result["role"] == "reviewer" and (not result.get("reviewed_implementer") or result.get("reviewed_implementer") == result.get("agent_id")):
         raise CogitoError("an independent reviewer must identify a different implementer")
     if package is not None:
-        validate_package(package)
+        if workflow_limits is None:
+            validate_package(package)
+        else:
+            validate_package_with_limits(package, workflow_limits)
         if result["run_id"] != package["run_id"]:
             raise CogitoError("agent result run_id does not match package")
         if any(not path_allowed(str(path), package["approved_paths"]) for path in result["changed_paths"]):

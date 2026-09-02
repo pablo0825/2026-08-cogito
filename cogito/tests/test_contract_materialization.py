@@ -35,11 +35,12 @@ class ContractMaterializationTests(unittest.TestCase):
         ]
 
     def test_one_materialization_validates_the_base_and_each_amendment_once(self) -> None:
-        with mock.patch.object(contracts, "validate_package", wraps=contracts.validate_package) as package_validation, \
-             mock.patch.object(contracts, "load_workflow", wraps=contracts.load_workflow) as workflow_load, \
+        workflow = contracts.load_workflow()
+        with mock.patch.object(contracts, "validate_package_with_limits", wraps=contracts.validate_package_with_limits) as package_validation, \
+             mock.patch.object(contracts, "load_workflow", return_value=workflow) as workflow_load, \
              mock.patch.object(contracts, "_validate_amendment_shape", wraps=contracts._validate_amendment_shape) as shape_validation:
             contracts.materialize_contract(self.package, self.amendments)
-        package_validation.assert_called_once_with(self.package)
+        package_validation.assert_called_once_with(self.package, workflow["limits"])
         workflow_load.assert_called_once_with()
         self.assertEqual(shape_validation.call_args_list, [mock.call(item) for item in self.amendments])
 

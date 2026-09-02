@@ -1,4 +1,4 @@
-"""Pure projection of append-only run events into current state."""
+"""Pure event projection, with a convenience wrapper that loads the workflow."""
 
 from __future__ import annotations
 
@@ -15,7 +15,12 @@ def _required(payload: Mapping[str, Any], *keys: str) -> bool:
 
 
 def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any] | None = None) -> RunState:
-    workflow = workflow or load_workflow()
+    """Compatibility entry point; omitted/empty workflow loads the bundled file."""
+    return project_events(events, workflow or load_workflow())
+
+
+def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any]) -> RunState:
+    """Project recorded events using supplied workflow data, without file IO."""
     projection: RunState | None = None
     for item in events:
         event_type = item.get("type")

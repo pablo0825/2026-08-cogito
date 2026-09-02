@@ -21,15 +21,17 @@ from cogito_common import (
 from cogito_contracts import (
     effective_contract_hash,
     materialize_contract,
+    materialize_contract_with_limits,
     package_hash,
     validate_agent_result,
     validate_amendment,
     validate_package,
+    validate_package_with_limits,
     validate_project_policy,
 )
 from cogito_events import append_event, read_events
 from cogito_evidence_contract import validate_check_evidence
-from cogito_projection import reduce_events
+from cogito_projection import project_events, reduce_events
 from cogito_project_graph import render_project_graph_mermaid, validate_project_graph
 from cogito_result_contract import validate_result
 from cogito_run_store import RunStore
@@ -58,7 +60,9 @@ __all__ = [
     "hash_json",
     "load_workflow",
     "materialize_contract",
+    "materialize_contract_with_limits",
     "package_hash",
+    "project_events",
     "read_events",
     "ready_tasks",
     "reduce_events",
@@ -68,6 +72,7 @@ __all__ = [
     "validate_amendment",
     "validate_check_evidence",
     "validate_package",
+    "validate_package_with_limits",
     "validate_project_graph",
     "validate_project_policy",
     "validate_result",

@@ -12,7 +12,7 @@ from cogito_common import (
     CogitoError, atomic_create_json, atomic_write_json, load_json,
 )
 from cogito_contracts import package_hash
-from cogito_projection import reduce_events
+from cogito_projection import project_events
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ def publish_approval(
         # refreshing its cache. Only authoritative history can permit rollback.
         try:
             history = list(load_events())
-            reduce_events(history, workflow)
+            project_events(history, workflow)
             sequence = prior_state["sequence"]
             if (len(history) < sequence
                     or history[sequence - 1]["event_hash"] != prior_state["last_event_hash"]):

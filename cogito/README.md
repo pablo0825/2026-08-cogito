@@ -53,6 +53,8 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 
 Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快照，並執行程序；`cogito_runner_evidence.build_evidence()` 只用這些資料判定通過／失敗、遮罩輸出並組裝 evidence。結果判定可不建立 Git repository 或啟動程序就完成單元測試，程序終止與不可變 evidence 發布仍有獨立整合測試。
 
+純契約入口 `validate_package_with_limits(package, workflow_limits)`、`materialize_contract_with_limits(package, amendments, workflow_limits)` 與純 projection `project_events(events, workflow)` 都明確接收設定，不自行讀檔。`RunStore` 將已載入的 workflow limits 傳入驗證、runner 與結案流程。原本的 `validate_package()`、`materialize_contract()` 及省略 workflow 的 `reduce_events()` 保留為會載入預設設定的便利入口；JSON 格式與 hash 計算不變。
+
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。

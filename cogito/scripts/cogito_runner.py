@@ -19,9 +19,8 @@ if str(SCRIPT_DIR) not in sys.path:
 from cogito_common import ID_RE, CogitoError, atomic_create_json, hash_json
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
-    materialize_contract,
+    materialize_contract_with_limits,
     validate_check_environment,
-    validate_package,
 )
 from cogito_evidence_binding import (
     safe_cwd as _safe_cwd,
@@ -30,6 +29,7 @@ from cogito_evidence_binding import (
 from cogito_evidence_contract import validate_check_evidence
 from cogito_process_capture import run_bounded_process
 from cogito_runner_evidence import build_evidence
+from cogito_workflow import load_workflow
 
 OUTPUT_CAP = 64 * 1024
 BASE_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "PATHEXT")
@@ -46,9 +46,10 @@ class EvidenceAlreadyExists(CogitoError):
 def run_check(
     package: Mapping[str, Any], check_id: str, worktree: str | Path,
     amendments: Sequence[Mapping[str, Any]] = (), output_cap: int = OUTPUT_CAP,
+    *, workflow_limits: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
-    validate_package(package)
-    effective = materialize_contract(package, amendments)
+    limits = load_workflow()["limits"] if workflow_limits is None else workflow_limits
+    effective = materialize_contract_with_limits(package, amendments, limits)
     matching = [item for item in effective["checks"] if item.get("id") == check_id]
     if len(matching) != 1:
         raise CogitoError(f"expected exactly one check named {check_id!r}")

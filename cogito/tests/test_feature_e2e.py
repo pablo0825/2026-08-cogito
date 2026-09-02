@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -23,6 +24,16 @@ class FeatureMultiSliceEndToEndTests(GitTestCase):
     def test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted(self) -> None:
         self._run_feature()
 
+    def test_explicit_workflow_limits_reach_runner_verification_and_finalization(self) -> None:
+        workflow = runtime.load_workflow()
+        workflow["limits"]["transient_retries"] = 4
+        with ExitStack() as stack:
+            for module in ("cogito_contracts", "cogito_projection", "cogito_runner", "cogito_run_store"):
+                stack.enter_context(mock.patch(
+                    f"{module}.load_workflow", side_effect=AssertionError("unexpected default workflow read"),
+                ))
+            self._run_feature(workflow=workflow)
+
     def test_incorrect_slice_content_fails_checks_and_cannot_pass_verification(self) -> None:
         for slice_name in ("a", "b"):
             with self.subTest(slice=slice_name):
@@ -33,6 +44,7 @@ class FeatureMultiSliceEndToEndTests(GitTestCase):
 
     def _run_feature(
         self, change_after_verification: bool = False, *, invalid_product: str | None = None,
+        workflow: dict | None = None,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
@@ -92,7 +104,9 @@ class FeatureMultiSliceEndToEndTests(GitTestCase):
                 "source_registry": [],
             }
 
-            store = runtime.RunStore(repo, run_id)
+            if workflow is not None:
+                draft["limits"]["transient_retries"] = workflow["limits"]["transient_retries"]
+            store = runtime.RunStore(repo, run_id, workflow)
             store.create("feature")
             store.transition("shared-understanding-ready", {"shared_understanding_hash": "b" * 64})
             store.transition("shared-understanding-confirmed", {"confirmed": True})

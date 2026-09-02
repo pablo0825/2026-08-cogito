@@ -19,10 +19,10 @@ from cogito_common import CogitoError, atomic_create_json, hash_json, load_json
 from cogito_approval import ApprovalArtifacts, publish_approval, restore_approval_permissions
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
 from cogito_contracts import (
-    effective_contract_hash, materialize_contract, package_hash,
+    materialize_contract_with_limits, package_hash,
     path_allowed as _path_allowed,
     safe_repo_path as _safe_repo_path, validate_agent_result,
-    validate_package,
+    validate_package_with_limits,
 )
 from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
 from cogito_event_repository import EventRepository, EventSnapshot
@@ -96,7 +96,7 @@ class RunStore:
         if relative_package_path:
             package_path = self.root / relative_package_path
             package = _load_json(package_path)
-            validate_package(package)
+            validate_package_with_limits(package, self.workflow["limits"])
             if package_hash(package) != projection["package_hash"]:
                 raise CogitoError("approved Package content no longer matches its frozen hash")
         self._events.refresh_cache(projection)
@@ -149,7 +149,7 @@ class RunStore:
         if not package_path:
             raise CogitoError("run has no approved Package")
         package = _load_json(self.root / package_path)
-        validate_package(package)
+        validate_package_with_limits(package, self.workflow["limits"])
         if package_hash(package) != state["package_hash"]:
             raise CogitoError("approved Package hash mismatch")
         return package
@@ -162,7 +162,7 @@ class RunStore:
         package = json.loads(json.dumps(draft))
         if package.get("run_id") != self.run_id:
             raise CogitoError("package run_id does not match run")
-        validate_package(package)
+        validate_package_with_limits(package, self.workflow["limits"])
         self._validate_policy(package)
         current = self.load()
         mini = package["kind"] in {"maintenance", "documentation"}
@@ -216,7 +216,7 @@ class RunStore:
         if replay is not None:
             return replay
         package = self.approved_package()
-        validate_agent_result(result, package)
+        validate_agent_result(result, package, workflow_limits=self.workflow["limits"])
         state = self.load()
         allowed_states = {
             "implementer": {"executing", "technical-correction", "review-fix", "post-integration-correction"},
@@ -303,7 +303,7 @@ class RunStore:
         else:
             raise CogitoError("controlled checks are not legal in the current state")
         prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
-        effective = materialize_contract(package, prior)
+        effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
         checks = [check for check in effective["checks"] if check["id"] == check_id]
         if len(checks) != 1:
             raise CogitoError(f"expected exactly one check named {check_id!r}")
@@ -322,7 +322,7 @@ class RunStore:
             if not path.exists():
                 raise CogitoError("controlled-check outcome is unknown; inspect the interrupted attempt before issuing another action")
         if not path.exists():
-            evidence = run_check(package, check_id, supplied_worktree, prior)
+            evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
             try:
                 path = write_evidence_once(self.run_dir / "evidence", record_id, evidence)
             except EvidenceAlreadyExists as collision:
@@ -464,7 +464,7 @@ class RunStore:
         if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification"}:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
         prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
-        digest = effective_contract_hash(package, [*prior, amendment])
+        digest = materialize_contract_with_limits(package, [*prior, amendment], self.workflow["limits"])["effective_contract_hash"]
         # Correction tasks must finish before verification/integration can resume.
         # A cross-Slice predecessor cannot reach integrated inside this cycle.
         added_tasks = amendment.get("added_tasks", [])
@@ -494,7 +494,7 @@ class RunStore:
         package = json.loads(json.dumps(draft))
         if package.get("run_id") != self.run_id:
             raise CogitoError("package run_id does not match run")
-        validate_package(package)
+        validate_package_with_limits(package, self.workflow["limits"])
         self._validate_policy(package)
         digest = package_hash(package)
         package["package_hash"] = digest
@@ -660,6 +660,7 @@ class RunStore:
             project_graph_path=project_graph_path,
             final_commit=final_commit,
             git=self._git,
+            workflow_limits=self.workflow["limits"],
         )
         validate_transition(self.workflow, current["state"], "finalization-complete", payload, current["counters"])
         return self.record("finalization-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
@@ -757,7 +758,7 @@ class RunStore:
         for item in evidence:
             validate_check_evidence(item)
         prior = [item["payload"]["amendment"] for item in snapshot.events if item["type"] == "technical-amendment-added"]
-        effective = materialize_contract(package, prior)
+        effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
         required = {check["id"] for check in effective["checks"] if check.get("required", True)}
         supplied = {item["check_id"]: item for item in evidence}
         if required - supplied.keys():

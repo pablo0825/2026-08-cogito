@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from cogito_state_types import RunState
 from cogito_common import CogitoError, atomic_write_json, load_json
 from cogito_events import append_event, read_events
-from cogito_projection import reduce_events
+from cogito_projection import project_events
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class EventRepository:
     def snapshot(self) -> EventSnapshot:
         """Collect one authoritative view without repairing the state cache."""
         events = self.read()
-        return EventSnapshot(events, reduce_events(events, self.workflow))
+        return EventSnapshot(events, project_events(events, self.workflow))
 
     def refresh_cache(self, projection: RunState) -> None:
         """Repair only disposable state; callers first validate any frozen artifacts."""
@@ -76,7 +76,7 @@ class EventRepository:
         expected = existing[-1]["event_hash"] if existing else "0" * 64
         if expected_previous_hash is not None and expected != expected_previous_hash:
             raise CogitoError("event history changed during validation; retry with the same action_id")
-        reduce_events([*existing, dict(event)], self.workflow)
+        project_events([*existing, dict(event)], self.workflow)
         append_event(self.events_path, event, expected)
         return self._project_and_refresh()
 
