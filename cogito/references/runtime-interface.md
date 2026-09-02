@@ -10,6 +10,23 @@ CLI 是敏感 verdict 的唯一寫入介面。Agent payload 可提供觀察、�
 
 Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 Markdown。Package 核准前，從已通過 `prepare-package` 的相同草稿呈現範圍、Spec／Plan 路徑、checks 與風險；核准與執行須綁定同一 candidate hash。顯示層不得補預設值或改寫契約；草稿有變動時重新驗證並確認核准。Python contract 不轉型、不修改輸入；格式錯誤不可透過改寫已凍結資料來掩蓋。
 
+## 停止條件與狀態操作
+
+Package 的 `stop_conditions` 由 Coordinator 在派工、驗證與狀態推進前，依目前證據逐項判讀。條件是否成立或證據是否足夠，不由 Gate 的欄位驗證代為決定。Gate 強制執行的是已實作的狀態轉移、重試上限、路徑、hash、DAG 與 evidence 等規則。
+
+停止條件成立或無法排除時，Coordinator 先停止新的派工與流程推進，記錄條件 ID、觀察與證據位置。若 Gate 能載入 run、通過既有 Package 與儲存檢查，且目前既非 `blocked` 也非終態，透過 `transition --event block` 登錄原因；例如：
+
+```sh
+python3 cogito/scripts/cogito_gate.py --repo <root> transition \
+  --run-id <ID> --event block \
+  --payload-json '{"reason":"SC-001: observed contract drift; evidence: docs/review.md"}' \
+  --action-id stop-SC-001
+```
+
+相同操作重送沿用同一 action ID 與相同原因；不同發現使用新 ID。`block` 不會終止已啟動的 subprocess 或 Worker，Coordinator 仍須依其執行介面停止或收尾。已在 `blocked` 時先處理已登錄的問題，不重送新的 `block` 事件；恢復使用 `resume` Gate。
+
+`outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `transition --event cancel` 提交授權結果；不能只因 Package 寫了 `cancelled` 就自行宣告授權。`awaiting-human` 只能經合法的 `post-verify` Human Gate 判定進入；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
+
 ## 儲存與復原
 
 - `.cogito/runs/<run-id>/events.jsonl` 是 append-only source of truth；event 包含 sequence、action ID、前一事件 hash、payload，以及新增 Gate 命令的 `request_hash`。此指紋綁定命令名稱與原始輸入，納入 event hash；衍生 verdict 保持在 payload。
@@ -23,4 +40,4 @@ Agent Result 至少回報 run/task/agent/role、status、base/head commit、chan
 
 Finalization 先產生不含自身 final commit ID 的 Result 與 Project Graph，以單一 commit 寫入。Gate 比對 final commit 與最後驗證 evidence 的 `worktree_binding.content_tree`，僅允許該 run 的 canonical Result 與 Project Graph 不同；Spec／Plan 必須在最後驗證前更新。舊 evidence 沒有此 tree 或其 Git object 不可用時，需重跑 controlled checks。Commit 成功且內容驗證通過後，Gate 才把實際 ID 追加到 event history 與結案報告並轉為 `accepted`；不得為了讓 Result 記錄自身 commit 而 amend 或重寫該 commit。
 
-Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證據遺失、hash 不符、DAG 有環、超出允許路徑或 action 無法對帳時，一律 `blocked`；不要用自然語言推測下一狀態。
+Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證據遺失、hash 不符、DAG 有環、超出允許路徑或 action 無法對帳時，Coordinator 必須停止推進並依上述方式處理。命令報錯不等於已寫入 `block` 事件；提交後的快取或權限錯誤也可能發生在事件已落盤之後，應先查詢事件還原的狀態。若 Gate 不可用、歷史無法驗證、Package 漂移或儲存故障使 `block` 本身也被拒絕，保留現場並回報無法登錄阻塞，不編輯 `state.json`，也不宣稱 run 已變為 `blocked`。

@@ -40,7 +40,9 @@ preparing -> awaiting-shared-confirmation -> boundary-analysis
 -> post-integration-verification -> awaiting-human | finalizing -> accepted
 ```
 
-允許的受控循環：`verifying -> technical-correction -> verifying`，總計最多三輪；`reviewing -> review-fix -> verifying -> reviewing`，最多三輪；`post-integration-verification -> post-integration-correction -> post-integration-verification` 共用前者 correction 預算，修正後不重複 integration。Transient retry 最多兩次。任何超限、契約漂移或不可恢復衝突皆進入 `blocked`。
+允許的受控循環：`verifying -> technical-correction -> verifying`，總計最多三輪；`reviewing -> review-fix -> verifying -> reviewing`，最多三輪；`post-integration-verification -> post-integration-correction -> post-integration-verification` 共用前者 correction 預算，修正後不重複 integration。Transient retry 最多兩次。任何超限、契約漂移或不可恢復衝突，Coordinator 都須停止推進並依 Runtime Interface 登錄 `block`；命令報錯不代表狀態已自動改變。
+
+Package 的 `stop_conditions` 是供 Coordinator 依證據判讀的凍結政策，Gate 只驗證欄位格式，不解析任意條件文字。宣告的 `outcome` 不會取代合法狀態轉移、Human Gate 判定或取消授權。
 
 ## 操作路由
 
@@ -74,6 +76,6 @@ Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，�
 
 ## 最終化
 
-進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗為 `blocked`。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。
+進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗先停止操作、查明事件是否已提交，再依 Runtime Interface 處理阻塞與復原。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。
 
 `kind` 為 `maintenance` 或 `documentation` 時，使用同一引擎的 Mini Package，不建立 Slice、Spec 或 Plan。Package 類型與審查規則由 Python Gate 實作；只有符合條件的 Maintenance 可免獨立 Reviewer，documentation 仍須獨立審查。Maintenance 還必須不改產品行為或契約、不改依賴/安全/資料邊界、路徑固定、可以 deterministic checks 覆蓋並以目前 checkout 單一 commit 完成；documentation-only 還必須只整理或引用既有語意。任一條無法證明即回到 Grilling／完整 Package。

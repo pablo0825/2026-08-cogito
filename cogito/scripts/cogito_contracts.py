@@ -196,6 +196,11 @@ def _validate_task(task: Any) -> None:
 
 
 def _validate_stop_conditions(conditions: Any) -> None:
+    """Validate frozen policy declarations, not whether their conditions are true.
+
+    The Coordinator evaluates the described evidence and requests a legal Gate
+    transition. An outcome is policy intent, not an executable transition.
+    """
     for condition in require_array(conditions, "stop_conditions", nonempty=True):
         if isinstance(condition, str):
             require_string(condition, "stop condition")
