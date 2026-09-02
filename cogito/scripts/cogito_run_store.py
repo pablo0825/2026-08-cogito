@@ -23,6 +23,7 @@ from cogito_contracts import (
     safe_repo_path as _safe_repo_path, validate_agent_result,
     validate_package,
 )
+from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
 from cogito_events import read_events
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
@@ -357,19 +358,8 @@ class RunStore:
         event = "technical-correction-complete" if current["state"] == "technical-correction" else "post-integration-correction-complete" if current["state"] == "post-integration-correction" else None
         if event is None:
             raise CogitoError("correction completion is not legal in the current state")
-        started = [item for item in read_events(self.events_path) if item["type"] in {"verification-correction-required", "post-verification-correction-required"}]
-        if not started or started[-1]["payload"].get("amendment_id") != amendment_id:
-            raise CogitoError("correction completion does not match the amendment that opened this correction cycle")
-        amendments = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
-        matching = [item for item in amendments if item["id"] == amendment_id]
-        if len(matching) != 1:
-            raise CogitoError("correction commit references an unknown Technical Amendment")
-        if any(current["tasks"].get(task["id"], {}).get("status") != "complete" for task in matching[0].get("added_tasks", [])):
-            raise CogitoError("correction cannot finish before amendment tasks complete")
-        added_ids = {task["id"] for task in matching[0].get("added_tasks", [])}
-        implementation_results = [item for item in current["agent_results"] if item.get("task_id") in added_ids and item.get("role") == "implementer" and item.get("status") == "complete"]
-        if added_ids and (added_ids != {item.get("task_id") for item in implementation_results} or commit_id not in {item.get("head_commit") for item in implementation_results}):
-            raise CogitoError("correction tasks require Gate-recorded Implementer Results")
+        events = read_events(self.events_path)
+        added_ids = validate_correction_completion(current, events, amendment_id, commit_id)
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         message = self._git("show", "-s", "--format=%B", commit_id)
         if f"Cogito-Amendment: {amendment_id}" not in message:
@@ -407,20 +397,8 @@ class RunStore:
         current = self.load()
         if current["state"] != "review-fix":
             raise CogitoError("review fix completion is not legal in the current state")
-        started = [item for item in read_events(self.events_path) if item["type"] == "review-fix-required"]
-        if not started:
-            raise CogitoError("review fix has no recorded Reviewer finding")
-        amendment_events = [item for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
-        matching_events = [item for item in amendment_events if item["payload"]["amendment"].get("id") == amendment_id and item["sequence"] > started[-1]["sequence"]]
-        matching = [item["payload"]["amendment"] for item in matching_events]
-        if len(matching) != 1:
-            raise CogitoError("review fix requires a new Technical Amendment bound to the current finding")
-        added_ids = {task["id"] for task in matching[0].get("added_tasks", [])}
-        if not added_ids or any(current["tasks"].get(task_id, {}).get("status") != "complete" for task_id in added_ids):
-            raise CogitoError("review fix requires completed amendment tasks")
-        implementer_results = [item for item in current["agent_results"] if item.get("task_id") in added_ids and item.get("role") == "implementer" and item.get("status") == "complete"]
-        if {item.get("task_id") for item in implementer_results} != added_ids or commit_id not in {item.get("head_commit") for item in implementer_results}:
-            raise CogitoError("review fix commit is not bound to its Implementer Results")
+        events = read_events(self.events_path)
+        validate_review_fix_completion(current, events, amendment_id, commit_id)
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         if f"Cogito-Amendment: {amendment_id}" not in self._git("show", "-s", "--format=%B", commit_id):
             raise CogitoError("review fix commit is missing the Cogito-Amendment trailer")

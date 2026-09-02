@@ -198,6 +198,22 @@ class ActionReplayTests(GitTestCase):
         self.assert_conflict(self.store.complete_correction, "TA-other", commit, "corrected")
         self.assert_conflict(self.store.complete_correction, "TA-1", self.head, "corrected")
 
+    def test_correction_without_tasks_still_requires_trailer_and_current_head(self) -> None:
+        self.store.add_amendment({"id": "TA-1", "reason": "fix", "path_fixes": ["note.txt"]})
+        self.store.enter_correction()
+        before = self.store.events_path.read_bytes()
+        self.git("add", "note.txt")
+        self.git("commit", "-qm", "missing trailer")
+        commit = self.git("rev-parse", "HEAD")
+        with self.assertRaisesRegex(CogitoError, "missing the Cogito-Amendment trailer"):
+            self.store.complete_correction("TA-1", commit, "corrected")
+        self.git("commit", "--amend", "-qm", "fix\n\nCogito-Amendment: TA-1")
+        old_head = self.git("rev-parse", "HEAD")
+        self.git("commit", "--allow-empty", "-qm", "new delivery head")
+        with self.assertRaisesRegex(CogitoError, "must use current delivery HEAD"):
+            self.store.complete_correction("TA-1", old_head, "corrected")
+        self.assertEqual(self.store.events_path.read_bytes(), before)
+
     def test_invalid_amendment_dependencies_do_not_append_events(self) -> None:
         def added(task_id, dependencies):
             return {"id": task_id, "slice_id": "mini-package", "paths": ["note.txt"], "depends_on": dependencies}
