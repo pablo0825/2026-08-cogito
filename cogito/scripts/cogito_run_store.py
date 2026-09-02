@@ -37,6 +37,7 @@ from cogito_gate_validation import (
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_run_queries import build_completion_report, derive_next_action
 from cogito_scheduler import ready_tasks, tasks_with_dependencies
+from cogito_task_rules import effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
 
 _load_json = load_json
@@ -113,7 +114,7 @@ class RunStore:
         if event == "implementation-complete":
             completed = {task_id for task_id, item in current["tasks"].items() if item.get("status") == "complete"}
             implemented = {item.get("task_id") for item in current["agent_results"] if item.get("role") == "implementer" and item.get("status") == "complete" and item.get("requested_transition") == "verifying"}
-            active = any(item.get("status") in {"leased", "running"} for item in current["tasks"].values())
+            active = any(is_active_task(item) for item in current["tasks"].values())
             edges = [{"from": dependency, "to": task["id"]} for task in current["tasks"].values() for dependency in task.get("depends_on", [])]
             dispatchable = ready_tasks(list(current["tasks"].values()), edges, current["max_workers"])
             payload["tasks_complete"] = bool(completed) and not active and not dispatchable and completed <= implemented
@@ -183,11 +184,11 @@ class RunStore:
             else:
                 worktree, branch = self._task_worktree(task, package)
             base_commit = self._git_at(worktree, "rev-parse", "HEAD")
-            task_slice = task.get("slice_id") or "mini-package"
+            task_slice = effective_slice_id(task)
             prior_heads = [
                 item["head_commit"] for item in current["agent_results"]
                 if item.get("role") == "implementer"
-                and (current["tasks"].get(item.get("task_id"), {}).get("slice_id") or "mini-package") == task_slice
+                and effective_slice_id(current["tasks"].get(item.get("task_id"), {})) == task_slice
             ]
             expected_base = prior_heads[-1] if prior_heads and current["state"] != "post-integration-correction" else self._git("rev-parse", "HEAD")
             if base_commit != expected_base:
@@ -429,7 +430,7 @@ class RunStore:
         if self._git("branch", "--show-current") != package["delivery_branch"] or self._git("rev-parse", "HEAD") != commit_id:
             raise CogitoError("integration commit must be current HEAD on the delivery branch")
         target_slice = slice_id or "mini-package"
-        task_ids = [task_id for task_id, task in current["tasks"].items() if (task.get("slice_id") or "mini-package") == target_slice]
+        task_ids = [task_id for task_id, task in current["tasks"].items() if effective_slice_id(task) == target_slice]
         if not task_ids or any(current["tasks"][task_id].get("status") != "reviewed" for task_id in task_ids):
             raise CogitoError("integration requires every task in the target Slice to be independently reviewed")
         latest_implementation = {item.get("task_id"): item for item in current["agent_results"] if item.get("role") == "implementer" and item.get("status") == "complete"}
@@ -613,7 +614,7 @@ class RunStore:
                 if hash_json(graph) != current.get("project_graph_hash") or graph.get("active_run_id") != self.run_id:
                     raise CogitoError("Resume Gate Project Graph drifted")
             for task in current["tasks"].values():
-                if task.get("status") in {"leased", "running"}:
+                if is_active_task(task):
                     worktree = Path(str(task.get("worktree", "")))
                     if not worktree.is_dir() or self._git_at(worktree, "branch", "--show-current") != task.get("branch"):
                         raise CogitoError("Resume Gate found a drifted active worker lease")

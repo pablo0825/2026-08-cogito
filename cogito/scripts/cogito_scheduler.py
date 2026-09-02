@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from cogito_common import CogitoError
+from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 
 
 def edge_pair(edge: Any) -> tuple[str, str]:
@@ -26,7 +27,7 @@ def tasks_with_dependencies(dag: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def slice_dependencies(dag: Mapping[str, Any]) -> set[tuple[str, str]]:
     """Collapse task edges into the Slice dependencies frozen at approval."""
-    slices = {task["id"]: task.get("slice_id") or "mini-package" for task in dag["tasks"]}
+    slices = {task["id"]: effective_slice_id(task) for task in dag["tasks"]}
     return {(slices[source], slices[target]) for source, target in map(edge_pair, dag["edges"])
             if slices[source] != slices[target]}
 
@@ -56,7 +57,7 @@ def ready_tasks(tasks: Sequence[Mapping[str, Any]], edges: Sequence[Any], max_wo
                 queue.append(child)
     if visited != len(by_id):
         raise CogitoError("execution graph contains a cycle")
-    active_slices = {task.get("slice_id") or "mini-package" for task in tasks if task.get("status") in {"leased", "running"}}
+    active_slices = {effective_slice_id(task) for task in tasks if is_active_task(task)}
     capacity = max(0, max_workers - len(active_slices))
     if capacity == 0:
         return []
@@ -64,21 +65,15 @@ def ready_tasks(tasks: Sequence[Mapping[str, Any]], edges: Sequence[Any], max_wo
     for source, target in pairs:
         prerequisites[target].add(source)
 
-    def dependency_ready(source: str, target: str) -> bool:
-        source_task, target_task = by_id[source], by_id[target]
-        if (source_task.get("slice_id") or "mini-package") == (target_task.get("slice_id") or "mini-package"):
-            return source_task.get("status") in {"complete", "verified", "reviewed", "integrated"}
-        return source_task.get("status") == "integrated"
-
     candidates = [
         dict(task) for key, task in by_id.items()
         if task.get("status", "pending") == "pending"
-        and all(dependency_ready(source, key) for source in prerequisites[key])
+        and all(dependency_satisfied(by_id[source], task) for source in prerequisites[key])
     ]
     selected: list[dict[str, Any]] = []
     selected_slices = set(active_slices)
     for task in candidates:
-        slice_id = task.get("slice_id") or "mini-package"
+        slice_id = effective_slice_id(task)
         if slice_id in selected_slices:
             continue
         selected.append(task)

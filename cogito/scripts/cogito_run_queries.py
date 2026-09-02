@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from cogito_common import CogitoError
 from cogito_result_contract import validate_result
 from cogito_scheduler import ready_tasks
+from cogito_task_rules import effective_slice_id, is_active_task
 
 
 def derive_next_action(projection: Mapping[str, Any]) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def derive_next_action(projection: Mapping[str, Any]) -> dict[str, Any]:
             for task in tasks for dependency in task.get("depends_on", [])
         ]
         output["ready_tasks"] = [item["id"] for item in ready_tasks(tasks, edges, projection["max_workers"])]
-        active_slices = {item.get("slice_id") or "mini-package" for item in tasks if item.get("status") in {"leased", "running"}}
+        active_slices = {effective_slice_id(item) for item in tasks if is_active_task(item)}
         output["worker_capacity"] = max(0, projection["max_workers"] - len(active_slices))
     return output
 

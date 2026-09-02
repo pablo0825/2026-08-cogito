@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from cogito_common import CogitoError
+from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
 
 
@@ -104,9 +105,7 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
     if before == "pending":
         for dependency in projection["tasks"][task_id].get("depends_on", []):
             predecessor = projection["tasks"].get(dependency, {})
-            same_slice = (predecessor.get("slice_id") or "mini-package") == (projection["tasks"][task_id].get("slice_id") or "mini-package")
-            allowed = {"complete", "verified", "reviewed", "integrated"} if same_slice else {"integrated"}
-            if predecessor.get("status") not in allowed:
+            if not dependency_satisfied(predecessor, projection["tasks"][task_id]):
                 raise CogitoError("cross-Slice dependencies must be integrated before dispatch")
     updated = dict(projection["tasks"][task_id])
     updated.update(payload)
@@ -114,13 +113,16 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
         updated["released_by"] = payload["agent_id"]
         updated.pop("agent_id", None)
     projection["tasks"][task_id] = updated
-    active_slices = {item.get("slice_id") or "mini-package" for item in projection["tasks"].values() if item.get("status") in {"leased", "running"}}
+    active_slices = {
+        effective_slice_id(item) for item in projection["tasks"].values()
+        if is_active_task(item)
+    }
     if len(active_slices) > int(projection["max_workers"]):
         raise CogitoError("worker lease limit exceeded")
     if payload["status"] == "leased" and any(
         key != task_id
-        and (item.get("slice_id") or "mini-package") == (projection["tasks"][task_id].get("slice_id") or "mini-package")
-        and item.get("status") in {"leased", "running"}
+        and effective_slice_id(item) == effective_slice_id(projection["tasks"][task_id])
+        and is_active_task(item)
         for key, item in projection["tasks"].items()
     ):
         raise CogitoError("a Slice may have only one active worker lease")
