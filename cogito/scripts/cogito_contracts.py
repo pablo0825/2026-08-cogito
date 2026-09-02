@@ -47,6 +47,28 @@ def package_hash(package: Mapping[str, Any]) -> str:
     return hash_json({key: value for key, value in package.items() if key != "package_hash"})
 
 
+def validate_shared_understanding_hash(value: Any) -> None:
+    require_string(value, "shared_understanding.hash", CONTENT_HASH_RE)
+
+
+def validate_boundary(value: Any) -> None:
+    boundary = require_object(value, "boundary", "decision", "evidence")
+    require_choice(boundary["decision"], "boundary.decision", {"single-slice", "split-required"})
+    require_strings(boundary["evidence"], "boundary.evidence", nonempty=True)
+
+
+def validate_preparation_event(event: str, payload: Mapping[str, Any]) -> None:
+    """Validate new preparation inputs without changing historical projection."""
+    if event in {"shared-understanding-ready", "shared-understanding-confirmed", "boundary-complete"}:
+        require_object(payload, "preparation payload")
+    if event == "shared-understanding-ready":
+        validate_shared_understanding_hash(payload.get("shared_understanding_hash"))
+    elif event == "shared-understanding-confirmed" and "shared_understanding_hash" in payload:
+        validate_shared_understanding_hash(payload["shared_understanding_hash"])
+    elif event == "boundary-complete":
+        validate_boundary(payload)
+
+
 def validate_package(package: Mapping[str, Any]) -> None:
     """Load default workflow limits and validate a Package without changing it."""
     validate_package_with_limits(package, load_workflow()["limits"])
@@ -74,7 +96,7 @@ def validate_package_with_limits(
     require_string(package["delivery_branch"], "delivery_branch")
     require_string(package["baseline_commit"], "baseline_commit", GIT_OBJECT_RE)
     shared = require_object(package["shared_understanding"], "shared_understanding", "hash")
-    require_string(shared["hash"], "shared_understanding.hash", CONTENT_HASH_RE)
+    validate_shared_understanding_hash(shared["hash"])
     if "path" in shared:
         require_path(shared["path"], "shared_understanding.path")
     require_array(package["slices"], "slices")
@@ -120,9 +142,7 @@ def validate_package_with_limits(
 
 
 def _validate_development_slices(package: Mapping[str, Any]) -> None:
-    boundary = require_object(package.get("boundary"), "boundary", "decision", "evidence")
-    require_choice(boundary["decision"], "boundary.decision", {"single-slice", "split-required"})
-    require_strings(boundary["evidence"], "boundary.evidence", nonempty=True)
+    validate_boundary(package.get("boundary"))
     require_array(package["slices"], "slices", nonempty=True)
     seen: set[str] = set()
     for item in package["slices"]:

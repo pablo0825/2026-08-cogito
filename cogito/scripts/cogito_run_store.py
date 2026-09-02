@@ -28,7 +28,7 @@ from cogito_contracts import (
     materialize_contract_with_limits, package_hash,
     path_allowed as _path_allowed,
     safe_repo_path as _safe_repo_path, validate_agent_result,
-    validate_package_with_limits,
+    validate_package_with_limits, validate_preparation_event, validate_shared_understanding_hash,
 )
 from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
 from cogito_delivery_scope import validate_committed_scope
@@ -110,6 +110,13 @@ class RunStore:
         self._events.refresh_cache(projection)
         return projection
 
+    def _validate_preparation_input(self, event: str, payload: Mapping[str, Any]) -> None:
+        validate_preparation_event(event, payload)
+        if event == "shared-understanding-confirmed":
+            # An old run may contain a malformed, unconfirmed summary. Keep it
+            # readable and revisable, but never freeze it via a new confirmation.
+            validate_shared_understanding_hash(self._events.project().get("shared_understanding_hash"))
+
     def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> RunState:
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
@@ -117,6 +124,7 @@ class RunStore:
         replay = self._replay(action_id, event_type, request_hash)
         if replay is not None:
             return replay
+        self._validate_preparation_input(event_type, payload)
         return self._events.append({
             "type": event_type, "payload": dict(payload),
             "action_id": action_id, "request_hash": request_hash,
@@ -136,6 +144,7 @@ class RunStore:
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
             return replay
+        self._validate_preparation_input(event, payload)
         current = self.load()
         if event in self._PROTECTED_TRANSITION_EVENTS:
             raise CogitoError(f"{event} requires its dedicated Gate operation")

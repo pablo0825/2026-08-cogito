@@ -16,6 +16,8 @@ Gate 與 Runner 的 JSON 檔案輸入使用 UTF-8；非 UTF-8 或損壞編碼與
 
 Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 Markdown。Package 核准前，從已通過 `prepare-package` 的相同草稿呈現範圍、Spec／Plan 路徑、checks 與風險；核准與執行須綁定同一 candidate hash。顯示層不得補預設值或改寫契約；草稿有變動時重新驗證並確認核准。Python contract 不轉型、不修改輸入；格式錯誤不可透過改寫已凍結資料來掩蓋。
 
+`shared-understanding-ready` 與 `boundary-complete` 在寫入前使用與 Package 相同的驗證：摘要 hash 為 64 位小寫十六進位字串；Boundary decision 是 `single-slice`／`split-required`，evidence 是非空字串陣列。錯型輸入不追加事件、不推進狀態，修正資料後可沿用尚未成功寫入的 action ID。歷史事件不自動改寫；舊 run 的錯誤摘要若仍未確認，可重新發布合法摘要後確認，新 confirmation 不會接受已存的非法 hash。若錯誤 Boundary 已在舊版本完成，需依既有停止／取消與重建決策處理，不手改權威事件。
+
 在 `awaiting-package-approval` 修改尚未核准的草稿後，以新的 `action_id` 再呼叫 `prepare-package`。Gate 重新驗證完整草稿，追加新的 candidate hash 並繼續等待核准；舊候選不能再核准。相同操作重送沿用原 ID，不能用舊 ID 提交新內容。候選修訂與核准都比對事件版本，若期間有其他操作則拒絕，重新查詢後重試。正式核准後不再接受此類修訂，須依 Technical Amendment 或既有停止流程處理。
 
 ## 停止條件與狀態操作
