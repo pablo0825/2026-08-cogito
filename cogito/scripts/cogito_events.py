@@ -28,6 +28,8 @@ def read_events(path: str | Path) -> list[dict[str, Any]]:
             event = json.loads(line)
         except json.JSONDecodeError as exc:
             raise CogitoError(f"invalid event JSON on line {expected}") from exc
+        if not isinstance(event, dict):
+            raise CogitoError(f"event JSON on line {expected} must be an object")
         supplied_hash = event.get("event_hash")
         body = {key: value for key, value in event.items() if key != "event_hash"}
         if event.get("sequence") != expected or event.get("previous_event_hash") != previous:
