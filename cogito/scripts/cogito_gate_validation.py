@@ -10,6 +10,7 @@ from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
     validate_project_policy,
+    validate_required_checks,
 )
 from cogito_evidence_contract import validate_check_evidence
 
@@ -39,9 +40,7 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
     if snapshot.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES) > project_output_limit:
         raise CogitoError("Package check output limit is looser than Project Policy")
 
-    required_checks = set(project.get("required_checks", []))
-    if not required_checks <= {item["id"] for item in package["checks"]}:
-        raise CogitoError("Package omits checks required by Project Policy")
+    validate_required_checks(package["checks"], project.get("required_checks", []), "Project Policy")
     allowed_env = set(project.get("allowed_environment", []))
     for check in package["checks"]:
         if set(check.get("env_allowlist", [])) - allowed_env:

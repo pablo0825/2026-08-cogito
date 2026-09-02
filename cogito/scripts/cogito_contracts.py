@@ -91,7 +91,7 @@ def validate_package(package: Mapping[str, Any]) -> None:
     require_paths(package["approved_paths"], "approved_paths", nonempty=True)
     _validate_stop_conditions(package["stop_conditions"])
     _validate_execution_dag(package, mini)
-    check_ids = _validate_checks(package)
+    _validate_checks(package)
     validate_human_gate(package["human_gate"], frozen=True)
     limits = package["limits"]
     global_limits = load_workflow()["limits"]
@@ -99,7 +99,7 @@ def validate_package(package: Mapping[str, Any]) -> None:
     require_object(limits, "limits", *retry_names)
     for key in retry_names:
         require_integer(limits[key], f"limits.{key}", 0, global_limits[key])
-    _validate_policy_snapshot(package, check_ids)
+    _validate_policy_snapshot(package)
     registry = package["source_registry"]
     dispositions = {"read-only-source", "adopted", "updated", "superseded", "not-touched"}
     for item in require_array(registry, "source_registry"):
@@ -228,14 +228,33 @@ def validate_check(check: Any) -> None:
             raise CogitoError(f"invalid redaction pattern: {exc}") from exc
 
 
-def _validate_checks(package: Mapping[str, Any]) -> list[str]:
+def _validate_checks(package: Mapping[str, Any]) -> None:
     checks = require_array(package["checks"], "checks", nonempty=True)
     for check in checks:
         validate_check(check)
     check_ids = [check["id"] for check in checks]
     if len(check_ids) != len(set(check_ids)):
         raise CogitoError("check ids must be unique")
-    return check_ids
+
+
+def validate_required_checks(
+    checks: Sequence[Mapping[str, Any]], required_ids: Sequence[str], source: str,
+) -> None:
+    """Enforce policy requirements on validated checks without rewriting them.
+
+    Omitting `required` keeps the established default of True. Both Project
+    Policy and the frozen snapshot use this rule, including optional downgrades.
+    """
+    by_id = {check["id"]: check for check in checks}
+    missing = set(required_ids) - by_id.keys()
+    if missing:
+        raise CogitoError(f"Package omits checks required by {source}: {sorted(missing)}")
+    optional = sorted({
+        check_id for check_id in required_ids
+        if by_id[check_id].get("required", True) is not True
+    })
+    if optional:
+        raise CogitoError(f"Package marks checks required by {source} as optional: {optional}")
 
 
 def validate_human_gate(human: Any, *, frozen: bool = False) -> None:
@@ -286,15 +305,13 @@ def validate_project_policy(policy: Any) -> None:
     validate_human_gate(policy.get("human_gate", {}))
 
 
-def _validate_policy_snapshot(package: Mapping[str, Any], check_ids: Sequence[Any]) -> None:
+def _validate_policy_snapshot(package: Mapping[str, Any]) -> None:
     policy = require_object(package["policy_snapshot"], "policy_snapshot", "max_workers", "fetch_allowed")
     _validate_policy_fields(policy)
     if "hash" in policy:
         require_string(policy["hash"], "policy_snapshot.hash", CONTENT_HASH_RE)
     allowed_environment = policy.get("allowed_environment", [])
-    required_checks = policy.get("required_checks", [])
-    if set(required_checks) - set(check_ids):
-        raise CogitoError("Package omits checks frozen by its policy snapshot")
+    validate_required_checks(package["checks"], policy.get("required_checks", []), "policy snapshot")
     for check in package["checks"]:
         validate_check_environment(check, allowed_environment)
 
