@@ -93,9 +93,20 @@ class GateCliContractTests(unittest.TestCase):
                     baseline,
                 )
             for index in range(1, 4):
+                next_action = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+                self.assertEqual(next_action["worker_capacity"], 4 - index)
+                self.assertEqual(next_action["ready_tasks"], [f"T-00{task}" for task in range(index, 4)])
                 self.invoke(repo, "task", "--run-id", run_id, "--task-id", f"T-00{index}", "--status", "leased", "--agent-id", f"worker-{index}", "--action-id", f"lease-{index}")
+            full = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+            self.assertEqual(full["worker_capacity"], 0)
+            self.assertEqual(full["ready_tasks"], [])
             overflow = self.invoke(repo, "task", "--run-id", run_id, "--task-id", "T-004", "--status", "leased", "--agent-id", "worker-4", "--action-id", "lease-4", ok=False)
             self.assertIn("worker lease limit exceeded", overflow.stderr)
+            self.invoke(repo, "task", "--run-id", run_id, "--task-id", "T-001", "--status", "blocked", "--agent-id", "worker-1", "--action-id", "release-1")
+            available = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+            self.assertEqual(available["worker_capacity"], 1)
+            self.assertEqual(available["ready_tasks"], ["T-004"])
+            self.invoke(repo, "task", "--run-id", run_id, "--task-id", "T-004", "--status", "leased", "--agent-id", "worker-4", "--action-id", "lease-4")
             self.invoke(repo, "transition", "--run-id", run_id, "--event", "block", "--payload-json", '{"reason":"transient"}', "--action-id", "block-1")
             skipped = self.invoke(repo, "resume", "--run-id", run_id, "--target", "finalizing", "--action-id", "skip-1", ok=False)
             self.assertNotEqual(skipped.returncode, 0)

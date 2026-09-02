@@ -201,6 +201,55 @@ class DagAndProfileContractTests(unittest.TestCase):
         ]
         self.assertEqual(len(self.runtime.ready_tasks(tasks, [], max_workers=3)), 1)
 
+    def test_ready_tasks_use_only_unoccupied_worker_slots(self) -> None:
+        cases = [
+            (1, ("leased",), []),
+            (1, ("running",), []),
+            (2, ("leased", "running"), []),
+            (2, ("leased",), ["P0"]),
+            (2, ("running",), ["P0"]),
+            (3, ("leased", "running", "leased"), []),
+            (3, ("running", "leased"), ["P0"]),
+            (3, ("running",), ["P0", "P1"]),
+        ]
+        for max_workers, active_statuses, expected in cases:
+            with self.subTest(max_workers=max_workers, active=active_statuses):
+                tasks = [
+                    {"id": f"A{i}", "slice_id": f"FS-A{i}", "status": status}
+                    for i, status in enumerate(active_statuses)
+                ] + [
+                    {"id": f"P{i}", "slice_id": f"FS-P{i}", "status": "pending"}
+                    for i in range(3)
+                ]
+                ready = self.runtime.ready_tasks(tasks, [], max_workers)
+                self.assertEqual([task["id"] for task in ready], expected)
+
+    def test_active_and_new_slices_each_receive_at_most_one_worker(self) -> None:
+        for status in ("leased", "running"):
+            with self.subTest(active_status=status):
+                tasks = [
+                    {"id": "A", "slice_id": "FS-A", "status": status},
+                    {"id": "B", "slice_id": "FS-A", "status": "pending"},
+                    {"id": "C", "slice_id": "FS-B", "status": "pending"},
+                    {"id": "D", "slice_id": "FS-B", "status": "pending"},
+                    {"id": "E", "slice_id": "FS-C", "status": "pending"},
+                ]
+                ready = self.runtime.ready_tasks(tasks, [], max_workers=3)
+                self.assertEqual([task["id"] for task in ready], ["C", "E"])
+
+    def test_full_worker_capacity_does_not_skip_dag_validation(self) -> None:
+        tasks = [
+            {"id": "A", "slice_id": "FS-A", "status": "leased"},
+            {"id": "B", "slice_id": "FS-B", "status": "pending"},
+        ]
+        for name, edges in (
+            ("self-reference", [("A", "A")]),
+            ("unknown-task", [("A", "missing")]),
+            ("cycle", [("A", "B"), ("B", "A")]),
+        ):
+            with self.subTest(invalid_graph=name), self.assertRaises(self.runtime.CogitoError):
+                self.runtime.ready_tasks(tasks, edges, max_workers=1)
+
     def test_dag_rejects_cycles(self) -> None:
         tasks = [{"id": "A", "status": "pending"}, {"id": "B", "status": "pending"}]
         edges = [{"from": "A", "to": "B"}, {"from": "B", "to": "A"}]

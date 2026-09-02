@@ -42,6 +42,8 @@ def ready_tasks(tasks: Sequence[Mapping[str, Any]], edges: Sequence[Any], max_wo
         raise CogitoError("execution graph contains a cycle")
     active_slices = {task.get("slice_id") or "mini-package" for task in tasks if task.get("status") in {"leased", "running"}}
     capacity = max(0, max_workers - len(active_slices))
+    if capacity == 0:
+        return []
     prerequisites: dict[str, set[str]] = {key: set() for key in by_id}
     for source, target in pairs:
         prerequisites[target].add(source)
