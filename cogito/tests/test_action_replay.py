@@ -250,7 +250,7 @@ class ActionReplayTests(unittest.TestCase):
         self.assert_replay(self.store.resume_gate, "resume")
 
     def test_event_append_failure_recovers_published_evidence_without_running_again(self) -> None:
-        with mock.patch("cogito_run_store.append_event", side_effect=OSError("injected append failure")):
+        with mock.patch("cogito_event_repository.append_event", side_effect=OSError("injected append failure")):
             with self.assertRaises(OSError):
                 self.evidence("interrupted")
         self.assert_conflict(self.store.run_controlled_check, "OTHER", self.repo, "interrupted")
@@ -263,7 +263,7 @@ class ActionReplayTests(unittest.TestCase):
         def append_then_fail(*args, **kwargs):
             append_event(*args, **kwargs)
             raise OSError("injected failure after append")
-        with mock.patch("cogito_run_store.append_event", side_effect=append_then_fail):
+        with mock.patch("cogito_event_repository.append_event", side_effect=append_then_fail):
             with self.assertRaises(OSError):
                 self.evidence("recorded")
         self.evidence("recorded")

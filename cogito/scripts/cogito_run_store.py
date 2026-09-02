@@ -14,7 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from cogito_common import CogitoError, atomic_create_json, atomic_write_json, hash_json, load_json
+from cogito_common import CogitoError, atomic_create_json, hash_json, load_json
 from cogito_approval import ApprovalArtifacts, publish_approval, restore_approval_permissions
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
 from cogito_contracts import (
@@ -23,7 +23,8 @@ from cogito_contracts import (
     safe_repo_path as _safe_repo_path, validate_agent_result,
     validate_package,
 )
-from cogito_events import append_event, read_events
+from cogito_events import read_events
+from cogito_event_repository import EventRepository
 from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
@@ -32,7 +33,6 @@ from cogito_gate_validation import (
     validate_policy as validate_gate_policy,
     derive_review_decision,
 )
-from cogito_projection import reduce_events
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_run_queries import build_completion_report, derive_next_action
 from cogito_scheduler import ready_tasks, tasks_with_dependencies
@@ -68,44 +68,24 @@ class RunStore:
         self.events_path = self.run_dir / "events.jsonl"
         self.state_path = self.run_dir / "state.json"
         self.workflow = dict(workflow or load_workflow())
+        self._events = EventRepository(self.events_path, self.state_path, self.workflow)
 
     def create(self, kind: str) -> dict[str, Any]:
         if self.events_path.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
         self.run_dir.mkdir(parents=True, exist_ok=False)
-        append_event(self.events_path, {"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
-        return self._project()
+        return self._events.create({"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
 
     def load(self) -> dict[str, Any]:
-        projection = reduce_events(read_events(self.events_path), self.workflow)
+        projection = self._events.project()
         if projection.get("package_path"):
             package_path = self.root / projection["package_path"]
             package = _load_json(package_path)
             validate_package(package)
             if package_hash(package) != projection["package_hash"]:
                 raise CogitoError("approved Package content no longer matches its frozen hash")
-        self._refresh_state_cache(projection)
+        self._events.refresh_cache(projection)
         return projection
-
-    def _project(self) -> dict[str, Any]:
-        projection = reduce_events(read_events(self.events_path), self.workflow)
-        self._refresh_state_cache(projection)
-        return projection
-
-    def _refresh_state_cache(self, projection: Mapping[str, Any]) -> None:
-        """Repair only the disposable cache, never authoritative artifacts."""
-        try:
-            cached = _load_json(self.state_path)
-        except CogitoError:
-            cached = None
-        if cached != projection:
-            try:
-                atomic_write_json(self.state_path, projection)
-            except OSError as exc:
-                raise CogitoError(
-                    "state cache could not be refreshed; event history is unchanged; "
-                    "retry with the same action_id after resolving the storage error"
-                ) from exc
 
     def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None) -> dict[str, Any]:
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
@@ -114,12 +94,10 @@ class RunStore:
         replay = self._replay(action_id, event_type, request_hash)
         if replay is not None:
             return replay
-        existing = read_events(self.events_path)
-        # Validate the candidate against authoritative history before mutating it.
-        reduce_events([*existing, {"type": event_type, "payload": dict(payload)}], self.workflow)
-        expected = existing[-1]["event_hash"] if existing else "0" * 64
-        append_event(self.events_path, {"type": event_type, "payload": dict(payload), "action_id": action_id, "request_hash": request_hash}, expected)
-        return self._project()
+        return self._events.append({
+            "type": event_type, "payload": dict(payload),
+            "action_id": action_id, "request_hash": request_hash,
+        })
 
     def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
         request_hash = request_fingerprint("transition", event=event, payload=payload)

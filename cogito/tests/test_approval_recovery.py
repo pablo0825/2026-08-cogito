@@ -54,7 +54,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
                 raise OSError("injected cache write failure")
             atomic_write_json(path, value)
 
-        with mock.patch("cogito_run_store.atomic_write_json", side_effect=fail_cache):
+        with mock.patch("cogito_event_repository.atomic_write_json", side_effect=fail_cache):
             with self.assertRaisesRegex(CogitoError, "approval.*recorded"):
                 self.store.approve_package(self.package, "approve")
         self.assertEqual(read_events(self.store.events_path)[-1]["type"], "package-approved")
@@ -66,7 +66,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
         self.assert_approved_artifacts()
 
     def test_event_append_failure_before_commit_rolls_back_new_artifacts(self) -> None:
-        with mock.patch("cogito_run_store.append_event", side_effect=OSError("injected append failure")):
+        with mock.patch("cogito_event_repository.append_event", side_effect=OSError("injected append failure")):
             with self.assertRaises(CogitoError):
                 self.store.approve_package(self.package, "approve")
         self.assertFalse(self.package_path.exists())
@@ -80,7 +80,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
         atomic_write_json(self.package_path, self.package)
         package_before = self.package_path.read_bytes()
         mode_before = self.package_path.stat().st_mode
-        with mock.patch("cogito_run_store.append_event", side_effect=OSError("injected append failure")):
+        with mock.patch("cogito_event_repository.append_event", side_effect=OSError("injected append failure")):
             with self.assertRaises(CogitoError):
                 self.store.approve_package(self.package, "approve")
         self.assertEqual(self.package_path.read_bytes(), package_before)
@@ -92,7 +92,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
             append_event(*args, **kwargs)
             raise OSError("injected error after append")
 
-        with mock.patch("cogito_run_store.append_event", side_effect=append_then_fail):
+        with mock.patch("cogito_event_repository.append_event", side_effect=append_then_fail):
             with self.assertRaisesRegex(CogitoError, "approval.*recorded"):
                 self.store.approve_package(self.package, "approve")
         self.store.approve_package(self.package, "approve")
@@ -111,7 +111,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
                 raise CogitoError("injected unreadable event history")
             return read_events(path)
 
-        with mock.patch("cogito_run_store.append_event", side_effect=fail_append), \
+        with mock.patch("cogito_event_repository.append_event", side_effect=fail_append), \
                 mock.patch("cogito_run_store.read_events", side_effect=fail_read_after_append):
             with self.assertRaisesRegex(CogitoError, "cannot determine.*approval"):
                 self.store.approve_package(self.package, "approve")
@@ -142,7 +142,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
         def missing_history(path):
             return [] if append_attempted else read_events(path)
 
-        with mock.patch("cogito_run_store.append_event", side_effect=fail_append), \
+        with mock.patch("cogito_event_repository.append_event", side_effect=fail_append), \
                 mock.patch("cogito_run_store.read_events", side_effect=missing_history):
             with self.assertRaisesRegex(CogitoError, "cannot determine.*approval"):
                 self.store.approve_package(self.package, "approve")
@@ -169,7 +169,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
             atomic_write_json(self.graph_path, other_graph)
             raise OSError("injected competing graph update")
 
-        with mock.patch("cogito_run_store.append_event", side_effect=replace_graph_then_fail):
+        with mock.patch("cogito_event_repository.append_event", side_effect=replace_graph_then_fail):
             with self.assertRaisesRegex(CogitoError, "cleanup is incomplete"):
                 self.store.approve_package(self.package, "approve")
         self.assertEqual(load_json(self.graph_path), other_graph)
@@ -194,7 +194,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
 
     def test_rollback_removes_graph_only_when_created_by_this_approval(self) -> None:
         self.graph_path.unlink()
-        with mock.patch("cogito_run_store.append_event", side_effect=OSError("injected append failure")):
+        with mock.patch("cogito_event_repository.append_event", side_effect=OSError("injected append failure")):
             with self.assertRaises(CogitoError):
                 self.store.approve_package(self.package, "approve")
         self.assertFalse(self.graph_path.exists())
@@ -217,14 +217,14 @@ class ApprovalRecoveryTests(unittest.TestCase):
                 raise CogitoError("injected invalid JSON")
             return original_load(path)
 
-        with mock.patch("cogito_run_store._load_json", side_effect=malformed_cache), \
-                mock.patch("cogito_run_store.atomic_write_json", wraps=atomic_write_json) as write:
+        with mock.patch("cogito_event_repository.load_json", side_effect=malformed_cache), \
+                mock.patch("cogito_event_repository.atomic_write_json", wraps=atomic_write_json) as write:
             self.assertEqual(self.store.load(), expected)
             write.assert_called_once_with(self.store.state_path, expected)
 
     def test_invalid_event_history_is_not_treated_as_cache_damage(self) -> None:
-        with mock.patch("cogito_run_store.read_events", side_effect=CogitoError("broken event chain")), \
-                mock.patch("cogito_run_store.atomic_write_json") as write:
+        with mock.patch("cogito_event_repository.read_events", side_effect=CogitoError("broken event chain")), \
+                mock.patch("cogito_event_repository.atomic_write_json") as write:
             with self.assertRaisesRegex(CogitoError, "broken event chain"):
                 self.store.load()
             write.assert_not_called()
@@ -240,7 +240,7 @@ class ApprovalRecoveryTests(unittest.TestCase):
             return value
 
         with mock.patch("cogito_run_store._load_json", side_effect=tampered_package), \
-                mock.patch("cogito_run_store.atomic_write_json") as write:
+                mock.patch("cogito_event_repository.atomic_write_json") as write:
             with self.assertRaises(CogitoError):
                 self.store.load()
             write.assert_not_called()
