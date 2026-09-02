@@ -90,7 +90,7 @@
       "id": 13,
       "scenario": "maintenance-mini-package",
       "prompt": "$cogito 對內部 identifier 做可自動證明、不改行為的小型 rename。",
-      "expected_output": "使用同一 Gate engine 的 maintenance profile 建立 Mini Package；在目前 checkout 單一 commit 執行，符合客觀低風險條件時可免獨立 Reviewer。",
+      "expected_output": "以 kind 為 maintenance 的 Package 使用同一 Gate engine 建立 Mini Package；在目前 checkout 單一 commit 執行，符合客觀低風險條件時可免獨立 Reviewer。",
       "expectations": ["Uses the same state engine", "Requires behavior-relevant evidence", "Does not create Slice, Spec, or Plan"]
     },
     {
