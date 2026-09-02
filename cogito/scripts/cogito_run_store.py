@@ -14,7 +14,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from cogito_state_types import RunState
+from cogito_state_types import AgentResult, RunState, TaskStatus
+from cogito_event_types import (
+    AgentResultRecordedEvent, AgentResultRecordedPayload,
+    CheckEvidenceRecordedEvent, CheckEvidenceRecordedPayload,
+    IntegrationCompletedEvent, IntegrationCompletedPayload,
+    TaskUpdatedEvent, TaskUpdatedPayload, TypedGateEvent,
+)
 from cogito_common import CogitoError, atomic_create_json, hash_json, load_json
 from cogito_approval import ApprovalArtifacts, publish_approval, restore_approval_permissions
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
@@ -114,6 +120,15 @@ class RunStore:
             "action_id": action_id, "request_hash": request_hash,
         }, expected_previous_hash=expected_previous_hash)
 
+    def _record_gate_event(
+        self, event: TypedGateEvent, action_id: str | None, *, request_hash: str,
+    ) -> RunState:
+        """Keep a typed event's discriminator and payload paired until persistence."""
+        return self.record(
+            event["type"], event["payload"], action_id, self._GATE_AUTHORITY,
+            request_hash=request_hash,
+        )
+
     def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("transition", event=event, payload=payload)
         replay = self._replay(action_id, event, request_hash)
@@ -178,8 +193,8 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def update_task(self, task_id: str, status: str, agent_id: str, action_id: str | None = None) -> RunState:
-        payload = {"task_id": task_id, "status": status, "agent_id": agent_id}
+    def update_task(self, task_id: str, status: TaskStatus, agent_id: str, action_id: str | None = None) -> RunState:
+        payload: TaskUpdatedPayload = {"task_id": task_id, "status": status, "agent_id": agent_id}
         request_hash = request_fingerprint("task", **payload)
         replay = self._replay(action_id, "task-updated", request_hash)
         if replay is not None:
@@ -207,10 +222,15 @@ class RunStore:
             if base_commit != expected_base:
                 raise CogitoError("a Slice worktree must start from the latest delivery HEAD")
             payload.update({"worktree": str(worktree), "branch": branch, "base_commit": base_commit})
-        return self.record("task-updated", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self._record_gate_event(
+            TaskUpdatedEvent(type="task-updated", payload=payload), action_id,
+            request_hash=request_hash,
+        )
 
     def submit_agent_result(self, result: Mapping[str, Any], action_id: str | None = None) -> RunState:
-        payload = {"result": dict(result)}
+        # This is the JSON boundary; validate_agent_result below checks its shape
+        # before a new event can be recorded. Exact replays keep the early return.
+        payload: AgentResultRecordedPayload = {"result": cast(AgentResult, dict(result))}
         request_hash = request_fingerprint("agent-result", result=result)
         replay = self._replay(action_id, "agent-result-recorded", request_hash)
         if replay is not None:
@@ -249,7 +269,10 @@ class RunStore:
             raise CogitoError("Agent Result changed_paths do not match its commit range")
         if any(not _path_allowed(path, task.get("paths", [])) for path in actual_paths):
             raise CogitoError("Agent Result exceeds its task path responsibility")
-        return self.record("agent-result-recorded", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self._record_gate_event(
+            AgentResultRecordedEvent(type="agent-result-recorded", payload=payload), action_id,
+            request_hash=request_hash,
+        )
 
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)
@@ -334,8 +357,11 @@ class RunStore:
                 or recorded["check_hash"] != execution["check_hash"]
                 or recorded["effective_contract_hash"] != execution["effective_contract_hash"]):
             raise CogitoError("controlled-check evidence does not match its recorded attempt")
-        payload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
-        return self.record("check-evidence-recorded", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        payload: CheckEvidenceRecordedPayload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
+        return self._record_gate_event(
+            CheckEvidenceRecordedEvent(type="check-evidence-recorded", payload=payload), action_id,
+            request_hash=request_hash,
+        )
 
     def enter_correction(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("correction-start")
@@ -446,13 +472,16 @@ class RunStore:
         for source_head in decision.source_heads:
             self._git("merge-base", "--is-ancestor", source_head, commit_id)
         self._git("merge-base", "--is-ancestor", decision.previous_delivery_head, commit_id)
-        payload = {
+        payload: IntegrationCompletedPayload = {
             "commit_id": commit_id, "slice_id": slice_id or "mini-package",
             "task_ids": list(decision.task_ids), "source_heads": list(decision.source_heads),
             "previous_delivery_head": decision.previous_delivery_head,
         }
         validate_transition(self.workflow, current["state"], decision.event, payload, current["counters"], current["limits"])
-        return self.record(decision.event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self._record_gate_event(
+            IntegrationCompletedEvent(type=decision.event, payload=payload), action_id,
+            request_hash=request_hash,
+        )
 
     def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("amend", amendment=amendment)

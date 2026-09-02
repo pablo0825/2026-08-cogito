@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, cast
 
-from cogito_state_types import AgentResult, EvidenceLedgerEntry, RunState, TaskState
+from cogito_state_types import EvidenceLedgerEntry, RunState, TaskState
+from cogito_event_types import (
+    AgentResultRecordedPayload, CheckEvidenceRecordedPayload,
+    IntegrationCompletedPayload, TaskUpdatedPayload,
+)
 from cogito_common import CogitoError
 from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
@@ -50,11 +54,16 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             result = payload.get("result")
             if not isinstance(result, dict):
                 raise CogitoError("agent-result-recorded requires a structured result")
-            projection["agent_results"].append(cast(AgentResult, result))
+            result_payload = cast(AgentResultRecordedPayload, payload)
+            projection["agent_results"].append(result_payload["result"])
         elif event_type == "check-evidence-recorded":
             if not _required(payload, "check_id", "evidence_path", "evidence_hash"):
                 raise CogitoError("check-evidence-recorded is incomplete")
-            projection["evidence"][payload["evidence_path"]] = cast(EvidenceLedgerEntry, {**dict(payload), "event_sequence": item.get("sequence")})
+            evidence_payload = cast(CheckEvidenceRecordedPayload, payload)
+            entry: EvidenceLedgerEntry = {
+                **evidence_payload, "event_sequence": item.get("sequence"),
+            }
+            projection["evidence"][evidence_payload["evidence_path"]] = entry
         elif event_type == "technical-amendment-added":
             if projection.get("package_hash") is None or projection["state"] in workflow["terminal_states"]:
                 raise CogitoError("amendments require an approved package on an active run")
@@ -105,27 +114,28 @@ def _apply_task_update(projection: RunState, payload: Mapping[str, Any]) -> None
     }
     if payload["status"] not in allowed_status.get(before, set()):
         raise CogitoError(f"illegal task status transition: {before} -> {payload['status']}")
+    task_payload = cast(TaskUpdatedPayload, payload)
     prior_agent = projection["tasks"][task_id].get("agent_id")
-    if payload["status"] != "pending" and prior_agent and prior_agent != payload["agent_id"]:
+    if task_payload["status"] != "pending" and prior_agent and prior_agent != task_payload["agent_id"]:
         raise CogitoError("task lease belongs to a different agent")
     if before == "pending":
         for dependency in projection["tasks"][task_id].get("depends_on", []):
             predecessor: Mapping[str, Any] = projection["tasks"].get(dependency, {})
             if not dependency_satisfied(predecessor, projection["tasks"][task_id]):
                 raise CogitoError("cross-Slice dependencies must be integrated before dispatch")
-    updated = dict(projection["tasks"][task_id])
-    updated.update(payload)
-    if payload["status"] == "pending":
-        updated["released_by"] = payload["agent_id"]
+    updated = projection["tasks"][task_id].copy()
+    updated.update(task_payload)
+    if task_payload["status"] == "pending":
+        updated["released_by"] = task_payload["agent_id"]
         updated.pop("agent_id", None)
-    projection["tasks"][task_id] = cast(TaskState, updated)
+    projection["tasks"][task_id] = updated
     active_slices = {
         effective_slice_id(item) for item in projection["tasks"].values()
         if is_active_task(item)
     }
     if len(active_slices) > int(projection["max_workers"]):
         raise CogitoError("worker lease limit exceeded")
-    if payload["status"] == "leased" and any(
+    if task_payload["status"] == "leased" and any(
         key != task_id
         and effective_slice_id(item) == effective_slice_id(projection["tasks"][task_id])
         and is_active_task(item)
@@ -168,6 +178,7 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
             if projection["tasks"].get(task_id, missing_task).get("status") == "verified":
                 projection["tasks"][task_id]["status"] = "reviewed"
     elif event_type in {"slice-integration-complete", "wave-integration-complete", "integration-complete"}:
-        for task_id in payload.get("task_ids", []):
+        integration_payload = cast(IntegrationCompletedPayload, payload)
+        for task_id in integration_payload.get("task_ids", []):
             if projection["tasks"].get(task_id, missing_task).get("status") == "reviewed":
                 projection["tasks"][task_id]["status"] = "integrated"

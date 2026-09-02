@@ -55,6 +55,8 @@ Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快�
 
 純契約入口 `validate_package_with_limits(package, workflow_limits)`、`materialize_contract_with_limits(package, amendments, workflow_limits)` 與純 projection `project_events(events, workflow)` 都明確接收設定，不自行讀檔。`RunStore` 將已載入的 workflow limits 傳入驗證、runner 與結案流程。原本的 `validate_package()`、`materialize_contract()` 及省略 workflow 的 `reduce_events()` 保留為會載入預設設定的便利入口；JSON 格式與 hash 計算不變。
 
+`cogito_event_types.py` 描述 task update、Agent Result、check evidence 與三種 integration 事件的 payload，以 Literal 事件種類組成 `TypedGateEvent` union。Gate 產生端與 projection 消費端共用這些型別，靜態範例檢查缺欄位、非法 task status 與事件／payload 不匹配。型別只描述內部交接，不取代既有 runtime 驗證，也不改寫舊事件、擴充欄位或 hash。
+
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。

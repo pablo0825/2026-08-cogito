@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from cogito_common import CogitoError
+from cogito_event_types import IntegrationEvent
 from cogito_state_types import RunState
 from cogito_task_rules import effective_slice_id
-
-
-IntegrationEvent = Literal[
-    "slice-integration-complete", "wave-integration-complete", "integration-complete",
-]
 
 
 @dataclass(frozen=True)
