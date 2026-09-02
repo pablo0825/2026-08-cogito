@@ -6,12 +6,47 @@ import re
 from typing import Any, Mapping
 
 from cogito_common import CogitoError
+from cogito_contract_fields import (
+    RUN_ID_RE, require_array, require_choice, require_id, require_object,
+    require_string, require_strings, validate_document,
+)
 from cogito_scheduler import edge_pair
 
 
 def validate_project_graph(graph: Mapping[str, Any]) -> None:
-    if graph.get("schema_version") != "3.0" or not isinstance(graph.get("slices"), dict) or not isinstance(graph.get("dependencies"), list):
-        raise CogitoError("existing Project Graph is invalid")
+    """Validate consumed fields, retaining sparse views and extension metadata.
+
+    Missing optional Slice metadata and active_run_id are not filled in. Existing
+    render callers can still pass sparse graphs without altering their hashes.
+    """
+    require_object(graph, "Project Graph", "schema_version", "slices", "dependencies")
+    require_choice(graph["schema_version"], "Project Graph.schema_version", {"3.0"})
+    if graph.get("active_run_id") is not None:
+        require_string(graph["active_run_id"], "active_run_id", RUN_ID_RE)
+    slices = require_object(graph["slices"], "Project Graph.slices")
+    for slice_id, item in slices.items():
+        require_id(slice_id, "Slice id")
+        require_object(item, f"Slice {slice_id}")
+        if "kind" in item:
+            require_choice(item["kind"], "Slice.kind", {"feature", "change", "correction"})
+        if "disposition" in item:
+            require_choice(item["disposition"], "Slice.disposition", {"planned", "active", "accepted", "cancelled", "superseded"})
+        for key in ("dependencies", "lineage"):
+            if key in item:
+                require_strings(item[key], f"Slice.{key}")
+        for key in ("spec", "plan"):
+            if key in item:
+                validate_document(item[key], f"Slice.{key}")
+        if "introduced_by" in item:
+            require_string(item["introduced_by"], "Slice.introduced_by", RUN_ID_RE)
+        if item.get("completed_by") is not None:
+            require_string(item["completed_by"], "Slice.completed_by", RUN_ID_RE)
+    for edge in require_array(graph["dependencies"], "Project Graph.dependencies"):
+        require_object(edge, "Project Graph dependency", "from", "to")
+        for endpoint in (edge["from"], edge["to"]):
+            require_id(endpoint, "Project Graph dependency endpoint")
+            if endpoint not in slices:
+                raise CogitoError("Project Graph dependency references an unknown Slice")
 
 
 def render_project_graph_mermaid(graph: Mapping[str, Any]) -> str:
@@ -29,8 +64,6 @@ def render_project_graph_mermaid(graph: Mapping[str, Any]) -> str:
         label = str(slice_id).replace('"', "'")
         lines.append(f'    {safe}["{label}\\n{item.get("disposition", "unknown")}"]')
     for edge in graph["dependencies"]:
-        if edge.get("from") not in graph["slices"] or edge.get("to") not in graph["slices"]:
-            raise CogitoError("Project Graph dependency references an unknown Slice")
         source = re.sub(r"[^A-Za-z0-9_]", "_", str(edge.get("from", "")))
         target = re.sub(r"[^A-Za-z0-9_]", "_", str(edge.get("to", "")))
         if not source or not target:
@@ -40,9 +73,10 @@ def render_project_graph_mermaid(graph: Mapping[str, Any]) -> str:
 
 
 def formalize_project_graph(graph: Mapping[str, Any] | None, package: Mapping[str, Any], run_id: str) -> dict[str, Any]:
+    if graph is not None:
+        validate_project_graph(graph)
     result = dict(graph) if graph is not None else {"schema_version": "3.0", "active_run_id": None, "slices": {}, "dependencies": []}
     if graph is not None:
-        validate_project_graph(result)
         if result.get("active_run_id") not in (None, run_id):
             raise CogitoError("another Cogito run is active in Project Graph")
     result["slices"] = {key: dict(value) for key, value in result["slices"].items()}

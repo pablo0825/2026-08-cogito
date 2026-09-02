@@ -8,9 +8,8 @@ from typing import Any, Callable, Mapping, MutableMapping, Sequence
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
-    MAX_MAX_CHECK_OUTPUT_BYTES,
-    MIN_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
+    validate_project_policy,
 )
 from cogito_evidence_contract import validate_check_evidence
 
@@ -27,8 +26,7 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
         return
 
     project = load_json(policy_path)
-    if project.get("schema_version") != "3.0":
-        raise CogitoError("Project Policy schema_version must be 3.0")
+    validate_project_policy(project)
     if snapshot.get("hash") != hash_json(project):
         raise CogitoError("Package policy snapshot does not match current Project Policy")
     if snapshot["max_workers"] > int(project.get("max_workers", 3)):
@@ -38,13 +36,6 @@ def validate_policy(root: Path, package: Mapping[str, Any]) -> None:
     project_output_limit = project.get(
         "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES
     )
-    if (
-        type(project_output_limit) is not int
-        or not MIN_MAX_CHECK_OUTPUT_BYTES
-        <= project_output_limit
-        <= MAX_MAX_CHECK_OUTPUT_BYTES
-    ):
-        raise CogitoError("Project Policy max_check_output_bytes must be between 1 KiB and 100 MiB")
     if snapshot.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES) > project_output_limit:
         raise CogitoError("Package check output limit is looser than Project Policy")
 

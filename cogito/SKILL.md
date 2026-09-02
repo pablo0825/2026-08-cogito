@@ -51,7 +51,7 @@ preparing -> awaiting-shared-confirmation -> boundary-analysis
 | Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
 | 首次在舊專案處理能力 | [project-bootstrap.md](references/project-bootstrap.md) |
 
-不要預載其他 reference。Gate schema 與 workflow JSON 是機器契約；Markdown reference 解釋 Agent 應遵守的語意。
+不要預載其他 reference。Python executable contracts 是資料驗證規則的唯一來源，workflow JSON 定義狀態轉移；Markdown reference 解釋 Agent 應遵守的語意。JSON 是實際資料，不另維護手寫 JSON Schema。
 
 ## 權威資料
 

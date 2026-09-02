@@ -31,7 +31,8 @@ from cogito_gate_validation import (
     validate_review as validate_gate_review,
 )
 from cogito_projection import reduce_events
-from cogito_project_graph import formalize_project_graph
+from cogito_project_graph import formalize_project_graph, validate_project_graph
+from cogito_result_contract import validate_result
 from cogito_scheduler import edge_pair as _edge_pair, ready_tasks
 from cogito_workflow import load_workflow, validate_transition
 
@@ -532,6 +533,7 @@ class RunStore:
             if source["disposition"] in {"adopted", "updated"}:
                 allowed_control.add(source["path"])
         graph = _load_json(self.root / "docs" / "cogito" / "project-graph.json")
+        validate_project_graph(graph)
         if hash_json(graph) != current.get("project_graph_hash") or graph.get("active_run_id") != self.run_id or any(item["id"] not in graph.get("slices", {}) for item in package["slices"]):
             raise CogitoError("Project Graph is not formalized for this Package")
         dirty = []
@@ -583,6 +585,7 @@ class RunStore:
             self._git("merge-base", "--is-ancestor", package["baseline_commit"], head)
             if target != "finalizing":
                 graph = _load_json(self.root / "docs/cogito/project-graph.json")
+                validate_project_graph(graph)
                 if hash_json(graph) != current.get("project_graph_hash") or graph.get("active_run_id") != self.run_id:
                     raise CogitoError("Resume Gate Project Graph drifted")
             for task in current["tasks"].values():
@@ -638,7 +641,11 @@ class RunStore:
             raise CogitoError("completion report is only available for an accepted run")
         final_events = [item for item in read_events(self.events_path) if item["type"] == "finalization-complete"]
         final = final_events[-1]["payload"]
-        result = json.loads(self._git("show", f"{final['final_commit']}:{final['result_path']}"))
+        try:
+            result = json.loads(self._git("show", f"{final['final_commit']}:{final['result_path']}"))
+        except json.JSONDecodeError as exc:
+            raise CogitoError(f"committed Result is not valid JSON: {exc}") from exc
+        validate_result(result)
         return {
             "run_id": self.run_id, "status": "accepted", "final_commit": final["final_commit"],
             "checks": result["checks"], "reviews": result["reviews"], "amendments": result["amendments"],

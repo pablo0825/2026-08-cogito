@@ -46,10 +46,7 @@ class EvidenceAlreadyExists(CogitoError):
 
 def _redact(text: str, patterns: Sequence[str]) -> str:
     for pattern in patterns:
-        try:
-            text = re.sub(pattern, "[REDACTED]", text)
-        except re.error as exc:
-            raise CogitoError(f"invalid redaction pattern: {exc}") from exc
+        text = re.sub(pattern, "[REDACTED]", text)
     return text
 
 
@@ -66,12 +63,9 @@ def run_check(
     validate_check_environment(
         check, package["policy_snapshot"].get("allowed_environment", [])
     )
-    argv = check.get("argv")
-    if not isinstance(argv, list) or not argv or not all(isinstance(value, str) and value for value in argv):
-        raise CogitoError("check argv must be a non-empty string array")
-    timeout = int(check.get("timeout_seconds", 300))
-    if not 1 <= timeout <= 3600:
-        raise CogitoError("timeout_seconds must be between 1 and 3600")
+    # Package and Amendment checks passed the same executable check contract.
+    argv = check["argv"]
+    timeout = check.get("timeout_seconds", 300)
     cap = max(1024, min(int(output_cap), 1024 * 1024))
     worktree = Path(worktree).resolve()
     cwd = _safe_cwd(worktree, str(check.get("cwd", ".")))
@@ -97,8 +91,6 @@ def run_check(
     stdout = capture.stdout.decode("utf-8", errors="replace")
     stderr = capture.stderr.decode("utf-8", errors="replace")
     patterns = check.get("redact_patterns", [])
-    if not isinstance(patterns, list):
-        raise CogitoError("redact_patterns must be an array")
     stdout, stderr = _redact(stdout, patterns), _redact(stderr, patterns)
     post_binding = _working_tree_binding(worktree)
     worktree_changed = pre_binding["snapshot_hash"] != post_binding["snapshot_hash"]

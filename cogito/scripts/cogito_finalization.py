@@ -8,6 +8,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 from cogito_common import CogitoError
 from cogito_contracts import materialize_contract, package_hash
+from cogito_project_graph import validate_project_graph
+from cogito_result_contract import validate_result
 
 
 GitCommand = Callable[..., str]
@@ -38,28 +40,17 @@ def validate_finalization(
         "rev-parse", "HEAD"
     ) != final_commit:
         raise CogitoError("final commit must be current HEAD on the frozen delivery branch")
-    result = json.loads(git("show", f"{final_commit}:{result_rel.as_posix()}"))
-    graph = json.loads(git("show", f"{final_commit}:{graph_rel.as_posix()}"))
-
-    required_result = {
-        "schema_version", "run_id", "status", "package_hash", "effective_contract_hash",
-        "integration_commits", "slice_dispositions", "checks", "reviews", "amendments",
-        "human_gate", "remaining_risks",
-    }
-    if (
-        not isinstance(result, dict)
-        or not required_result <= result.keys()
-        or result.get("schema_version") != "3.0"
-    ):
-        raise CogitoError("final Result is structurally incomplete")
+    try:
+        result = json.loads(git("show", f"{final_commit}:{result_rel.as_posix()}"))
+        graph = json.loads(git("show", f"{final_commit}:{graph_rel.as_posix()}"))
+    except json.JSONDecodeError as exc:
+        raise CogitoError(f"finalization artifact is not valid JSON: {exc}") from exc
+    validate_result(result)
+    validate_project_graph(graph)
     if result.get("run_id") != run_id or result.get("package_hash") != package_hash(package):
         raise CogitoError("final Result is not bound to this run and Package")
     if result.get("effective_contract_hash") != state.get("effective_contract_hash"):
         raise CogitoError("final Result effective contract hash does not match the run")
-    if result.get("status") != "accepted" or any(
-        key in result for key in ("final_commit", "result_commit", "finalization_commit")
-    ):
-        raise CogitoError("Result must be accepted and must not self-reference its containing commit")
     if graph.get("active_run_id") is not None:
         raise CogitoError("final Project Graph must clear active_run_id")
 
@@ -130,10 +121,6 @@ def validate_finalization(
     }
     if not required_checks <= passed_checks:
         raise CogitoError("Result does not include passed evidence for every required check")
-    if not isinstance(result["remaining_risks"], list) or not isinstance(
-        result["integration_commits"], list
-    ):
-        raise CogitoError("Result risks and integration commits must be arrays")
     integration_commits = [
         item["payload"]["commit_id"]
         for item in events
