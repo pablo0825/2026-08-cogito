@@ -33,7 +33,7 @@ from cogito_gate_validation import (
 )
 from cogito_projection import reduce_events
 from cogito_project_graph import formalize_project_graph, validate_project_graph
-from cogito_result_contract import validate_result
+from cogito_run_queries import build_completion_report, derive_next_action
 from cogito_scheduler import ready_tasks, tasks_with_dependencies
 from cogito_workflow import load_workflow, validate_transition
 
@@ -744,7 +744,10 @@ class RunStore:
         return self.record("finalization-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
     def completion_report(self) -> dict[str, Any]:
-        current = self.load()
+        return self._load_completion_report(self.load())
+
+    def _load_completion_report(self, current: Mapping[str, Any]) -> dict[str, Any]:
+        """Read the Result from the recorded final commit, never the working copy."""
         if current["state"] != "accepted":
             raise CogitoError("completion report is only available for an accepted run")
         final_events = [item for item in read_events(self.events_path) if item["type"] == "finalization-complete"]
@@ -753,12 +756,7 @@ class RunStore:
             result = json.loads(self._git("show", f"{final['final_commit']}:{final['result_path']}"))
         except json.JSONDecodeError as exc:
             raise CogitoError(f"committed Result is not valid JSON: {exc}") from exc
-        validate_result(result)
-        return {
-            "run_id": self.run_id, "status": "accepted", "final_commit": final["final_commit"],
-            "checks": result["checks"], "reviews": result["reviews"], "amendments": result["amendments"],
-            "human_gate": result["human_gate"], "remaining_risks": result["remaining_risks"],
-        }
+        return build_completion_report(self.run_id, final["final_commit"], result)
 
     def _git(self, *args: str) -> str:
         return self._git_repo.run(*args)
@@ -838,33 +836,7 @@ class RunStore:
 
     def next_action(self) -> dict[str, Any]:
         projection = self.load()
-        state = projection["state"]
-        actions = {
-            "preparing": "draft-shared-understanding", "awaiting-shared-confirmation": "request-shared-confirmation",
-            "boundary-analysis": "run-boundary-gate", "package-preparing": "author-development-package",
-            "awaiting-package-approval": "request-package-approval", "start-gate": "validate-latest-baseline",
-            "executing": "dispatch-ready-workers", "verifying": "run-controlled-checks",
-            "technical-correction": "dispatch-in-scope-correction", "reviewing": "dispatch-independent-reviewer",
-            "review-fix": "dispatch-review-fix", "integrating": "integrate-serially",
-            "post-integration-verification": "run-post-integration-checks", "awaiting-human": "request-human-review",
-            "post-integration-correction": "dispatch-post-integration-correction",
-            "finalizing": "write-result-and-finalize", "blocked": "resolve-and-run-resume-gate",
-            "accepted": "report-completion", "cancelled": "report-cancellation",
-        }
-        if state not in actions:
-            raise CogitoError(f"no action is defined for state {state!r}")
-        output: dict[str, Any] = {"state": state, "next_action": actions[state]}
-        if state == "preparing" and projection["kind"] in {"maintenance", "documentation"}:
-            output["next_action"] = "assess-mini-package-eligibility"
-        if state == "executing":
-            tasks = list(projection["tasks"].values())
-            edges = [
-                {"from": dependency, "to": task["id"]}
-                for task in tasks for dependency in task.get("depends_on", [])
-            ]
-            output["ready_tasks"] = [item["id"] for item in ready_tasks(tasks, edges, projection["max_workers"])]
-            active_slices = {item.get("slice_id") or "mini-package" for item in tasks if item.get("status") in {"leased", "running"}}
-            output["worker_capacity"] = max(0, projection["max_workers"] - len(active_slices))
-        if state == "accepted":
-            output["report"] = self.completion_report()
+        output = derive_next_action(projection)
+        if projection["state"] == "accepted":
+            output["report"] = self._load_completion_report(projection)
         return output

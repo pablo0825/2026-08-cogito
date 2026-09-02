@@ -84,6 +84,17 @@ class GateSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.runtime = load("cogito_runtime")
 
+    def test_completion_report_rejects_unaccepted_runs_before_reading_history_or_git(self) -> None:
+        for state in ("executing", "finalizing", "cancelled"):
+            with self.subTest(state=state), mock.patch("cogito_run_store.read_events") as read_history:
+                store = self.runtime.RunStore.__new__(self.runtime.RunStore)
+                store.load = mock.Mock(return_value={"state": state})
+                store._git = mock.Mock()
+                with self.assertRaisesRegex(self.runtime.CogitoError, "only available for an accepted run"):
+                    store.completion_report()
+                read_history.assert_not_called()
+                store._git.assert_not_called()
+
     def test_invalid_preflight_does_not_pollute_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = self.runtime.RunStore(directory, "DEV-safe-001")

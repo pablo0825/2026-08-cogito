@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 COGITO = Path(__file__).resolve().parents[1]
@@ -205,6 +206,18 @@ class FeatureMultiSliceEndToEndTests(unittest.TestCase):
             self.assertEqual(report["status"], "accepted")
             self.assertEqual(report["final_commit"], final_commit)
             self.assertEqual({item["reviewer"] for item in report["reviews"]}, {"reviewer-a", "reviewer-b"})
+            # Later edits and commits must not replace the recorded delivery report.
+            (repo / f"docs/cogito/results/{run_id}.json").write_text("{invalid later result")
+            git(repo, "add", f"docs/cogito/results/{run_id}.json")
+            git(repo, "commit", "-qm", "later unrelated edit")
+            before = store.events_path.read_bytes()
+            with mock.patch.object(store, "load", wraps=store.load) as load_state:
+                self.assertEqual(store.next_action(), {
+                    "state": "accepted", "next_action": "report-completion", "report": report,
+                })
+                load_state.assert_called_once_with()
+            self.assertEqual(store.completion_report(), report)
+            self.assertEqual(store.events_path.read_bytes(), before)
 
     @staticmethod
     def _result(run_id: str, task_id: str, agent_id: str, role: str, base: str, head: str,
