@@ -34,7 +34,7 @@ from cogito_correction_rules import validate_correction_completion, validate_rev
 from cogito_delivery_scope import validate_committed_scope
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
-from cogito_evidence_binding import capture_index_and_worktree_trees
+from cogito_evidence_binding import capture_index_and_worktree_trees, working_tree_changed_paths
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
 from cogito_integration_rules import derive_integration_decision
@@ -250,7 +250,7 @@ class RunStore:
                 elif current["state"] == "executing":
                     completed = [item for item in current["agent_results"]
                                  if item["role"] == "implementer" and item["status"] == "complete"]
-                    predecessor = current["tasks"].get(completed[-1]["task_id"], {}) if completed else {}
+                    predecessor: Mapping[str, Any] = current["tasks"].get(completed[-1]["task_id"], {}) if completed else {}
                     expected_tree = predecessor.get("maintenance_end_tree", base_commit)
                     expected_index = predecessor.get("maintenance_end_index_tree", base_commit)
                     controls = {current.get("package_path"), "docs/cogito/project-graph.json"}
@@ -314,11 +314,7 @@ class RunStore:
 
             cumulative = (changed_paths(result["base_commit"], content_tree)
                           | changed_paths(result["base_commit"], index_tree))
-            live_paths: set[str] = set()
-            for options in ((), ("--cached",)):
-                live_paths.update(filter(None, self._git_at(
-                    worktree, *diff_options, *options, result["base_commit"], "--",
-                ).split("\0")))
+            live_paths = working_tree_changed_paths(worktree, result["base_commit"])
             live_paths = {path for path in live_paths if path not in control_paths and not path.startswith(".cogito/")}
             # A dirty submodule can differ without a representable tree delta.
             # Do not silently drop a path detected by Git's live comparison.

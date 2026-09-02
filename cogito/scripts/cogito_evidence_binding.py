@@ -7,8 +7,9 @@ import os
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from cogito_common import CogitoError, hash_json
 
@@ -24,8 +25,9 @@ def working_tree_content_tree(worktree: Path) -> str:
     return capture_index_and_worktree_trees(worktree)[1]
 
 
-def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
-    """Snapshot staging and working content using one private copy of the index."""
+@contextmanager
+def _private_index(worktree: Path) -> Iterator[tuple[dict[str, str], Path, os.stat_result]]:
+    """Let Git refresh index caches without touching the caller staging area."""
     try:
         index = subprocess.run(
             ["git", "-C", str(worktree), "rev-parse", "--git-path", "index"],
@@ -44,24 +46,44 @@ def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
                 shutil.copyfileobj(source, target)
             os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
             env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
-            index_tree = subprocess.run(
-                ["git", "-C", str(worktree), "write-tree"],
-                env=env, check=True, capture_output=True, text=True, timeout=30,
-            ).stdout.strip()
-            # write-tree may update its cache extension and mtime. Retain the
-            # source timestamp before add so racy-clean entries are rechecked.
-            os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
-            subprocess.run(
-                ["git", "-C", str(worktree), "add", "--all", "--", "."],
-                env=env, check=True, capture_output=True, timeout=30,
-            )
-            content_tree = subprocess.run(
-                ["git", "-C", str(worktree), "write-tree"],
-                env=env, check=True, capture_output=True, text=True, timeout=30,
-            ).stdout.strip()
-            return index_tree, content_tree
+            yield env, temporary_index, index_stat
     except (OSError, subprocess.SubprocessError) as exc:
         raise CogitoError(f"cannot snapshot working-tree content: {exc}") from exc
+
+
+def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
+    """Snapshot staging and working content using one private copy of the index."""
+    with _private_index(worktree) as (env, temporary_index, index_stat):
+        index_tree = subprocess.run(
+            ["git", "-C", str(worktree), "write-tree"],
+            env=env, check=True, capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        # write-tree may update its cache extension and mtime. Retain the
+        # source timestamp before add so racy-clean entries are rechecked.
+        os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
+        subprocess.run(
+            ["git", "-C", str(worktree), "add", "--all", "--", "."],
+            env=env, check=True, capture_output=True, timeout=30,
+        )
+        content_tree = subprocess.run(
+            ["git", "-C", str(worktree), "write-tree"],
+            env=env, check=True, capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        return index_tree, content_tree
+
+
+def working_tree_changed_paths(worktree: Path, base: str) -> set[str]:
+    """Include live submodule changes without letting diff refresh the real index."""
+    with _private_index(worktree) as (env, _, __):
+        paths: set[str] = set()
+        for options in ((), ("--cached",)):
+            output = subprocess.run(
+                ["git", "-C", str(worktree), "diff", "--name-only", "--no-renames",
+                 "--no-ext-diff", "--ignore-submodules=none", "-z", *options, base, "--"],
+                env=env, check=True, capture_output=True, text=True, timeout=30,
+            ).stdout
+            paths.update(filter(None, output.split("\0")))
+        return paths
 
 
 def safe_file(worktree: Path, relative: str) -> Path:

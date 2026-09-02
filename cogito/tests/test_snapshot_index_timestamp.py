@@ -10,6 +10,7 @@ from pathlib import Path
 
 from cogito_test_support import GitTestCase, git, init_repo
 from cogito_evidence_binding import working_tree_content_tree
+from cogito_evidence_binding import working_tree_changed_paths
 
 
 class SnapshotIndexTimestampTests(GitTestCase):
@@ -72,6 +73,19 @@ class SnapshotIndexTimestampTests(GitTestCase):
 
     def test_equal_size_timestamp_collision_captures_current_working_content(self) -> None:
         self.assert_racy_snapshot(self.repo)
+
+    def test_gate_live_diff_does_not_refresh_the_callers_index(self) -> None:
+        tracked = self.repo / "tracked.txt"
+        # The content matches HEAD again, but its stat data is different. Git
+        # diff normally refreshes these cached stat entries in the real index.
+        tracked.write_bytes(b"after\n\n")
+        tracked.write_bytes(b"before\n")
+        timestamp_ns = 1_700_000_000_000_000_000
+        os.utime(tracked, ns=(timestamp_ns, timestamp_ns))
+        index = self.index_path(self.repo)
+        before = (index.read_bytes(), index.stat().st_mtime_ns)
+        self.assertEqual(working_tree_changed_paths(self.repo, "HEAD"), set())
+        self.assertEqual((index.read_bytes(), index.stat().st_mtime_ns), before)
 
     def test_linked_worktree_timestamp_collision_preserves_its_own_index(self) -> None:
         linked = self.root / "linked"
