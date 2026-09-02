@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError, hash_json
 from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import package_hash
@@ -17,7 +18,7 @@ class FinalizationContext:
 
     run_id: str
     package: Mapping[str, Any]
-    state: Mapping[str, Any]
+    state: RunState
     events: Sequence[Mapping[str, Any]]
     result: Mapping[str, Any]
     graph: Mapping[str, Any]
@@ -32,7 +33,7 @@ def validate_final_content_changes(changed_paths: Sequence[str], metadata_paths:
 
 
 def validate_verification_snapshot(
-    evidence: Mapping[str, Any], ledger: Mapping[str, Any], effective_contract_hash: str,
+    evidence: Mapping[str, Any], ledger: Mapping[str, Any], effective_contract_hash: str | None,
 ) -> str:
     """Validate loaded evidence against the ledger and return its content tree."""
     validate_check_evidence(evidence)

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError, atomic_write_json, load_json
 from cogito_events import append_event, read_events
 from cogito_projection import reduce_events
@@ -16,7 +17,7 @@ class EventSnapshot:
     """History and state derived from the same read of the event log."""
 
     events: list[dict[str, Any]]
-    state: dict[str, Any]
+    state: RunState
 
 
 class EventRepository:
@@ -28,7 +29,7 @@ class EventRepository:
     def read(self) -> list[dict[str, Any]]:
         return read_events(self.events_path)
 
-    def project(self) -> dict[str, Any]:
+    def project(self) -> RunState:
         """Rebuild authoritative state without reading or repairing the cache."""
         return self.snapshot().state
 
@@ -37,7 +38,7 @@ class EventRepository:
         events = self.read()
         return EventSnapshot(events, reduce_events(events, self.workflow))
 
-    def refresh_cache(self, projection: Mapping[str, Any]) -> None:
+    def refresh_cache(self, projection: RunState) -> None:
         """Repair only disposable state; callers first validate any frozen artifacts."""
         try:
             cached = load_json(self.state_path)
@@ -52,12 +53,12 @@ class EventRepository:
                     "retry with the same action_id after resolving the storage error"
                 ) from exc
 
-    def create(self, event: Mapping[str, Any]) -> dict[str, Any]:
+    def create(self, event: Mapping[str, Any]) -> RunState:
         """Record the initial event after the coordinator creates the run directory."""
         append_event(self.events_path, event)
         return self._project_and_refresh()
 
-    def append(self, event: Mapping[str, Any], *, expected_previous_hash: str | None = None) -> dict[str, Any]:
+    def append(self, event: Mapping[str, Any], *, expected_previous_hash: str | None = None) -> RunState:
         """Validate against current history, append with CAS, then rebuild the cache.
 
         A failure after append can leave a committed event. Recovery must inspect
@@ -71,7 +72,7 @@ class EventRepository:
         append_event(self.events_path, event, expected)
         return self._project_and_refresh()
 
-    def _project_and_refresh(self) -> dict[str, Any]:
+    def _project_and_refresh(self) -> RunState:
         projection = self.project()
         self.refresh_cache(projection)
         return projection

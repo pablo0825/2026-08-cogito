@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, cast
 
+from cogito_state_types import AgentResult, EvidenceLedgerEntry, RunState, TaskState
 from cogito_common import CogitoError
 from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
@@ -13,9 +14,9 @@ def _required(payload: Mapping[str, Any], *keys: str) -> bool:
     return all(payload.get(key) not in (None, "", False, [], {}) for key in keys)
 
 
-def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any] | None = None) -> RunState:
     workflow = workflow or load_workflow()
-    projection: dict[str, Any] | None = None
+    projection: RunState | None = None
     for item in events:
         event_type = item.get("type")
         payload = item.get("payload", {})
@@ -44,11 +45,11 @@ def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, An
             result = payload.get("result")
             if not isinstance(result, dict):
                 raise CogitoError("agent-result-recorded requires a structured result")
-            projection["agent_results"].append(result)
+            projection["agent_results"].append(cast(AgentResult, result))
         elif event_type == "check-evidence-recorded":
             if not _required(payload, "check_id", "evidence_path", "evidence_hash"):
                 raise CogitoError("check-evidence-recorded is incomplete")
-            projection["evidence"][payload["evidence_path"]] = {**dict(payload), "event_sequence": item.get("sequence")}
+            projection["evidence"][payload["evidence_path"]] = cast(EvidenceLedgerEntry, {**dict(payload), "event_sequence": item.get("sequence")})
         elif event_type == "technical-amendment-added":
             if projection.get("package_hash") is None or projection["state"] in workflow["terminal_states"]:
                 raise CogitoError("amendments require an approved package on an active run")
@@ -57,7 +58,7 @@ def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, An
             for task in payload.get("amendment", {}).get("added_tasks", []):
                 if task["id"] in projection["tasks"]:
                     raise CogitoError("amendment task id already exists in run state")
-                projection["tasks"][task["id"]] = {**dict(task), "status": "pending"}
+                projection["tasks"][task["id"]] = cast(TaskState, {**dict(task), "status": "pending"})
         elif event_type in {"transient-retry", "format-repair-recorded"}:
             counter = "transient_retries" if event_type == "transient-retry" else "format_repairs"
             limit = int(projection["limits"][counter])
@@ -85,7 +86,7 @@ def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, An
     return projection
 
 
-def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -> None:
+def _apply_task_update(projection: RunState, payload: Mapping[str, Any]) -> None:
     if not _required(payload, "task_id", "status", "agent_id"):
         raise CogitoError("task-updated requires task_id, status and agent_id")
     task_id = payload["task_id"]
@@ -104,7 +105,7 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
         raise CogitoError("task lease belongs to a different agent")
     if before == "pending":
         for dependency in projection["tasks"][task_id].get("depends_on", []):
-            predecessor = projection["tasks"].get(dependency, {})
+            predecessor: Mapping[str, Any] = projection["tasks"].get(dependency, {})
             if not dependency_satisfied(predecessor, projection["tasks"][task_id]):
                 raise CogitoError("cross-Slice dependencies must be integrated before dispatch")
     updated = dict(projection["tasks"][task_id])
@@ -112,7 +113,7 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
     if payload["status"] == "pending":
         updated["released_by"] = payload["agent_id"]
         updated.pop("agent_id", None)
-    projection["tasks"][task_id] = updated
+    projection["tasks"][task_id] = cast(TaskState, updated)
     active_slices = {
         effective_slice_id(item) for item in projection["tasks"].values()
         if is_active_task(item)
@@ -128,7 +129,8 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
         raise CogitoError("a Slice may have only one active worker lease")
 
 
-def _apply_transition(projection: dict[str, Any], workflow: Mapping[str, Any], event_type: str, payload: Mapping[str, Any]) -> None:
+def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_type: str, payload: Mapping[str, Any]) -> None:
+    missing_task: Mapping[str, Any] = {}
     transition = validate_transition(workflow, projection["state"], event_type, payload, projection["counters"], projection["limits"])
     # Further findings belong to the same blocked interval. Its resume target
     # remains the state that preceded the first block, including during replay.
@@ -145,7 +147,7 @@ def _apply_transition(projection: dict[str, Any], workflow: Mapping[str, Any], e
         projection["max_workers"] = int(payload["max_workers"])
         projection["project_graph_hash"] = payload["project_graph_hash"]
         projection["limits"].update(payload["limits"])
-        projection["tasks"] = {item["id"]: {**dict(item), "status": "pending"} for item in payload.get("tasks", [])}
+        projection["tasks"] = {item["id"]: cast(TaskState, {**dict(item), "status": "pending"}) for item in payload.get("tasks", [])}
     elif event_type in {"package-ready", "mini-package-ready"}:
         projection["candidate_package_hash"] = payload.get("candidate_package_hash")
     elif event_type == "shared-understanding-ready":
@@ -158,9 +160,9 @@ def _apply_transition(projection: dict[str, Any], workflow: Mapping[str, Any], e
                 task["status"] = "verified"
     elif event_type == "review-approved":
         for task_id in payload.get("reviews", []):
-            if projection["tasks"].get(task_id, {}).get("status") == "verified":
+            if projection["tasks"].get(task_id, missing_task).get("status") == "verified":
                 projection["tasks"][task_id]["status"] = "reviewed"
     elif event_type in {"slice-integration-complete", "wave-integration-complete", "integration-complete"}:
         for task_id in payload.get("task_ids", []):
-            if projection["tasks"].get(task_id, {}).get("status") == "reviewed":
+            if projection["tasks"].get(task_id, missing_task).get("status") == "reviewed":
                 projection["tasks"][task_id]["status"] = "integrated"

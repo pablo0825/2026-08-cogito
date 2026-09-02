@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
+from cogito_state_types import AgentResult, RunState
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import (
@@ -79,7 +80,7 @@ def _validate_environment_policy(
 
 def derive_review_decision(
     package: Mapping[str, Any],
-    state: Mapping[str, Any],
+    state: RunState,
     *, review_exemption: bool = False,
 ) -> dict[str, Any]:
     """Return the current wave's Gate verdict without IO or input mutation.
@@ -104,10 +105,11 @@ def derive_review_decision(
     }
     if not expected:
         raise CogitoError("review approval requires completed implementation tasks")
-    latest: dict[str, Mapping[str, Any]] = {}
+    latest: dict[str, AgentResult] = {}
     for result in state["agent_results"]:
         if result.get("role") == "reviewer":
             latest[str(result.get("task_id"))] = result
+    missing_task: Mapping[str, Any] = {}
     closed = {
         result["task_id"]
         for result in latest.values()
@@ -115,9 +117,9 @@ def derive_review_decision(
         and result.get("status") == "complete"
         and result.get("requested_transition") == "review-approved"
         and result.get("reviewed_implementer")
-        == state["tasks"].get(result.get("task_id"), {}).get("agent_id")
+        == state["tasks"].get(result.get("task_id"), missing_task).get("agent_id")
         and result.get("agent_id")
-        != state["tasks"].get(result.get("task_id"), {}).get("agent_id")
+        != state["tasks"].get(result.get("task_id"), missing_task).get("agent_id")
     }
     if closed != expected:
         raise CogitoError(

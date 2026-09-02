@@ -39,6 +39,7 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 - `cogito_project_graph.py`：Project Graph 驗證及衍生圖。
 - `cogito_result_contract.py`、`cogito_evidence_contract.py`：Result 與 evidence 的純資料驗證；Git／event history 綁定另外由 Gate 驗證。
 - `cogito_projection.py`：Run state 由事件重建，不另讀取外部 Run Schema。
+- `cogito_state_types.py`：內部 RunState、TaskState、AgentResult 等型別，描述必填、選填與可為空值的欄位；不取代執行時驗證，也不轉換或補寫 JSON。
 
 驗證不做型別轉換、不補欄位、不排序、不移除擴充資料，因此不改既有 JSON 與 hash。保留既有 optional defaults、一般 artifacts 的擴充欄位、簡化 Graph metadata，以及 Result review 可省略 `outcome` 的行為；Amendment 與 evidence 繼續拒絕未知欄位。錯誤型別、非法 ID／路徑、無法執行的 check 定義改為提早回報 `CogitoError`。舊資料若含這些錯誤會被拒絕，不會自動改寫已核准文件；應修正草稿並重新核准，或依既有 correction／blocked 流程處理。
 
@@ -49,5 +50,7 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。
+
+核心狀態資料流另提供靜態型別檢查：在 repo 根目錄使用 mypy 1.20.2 執行 `python3 -m mypy --config-file cogito/mypy.ini`。範圍由設定檔列出，包含拒絕錯誤欄位與狀態值的靜態範例；尚未將全部 JSON 邊界與測試程式納入型別檢查。mypy 僅為開發工具，執行 Cogito 不需要安裝。
 
 維護時執行上述 Python 回歸測試；skill 格式驗證與 Agent 行為評測若另有工具，分別執行並回報結果，未執行的項目明確標示。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。

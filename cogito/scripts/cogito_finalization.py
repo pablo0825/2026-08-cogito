@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError, load_json
 from cogito_contracts import materialize_contract
 from cogito_project_graph import validate_project_graph
@@ -20,7 +21,7 @@ GitCommand = Callable[..., str]
 
 
 def validate_verified_content(
-    *, final_commit: str, evidence_paths: set[str], state: Mapping[str, Any],
+    *, final_commit: str, evidence_paths: set[str], state: RunState,
     metadata_paths: set[str], git: GitCommand,
 ) -> None:
     """Read immutable runner snapshots and compare their trees with delivery."""
@@ -42,7 +43,7 @@ def validate_finalization(
     *,
     run_id: str,
     package: Mapping[str, Any],
-    state: Mapping[str, Any],
+    state: RunState,
     load_events: Callable[[], Sequence[Mapping[str, Any]]],
     result_path: str,
     project_graph_path: str,

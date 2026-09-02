@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from cogito_state_types import RunState
 from cogito_common import (
     CogitoError, atomic_create_json, atomic_write_json, load_json,
 )
@@ -39,11 +40,11 @@ def restore_approval_permissions(package_path: Path) -> None:
 def publish_approval(
     artifacts: ApprovalArtifacts,
     *,
-    prior_state: Mapping[str, Any],
+    prior_state: RunState,
     workflow: Mapping[str, Any],
     load_events: Callable[[], Sequence[Mapping[str, Any]]],
-    record_approval: Callable[[], dict[str, Any]],
-) -> dict[str, Any]:
+    record_approval: Callable[[], RunState],
+) -> RunState:
     """Publish artifacts, record the commit point, and recover conservatively."""
     package_created = False
     graph_write_attempted = False

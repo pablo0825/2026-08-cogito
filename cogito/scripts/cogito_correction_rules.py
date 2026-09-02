@@ -4,18 +4,20 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError
 
 
-def _tasks_complete(state: Mapping[str, Any], task_ids: set[str]) -> bool:
+def _tasks_complete(state: RunState, task_ids: set[str]) -> bool:
+    missing_task: Mapping[str, Any] = {}
     return all(
-        state["tasks"].get(task_id, {}).get("status") == "complete"
+        state["tasks"].get(task_id, missing_task).get("status") == "complete"
         for task_id in task_ids
     )
 
 
 def _results_bind_commit(
-    state: Mapping[str, Any], task_ids: set[str], commit_id: str,
+    state: RunState, task_ids: set[str], commit_id: str,
 ) -> bool:
     results = [
         item for item in state["agent_results"]
@@ -30,7 +32,7 @@ def _results_bind_commit(
 
 
 def validate_correction_completion(
-    state: Mapping[str, Any], events: Sequence[Mapping[str, Any]],
+    state: RunState, events: Sequence[Mapping[str, Any]],
     amendment_id: str, commit_id: str,
 ) -> set[str]:
     """Bind completion to the opened correction and return its added task IDs.
@@ -62,7 +64,7 @@ def validate_correction_completion(
 
 
 def validate_review_fix_completion(
-    state: Mapping[str, Any], events: Sequence[Mapping[str, Any]],
+    state: RunState, events: Sequence[Mapping[str, Any]],
     amendment_id: str, commit_id: str,
 ) -> None:
     """Require a new amendment and completed tasks for the latest review finding.

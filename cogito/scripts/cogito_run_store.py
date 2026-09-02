@@ -8,12 +8,13 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence, cast
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError, atomic_create_json, hash_json, load_json
 from cogito_approval import ApprovalArtifacts, publish_approval, restore_approval_permissions
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
@@ -72,17 +73,18 @@ class RunStore:
         self.workflow = dict(workflow or load_workflow())
         self._events = EventRepository(self.events_path, self.state_path, self.workflow)
 
-    def create(self, kind: str) -> dict[str, Any]:
+    def create(self, kind: str) -> RunState:
         if self.events_path.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
         self.run_dir.mkdir(parents=True, exist_ok=False)
         return self._events.create({"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
 
-    def load(self) -> dict[str, Any]:
+    def load(self) -> RunState:
         """Validate authoritative state and repair its disposable cache if needed."""
         projection = self._events.project()
-        if projection.get("package_path"):
-            package_path = self.root / projection["package_path"]
+        relative_package_path = projection.get("package_path")
+        if relative_package_path:
+            package_path = self.root / relative_package_path
             package = _load_json(package_path)
             validate_package(package)
             if package_hash(package) != projection["package_hash"]:
@@ -90,7 +92,7 @@ class RunStore:
         self._events.refresh_cache(projection)
         return projection
 
-    def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> dict[str, Any]:
+    def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> RunState:
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
         request_hash = request_hash or request_fingerprint("record", event=event_type, payload=payload)
@@ -102,7 +104,7 @@ class RunStore:
             "action_id": action_id, "request_hash": request_hash,
         }, expected_previous_hash=expected_previous_hash)
 
-    def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
+    def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("transition", event=event, payload=payload)
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
@@ -131,17 +133,18 @@ class RunStore:
     def approved_package(self) -> dict[str, Any]:
         return self._approved_package_from_state(self.load())
 
-    def _approved_package_from_state(self, state: Mapping[str, Any]) -> dict[str, Any]:
+    def _approved_package_from_state(self, state: RunState) -> dict[str, Any]:
         """Read and validate the frozen Package referenced by a captured state."""
-        if not state.get("package_path"):
+        package_path = state.get("package_path")
+        if not package_path:
             raise CogitoError("run has no approved Package")
-        package = _load_json(self.root / state["package_path"])
+        package = _load_json(self.root / package_path)
         validate_package(package)
         if package_hash(package) != state["package_hash"]:
             raise CogitoError("approved Package hash mismatch")
         return package
 
-    def prepare_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
+    def prepare_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("prepare-package", draft=draft)
         replay = self._replay(action_id, {"mini-package-ready", "package-ready"}, request_hash)
         if replay is not None:
@@ -165,7 +168,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def update_task(self, task_id: str, status: str, agent_id: str, action_id: str | None = None) -> dict[str, Any]:
+    def update_task(self, task_id: str, status: str, agent_id: str, action_id: str | None = None) -> RunState:
         payload = {"task_id": task_id, "status": status, "agent_id": agent_id}
         request_hash = request_fingerprint("task", **payload)
         replay = self._replay(action_id, "task-updated", request_hash)
@@ -196,7 +199,7 @@ class RunStore:
             payload.update({"worktree": str(worktree), "branch": branch, "base_commit": base_commit})
         return self.record("task-updated", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def submit_agent_result(self, result: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
+    def submit_agent_result(self, result: Mapping[str, Any], action_id: str | None = None) -> RunState:
         payload = {"result": dict(result)}
         request_hash = request_fingerprint("agent-result", result=result)
         replay = self._replay(action_id, "agent-result-recorded", request_hash)
@@ -238,7 +241,7 @@ class RunStore:
             raise CogitoError("Agent Result exceeds its task path responsibility")
         return self.record("agent-result-recorded", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> dict[str, Any]:
+    def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)
         replay = self._replay(action_id, "verification-passed", request_hash)
         if replay is not None:
@@ -257,7 +260,7 @@ class RunStore:
             request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
         )
 
-    def run_controlled_check(self, check_id: str, worktree: str | Path, action_id: str) -> dict[str, Any]:
+    def run_controlled_check(self, check_id: str, worktree: str | Path, action_id: str) -> RunState:
         if not action_id:
             raise CogitoError("controlled check requires a stable action_id")
         supplied_worktree = Path(worktree).resolve()
@@ -277,7 +280,7 @@ class RunStore:
     def _capture_controlled_check(
         self, check_id: str, supplied_worktree: Path, action_id: str,
         request_hash: str, started_path: Path,
-    ) -> dict[str, Any]:
+    ) -> RunState:
         package = self.approved_package()
         state = self.load()
         if state["state"] == "post-integration-verification":
@@ -324,7 +327,7 @@ class RunStore:
         payload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
         return self.record("check-evidence-recorded", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def enter_correction(self, action_id: str | None = None) -> dict[str, Any]:
+    def enter_correction(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("correction-start")
         replay = self._replay(action_id, {"verification-correction-required", "post-verification-correction-required"}, request_hash)
         if replay is not None:
@@ -349,7 +352,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def complete_correction(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> dict[str, Any]:
+    def complete_correction(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("correction-complete", amendment_id=amendment_id, commit_id=commit_id)
         payload = {"scope_within_contract": True, "amendment_id": amendment_id, "commit_id": commit_id}
         replay = self._replay(action_id, {"technical-correction-complete", "post-integration-correction-complete"}, request_hash)
@@ -373,7 +376,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def enter_review_fix(self, action_id: str | None = None) -> dict[str, Any]:
+    def enter_review_fix(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("review-fix-start")
         replay = self._replay(action_id, "review-fix-required", request_hash)
         if replay is not None:
@@ -389,7 +392,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "review-fix-required", payload, current["counters"], current["limits"])
         return self.record("review-fix-required", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def complete_review_fix(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> dict[str, Any]:
+    def complete_review_fix(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("review-fix-complete", amendment_id=amendment_id, commit_id=commit_id)
         payload = {"scope_within_contract": True, "amendment_id": amendment_id, "commit_id": commit_id}
         replay = self._replay(action_id, "review-fix-complete", request_hash)
@@ -406,7 +409,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "review-fix-complete", payload, current["counters"], current["limits"])
         return self.record("review-fix-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> dict[str, Any]:
+    def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("retry", kind=kind, reason=reason)
         event = {"transient": "transient-retry", "format": "format-repair-recorded"}.get(kind)
         if event is None or not reason.strip():
@@ -417,7 +420,7 @@ class RunStore:
             return replay
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def complete_integration(self, commit_id: str, slice_id: str | None = None, action_id: str | None = None) -> dict[str, Any]:
+    def complete_integration(self, commit_id: str, slice_id: str | None = None, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("integrate", commit_id=commit_id, slice_id=slice_id)
         replay = self._replay(action_id, {"slice-integration-complete", "wave-integration-complete", "integration-complete"}, request_hash)
         if replay is not None:
@@ -453,7 +456,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"], current["limits"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
+    def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("amend", amendment=amendment)
         replay = self._replay(action_id, "technical-amendment-added", request_hash)
         if replay is not None:
@@ -482,7 +485,7 @@ class RunStore:
             action_id, self._GATE_AUTHORITY, request_hash=request_hash,
         )
 
-    def approve_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
+    def approve_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("approve", draft=draft)
         relative = Path("docs") / "cogito" / "packages" / f"{self.run_id}.json"
         target = self.root / relative
@@ -520,7 +523,7 @@ class RunStore:
             ),
         )
 
-    def start_gate(self, action_id: str | None = None) -> dict[str, Any]:
+    def start_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("start")
         replay = self._replay(action_id, "start-gate-passed", request_hash)
         if replay is not None:
@@ -562,7 +565,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
         return self.record("start-gate-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def decide_post_verification(self, passed_evidence: Sequence[Mapping[str, Any]], reviewer_escalation: bool = False, action_id: str | None = None) -> dict[str, Any]:
+    def decide_post_verification(self, passed_evidence: Sequence[Mapping[str, Any]], reviewer_escalation: bool = False, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("post-verify", evidence=passed_evidence, reviewer_escalation=reviewer_escalation)
         replay = self._replay(action_id, {"human-review-required", "auto-accept-ready"}, request_hash)
         if replay is not None:
@@ -590,7 +593,7 @@ class RunStore:
             request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
         )
 
-    def resume_gate(self, action_id: str | None = None) -> dict[str, Any]:
+    def resume_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("resume")
         replay = self._replay(action_id, "resume", request_hash)
         if replay is not None:
@@ -619,7 +622,8 @@ class RunStore:
                     if not worktree.is_dir() or self._git_at(worktree, "branch", "--show-current") != task.get("branch"):
                         raise CogitoError("Resume Gate found a drifted active worker lease")
                     worker_head = self._git_at(worktree, "rev-parse", "HEAD")
-                    self._git("merge-base", "--is-ancestor", task.get("base_commit"), worker_head)
+                    # Active leases were recorded with a validated base commit.
+                    self._git("merge-base", "--is-ancestor", cast(str, task.get("base_commit")), worker_head)
                     recorded = [item for item in current["agent_results"] if item.get("task_id") == task.get("id")]
                     if recorded and worker_head != recorded[-1].get("head_commit"):
                         raise CogitoError("Resume Gate worker HEAD differs from its recorded Result")
@@ -630,7 +634,7 @@ class RunStore:
         reconciliation = hash_json({"target": target, "head": self._git("rev-parse", "HEAD"), "event_hash": current["last_event_hash"]})
         return self.record("resume", {"target": target, "validated": True, "reconciliation_hash": reconciliation}, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def approve_human_gate(self, action_id: str | None = None) -> dict[str, Any]:
+    def approve_human_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("human-approve")
         replay = self._replay(action_id, "human-approved", request_hash)
         if replay is not None:
@@ -640,7 +644,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "human-approved", payload, current["counters"])
         return self.record("human-approved", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
-    def finalize(self, result_path: str, project_graph_path: str, final_commit: str, action_id: str | None = None) -> dict[str, Any]:
+    def finalize(self, result_path: str, project_graph_path: str, final_commit: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("finalize", result_path=result_path, project_graph_path=project_graph_path, final_commit=final_commit)
         replay = self._replay(action_id, "finalization-complete", request_hash)
         if replay is not None:
@@ -665,7 +669,7 @@ class RunStore:
     def completion_report(self) -> dict[str, Any]:
         return self._load_completion_report(self.load())
 
-    def _load_completion_report(self, current: Mapping[str, Any]) -> dict[str, Any]:
+    def _load_completion_report(self, current: RunState) -> dict[str, Any]:
         """Read the Result from the recorded final commit, never the working copy."""
         if current["state"] != "accepted":
             raise CogitoError("completion report is only available for an accepted run")
@@ -709,7 +713,7 @@ class RunStore:
         if actual != expected:
             raise CogitoError(f"Package content hash drifted: {relative}")
 
-    def _replay(self, action_id: str | None, event_type: str | set[str], request_hash: str) -> dict[str, Any] | None:
+    def _replay(self, action_id: str | None, event_type: str | set[str], request_hash: str) -> RunState | None:
         if not action_id:
             return None
         pending = self.run_dir / "check-actions" / hash_json(action_id) / "request.json"

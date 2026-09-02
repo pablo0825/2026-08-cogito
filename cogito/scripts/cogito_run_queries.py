@@ -5,13 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
+from cogito_state_types import RunState
 from cogito_common import CogitoError
 from cogito_result_contract import validate_result
 from cogito_scheduler import ready_tasks
 from cogito_task_rules import effective_slice_id, is_active_task
 
 
-def derive_next_action(projection: Mapping[str, Any]) -> dict[str, Any]:
+def derive_next_action(projection: RunState) -> dict[str, Any]:
     """Describe the next step; the caller attaches committed data for accepted runs."""
     state = projection["state"]
     actions = {
