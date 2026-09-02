@@ -11,12 +11,12 @@ import unittest
 from pathlib import Path
 
 
-from cogito_test_support import SCRIPTS, git, init_repo, minimal_package
+from cogito_test_support import GitTestCase, SCRIPTS, git, init_repo, minimal_package
 
 RUNNER = SCRIPTS / "cogito_runner.py"
 
 
-class ControlledRunnerContractTests(unittest.TestCase):
+class ControlledRunnerContractTests(GitTestCase):
     def prepare_repo(self, root: Path) -> tuple[Path, str]:
         repo = root / "repo"
         repo.mkdir()

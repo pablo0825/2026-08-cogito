@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from cogito_test_support import GitTestCase, init_repo
 from cogito_common import CogitoError, hash_json
 from cogito_evidence_binding import working_tree_binding
 from cogito_finalization import validate_final_content_changes, validate_verified_content
@@ -55,17 +56,16 @@ class VerificationSnapshotRulesTests(unittest.TestCase):
                 self.assertEqual((evidence, ledger), before)
 
 
-class FinalizationContentTests(unittest.TestCase):
+class FinalizationContentTests(GitTestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repo"
         self.repo.mkdir()
         self.git = GitRepository(self.repo).run
-        self.git("init", "-q", "-b", "main")
-        self.git("config", "user.email", "cogito@example.invalid")
-        self.git("config", "user.name", "Cogito Test")
+        init_repo(self.repo)
         self.git("config", "core.filemode", "true")
         (self.repo / "product.bin").write_bytes(b"before\x00\xff\n")
         (self.repo / ".gitignore").write_text("ignored.txt\n")
@@ -187,9 +187,8 @@ class FinalizationContentTests(unittest.TestCase):
     def test_legacy_evidence_is_rejected_before_leaving_post_verification(self) -> None:
         with self.assertRaisesRegex(CogitoError, "rerun controlled checks"):
             validate_evidence(
-                {}, [valid_evidence()], [],
-                lambda: self.fail("legacy evidence must fail before loading the ledger"),
-                self.root, load_current_head=lambda: self.fail("must not query Git"),
+                {}, [valid_evidence()], [], {}, {},
+                effective_contract={}, phase="post-integration", current_head="b" * 40,
             )
 
     def test_tampered_evidence_is_rejected(self) -> None:

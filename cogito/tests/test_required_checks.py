@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from cogito_common import CogitoError, atomic_write_json, hash_json
 from cogito_contracts import package_hash, validate_amendment, validate_package
-from cogito_gate_validation import validate_evidence, validate_policy
+from cogito_event_repository import EventSnapshot
+from cogito_gate_validation import validate_policy
 from cogito_run_store import RunStore
 from cogito_test_support import minimal_package
 
@@ -77,7 +78,11 @@ class RequiredChecksTests(unittest.TestCase):
         self.package["policy_snapshot"]["required_checks"] = ["C-1"]
         self.package["checks"][0]["required"] = False
         with self.assertRaisesRegex(CogitoError, "policy snapshot.*optional.*C-1"):
-            validate_evidence(self.package, [], [], lambda: {}, self.root / "run")
+            store = RunStore(self.root, self.package["run_id"])
+            store._validate_evidence(
+                self.package, [], snapshot=EventSnapshot([], {"evidence": {}}),
+                phase="implementation",
+            )
         with self.assertRaisesRegex(CogitoError, "policy snapshot.*optional.*C-1"):
             validate_amendment(self.package, [], {
                 "id": "TA-1", "reason": "extra check",

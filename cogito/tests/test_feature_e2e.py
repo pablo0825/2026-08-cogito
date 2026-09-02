@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 
-from cogito_test_support import git, init_repo
+from cogito_test_support import GitTestCase, git, init_repo
 import cogito_runtime as runtime
 
 
@@ -19,7 +19,7 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-class FeatureMultiSliceEndToEndTests(unittest.TestCase):
+class FeatureMultiSliceEndToEndTests(GitTestCase):
     def test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted(self) -> None:
         self._run_feature()
 

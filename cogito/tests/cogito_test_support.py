@@ -2,14 +2,50 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 COGITO = Path(__file__).resolve().parents[1]
 SCRIPTS = COGITO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+
+
+@contextmanager
+def isolated_git_environment():
+    """Isolate this test and its product subprocesses; restore the caller on exit.
+
+    Tests run sequentially in this process. Removing all inherited GIT_* values
+    also prevents repository paths and command-line config from escaping into
+    temporary repositories. Tests can still set explicit overrides inside this
+    context when they need to exercise environment handling.
+    """
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment.update({
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+    with mock.patch.dict(os.environ, environment, clear=True):
+        yield
+
+
+class GitTestCase(unittest.TestCase):
+    """Base for tests that create repositories or invoke product Git processes."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        context = isolated_git_environment()
+        context.__enter__()
+        self.addCleanup(context.__exit__, None, None, None)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -19,10 +55,13 @@ def git(repo: Path, *args: str) -> str:
 
 
 def init_repo(repo: Path, *, branch: str = "main") -> None:
-    """Initialize an existing directory without creating fixture files or commits."""
-    git(repo, "init", "-q", "-b", branch)
+    """Initialize inside GitTestCase/isolated_git_environment, without commits."""
+    git(repo, "init", "-q", "--template=", "-b", branch)
     git(repo, "config", "user.email", "cogito@example.invalid")
     git(repo, "config", "user.name", "Cogito Test")
+    git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "config", "tag.gpgsign", "false")
+    git(repo, "config", "core.hooksPath", os.devnull)
 
 
 def minimal_package() -> dict:

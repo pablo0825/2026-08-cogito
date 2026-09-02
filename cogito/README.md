@@ -44,7 +44,9 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 
 已移除的六份 `schemas/*.schema.json` 可由 Git 歷史取回；外部工具若曾直接依賴它們，需改用 Python contract。方案 A 不提供 Schema generator；若未來有明確需求，再從單一可描述的 Python 模型衍生，不能從任意驗證函式猜測生成。
 
-執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。
+證據驗證由 Gate 一次取得同一份事件歷史與狀態快照，讀取必要的不可變 evidence，再交給純資料規則判斷；整合前與整合後階段明確指定。寫入驗證結果時會比對快照的事件版本，若歷史已變更則拒絕並要求以相同 action_id 重試。整合後驗證的 evidence 與事件使用同一個 HEAD，寫入前再次確認 HEAD 未變更。
+
+執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。
 

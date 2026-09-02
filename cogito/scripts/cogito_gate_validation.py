@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
-    materialize_contract,
     validate_project_policy,
     validate_required_checks,
 )
@@ -131,28 +130,40 @@ def validate_evidence(
     package: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
     events: Sequence[Mapping[str, Any]],
-    load_ledger: Callable[[], Mapping[str, Any]],
-    run_dir: Path,
-    load_current_head: Callable[[], str] | None = None,
+    ledger: Mapping[str, Mapping[str, Any]],
+    recorded_evidence: Mapping[str, Mapping[str, Any]],
+    *,
+    effective_contract: Mapping[str, Any],
+    phase: Literal["implementation", "post-integration"],
+    current_head: str | None = None,
 ) -> None:
-    """Validate controlled-runner evidence against its contract and event cycle."""
+    """Validate loaded evidence against one contract, ledger, and event snapshot.
+
+    The caller materializes the contract and checks file existence/containment.
+    Both loaded mappings use each supplied evidence_path's original string as
+    their key; canonical path lookup belongs to the caller. No inputs are mutated.
+    """
+    if phase not in {"implementation", "post-integration"}:
+        raise CogitoError("evidence phase must be implementation or post-integration")
+    post_integration = phase == "post-integration"
+    if post_integration and (
+        not isinstance(current_head, str) or not GIT_OBJECT_RE.fullmatch(current_head)
+    ):
+        raise CogitoError("post-integration evidence requires a valid current HEAD")
     for item in evidence:
         validate_check_evidence(item)
-        if load_current_head is not None:
+        if post_integration:
             tree = item["worktree_binding"].get("content_tree")
             if not isinstance(tree, str) or not GIT_OBJECT_RE.fullmatch(tree):
                 raise CogitoError("post-integration evidence lacks a content tree; rerun controlled checks")
-    prior = [
-        item["payload"]["amendment"]
-        for item in events
-        if item["type"] == "technical-amendment-added"
-    ]
-    effective = materialize_contract(package, prior)
-    required = {item["id"]: item for item in effective["checks"] if item.get("required", True)}
+    required = {
+        item["id"]: item for item in effective_contract["checks"]
+        if item.get("required", True)
+    }
     supplied = {item.get("check_id"): item for item in evidence}
     anchors = (
         {"integration-complete", "post-integration-correction-complete"}
-        if load_current_head is not None
+        if post_integration
         else {"implementation-complete", "technical-correction-complete", "review-fix-complete"}
     )
     anchor_sequence = max(
@@ -161,23 +172,18 @@ def validate_evidence(
     if set(required) - set(supplied):
         raise CogitoError("required verification evidence is missing")
 
-    evidence_root = (run_dir / "evidence").resolve()
     for check_id, check in required.items():
         item = supplied[check_id]
-        evidence_path = Path(str(item.get("evidence_path", ""))).resolve()
-        try:
-            evidence_path.relative_to(evidence_root)
-        except ValueError as exc:
-            raise CogitoError(f"evidence path is outside this run for {check_id}") from exc
-        if not evidence_path.is_file():
+        evidence_path = item["evidence_path"]
+        if evidence_path not in recorded_evidence:
             raise CogitoError(f"immutable evidence file is missing for {check_id}")
-        recorded = load_json(evidence_path)
+        recorded = recorded_evidence[evidence_path]
         validate_check_evidence(recorded)
         if recorded != item:
             raise CogitoError(
                 f"evidence payload does not match its immutable file for {check_id}"
             )
-        entry = load_ledger().get("evidence", {}).get(str(evidence_path))
+        entry = ledger.get(evidence_path)
         if (
             not entry
             or entry.get("evidence_hash") != hash_json(recorded)
@@ -191,7 +197,7 @@ def validate_evidence(
         if (
             item.get("passed") is not True
             or item.get("check_hash") != hash_json(check)
-            or item.get("effective_contract_hash") != effective["effective_contract_hash"]
+            or item.get("effective_contract_hash") != effective_contract["effective_contract_hash"]
         ):
             raise CogitoError(f"evidence binding failed for {check_id}")
         expected_output_limit = package["policy_snapshot"].get(
@@ -218,7 +224,7 @@ def validate_evidence(
             or binding.get("head_commit") != item.get("head_commit")
         ):
             raise CogitoError(f"evidence worktree stability binding failed for {check_id}")
-        if load_current_head is not None and item.get("head_commit") != load_current_head():
+        if post_integration and item.get("head_commit") != current_head:
             raise CogitoError(
                 f"post-integration evidence is not bound to current HEAD for {check_id}"
             )

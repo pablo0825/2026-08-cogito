@@ -19,20 +19,19 @@ from cogito_common import CogitoError
 from cogito_events import append_event, read_events
 from cogito_git import GitRepository
 from cogito_run_store import RunStore
-from cogito_test_support import package
+from cogito_test_support import GitTestCase, init_repo, package
 
 
-class ActionReplayTests(unittest.TestCase):
+class ActionReplayTests(GitTestCase):
     def setUp(self) -> None:
+        super().setUp()
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.repo = self.root / "repo"
         self.repo.mkdir()
         self.git = GitRepository(self.repo).run
-        self.git("init", "-q", "-b", "main")
-        self.git("config", "user.email", "cogito@example.invalid")
-        self.git("config", "user.name", "Cogito Test")
+        init_repo(self.repo)
         (self.repo / ".gitignore").write_text(".cogito/\ndocs/cogito/packages/\n")
         (self.repo / "note.txt").write_text("before\n")
         self.git("add", ".")

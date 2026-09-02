@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
 from cogito_common import CogitoError, atomic_write_json, load_json
 from cogito_events import append_event, read_events
 from cogito_projection import reduce_events
+
+
+@dataclass(frozen=True)
+class EventSnapshot:
+    """History and state derived from the same read of the event log."""
+
+    events: list[dict[str, Any]]
+    state: dict[str, Any]
 
 
 class EventRepository:
@@ -21,7 +30,12 @@ class EventRepository:
 
     def project(self) -> dict[str, Any]:
         """Rebuild authoritative state without reading or repairing the cache."""
-        return reduce_events(self.read(), self.workflow)
+        return self.snapshot().state
+
+    def snapshot(self) -> EventSnapshot:
+        """Collect one authoritative view without repairing the state cache."""
+        events = self.read()
+        return EventSnapshot(events, reduce_events(events, self.workflow))
 
     def refresh_cache(self, projection: Mapping[str, Any]) -> None:
         """Repair only disposable state; callers first validate any frozen artifacts."""
@@ -43,15 +57,17 @@ class EventRepository:
         append_event(self.events_path, event)
         return self._project_and_refresh()
 
-    def append(self, event: Mapping[str, Any]) -> dict[str, Any]:
+    def append(self, event: Mapping[str, Any], *, expected_previous_hash: str | None = None) -> dict[str, Any]:
         """Validate against current history, append with CAS, then rebuild the cache.
 
         A failure after append can leave a committed event. Recovery must inspect
         authoritative history rather than treating cache failure as rollback.
         """
         existing = self.read()
-        reduce_events([*existing, dict(event)], self.workflow)
         expected = existing[-1]["event_hash"] if existing else "0" * 64
+        if expected_previous_hash is not None and expected != expected_previous_hash:
+            raise CogitoError("event history changed during validation; retry with the same action_id")
+        reduce_events([*existing, dict(event)], self.workflow)
         append_event(self.events_path, event, expected)
         return self._project_and_refresh()
 

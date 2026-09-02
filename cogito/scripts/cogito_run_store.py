@@ -8,7 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -24,7 +24,7 @@ from cogito_contracts import (
     validate_package,
 )
 from cogito_events import read_events
-from cogito_event_repository import EventRepository
+from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
@@ -77,6 +77,7 @@ class RunStore:
         return self._events.create({"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
 
     def load(self) -> dict[str, Any]:
+        """Validate authoritative state and repair its disposable cache if needed."""
         projection = self._events.project()
         if projection.get("package_path"):
             package_path = self.root / projection["package_path"]
@@ -87,7 +88,7 @@ class RunStore:
         self._events.refresh_cache(projection)
         return projection
 
-    def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None) -> dict[str, Any]:
+    def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> dict[str, Any]:
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
         request_hash = request_hash or request_fingerprint("record", event=event_type, payload=payload)
@@ -97,7 +98,7 @@ class RunStore:
         return self._events.append({
             "type": event_type, "payload": dict(payload),
             "action_id": action_id, "request_hash": request_hash,
-        })
+        }, expected_previous_hash=expected_previous_hash)
 
     def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
         request_hash = request_fingerprint("transition", event=event, payload=payload)
@@ -126,7 +127,10 @@ class RunStore:
         return self.record(event, payload, action_id, request_hash=request_hash)
 
     def approved_package(self) -> dict[str, Any]:
-        state = self.load()
+        return self._approved_package_from_state(self.load())
+
+    def _approved_package_from_state(self, state: Mapping[str, Any]) -> dict[str, Any]:
+        """Read and validate the frozen Package referenced by a captured state."""
         if not state.get("package_path"):
             raise CogitoError("run has no approved Package")
         package = _load_json(self.root / state["package_path"])
@@ -237,14 +241,19 @@ class RunStore:
         replay = self._replay(action_id, "verification-passed", request_hash)
         if replay is not None:
             return replay
-        current = self.load()
+        snapshot = self._events.snapshot()
+        current = snapshot.state
         if current["state"] != "verifying":
             raise CogitoError("verification closure is not legal in the current state")
-        package = self.approved_package()
-        self._validate_evidence(package, evidence)
+        package = self._approved_package_from_state(current)
+        self._events.refresh_cache(current)
+        self._validate_evidence(package, evidence, snapshot=snapshot, phase="implementation")
         payload = {"passed": True, "evidence": [item["evidence_path"] for item in evidence]}
         validate_transition(self.workflow, current["state"], "verification-passed", payload, current["counters"])
-        return self.record("verification-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self.record(
+            "verification-passed", payload, action_id, self._GATE_AUTHORITY,
+            request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
+        )
 
     def run_controlled_check(self, check_id: str, worktree: str | Path, action_id: str) -> dict[str, Any]:
         if not action_id:
@@ -579,17 +588,28 @@ class RunStore:
         replay = self._replay(action_id, {"human-review-required", "auto-accept-ready"}, request_hash)
         if replay is not None:
             return replay
-        current = self.load()
+        snapshot = self._events.snapshot()
+        current = snapshot.state
         if current["state"] != "post-integration-verification":
             raise CogitoError("post-verification decision is not legal in the current state")
-        package = self.approved_package()
-        self._validate_evidence(package, passed_evidence, require_current_head=True)
+        package = self._approved_package_from_state(current)
+        self._events.refresh_cache(current)
+        current_head = self._git("rev-parse", "HEAD")
+        self._validate_evidence(
+            package, passed_evidence, snapshot=snapshot,
+            phase="post-integration", current_head=current_head,
+        )
         human = package["human_gate"]
         human_required = bool(reviewer_escalation or human.get("high_risk_hotspots") or any(item["applicable"] for item in human["predicates"]))
         event = "human-review-required" if human_required else "auto-accept-ready"
-        payload = {"passed": True, "human_required": human_required, "evidence": [item["evidence_path"] for item in passed_evidence], "reviewer_escalation": bool(reviewer_escalation), "delivery_head": self._git("rev-parse", "HEAD")}
+        payload = {"passed": True, "human_required": human_required, "evidence": [item["evidence_path"] for item in passed_evidence], "reviewer_escalation": bool(reviewer_escalation), "delivery_head": current_head}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
-        return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        if self._git("rev-parse", "HEAD") != current_head:
+            raise CogitoError("delivery HEAD changed during verification; retry with the same action_id")
+        return self.record(
+            event, payload, action_id, self._GATE_AUTHORITY,
+            request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
+        )
 
     def resume_gate(self, action_id: str | None = None) -> dict[str, Any]:
         request_hash = request_fingerprint("resume")
@@ -745,13 +765,43 @@ class RunStore:
     def _validate_policy(self, package: Mapping[str, Any]) -> None:
         validate_gate_policy(self.root, package)
 
-    def _validate_evidence(self, package: Mapping[str, Any], evidence: Sequence[Mapping[str, Any]], require_current_head: bool = False) -> None:
-        events = read_events(self.events_path)
-        load_current_head = (
-            (lambda: self._git("rev-parse", "HEAD")) if require_current_head else None
-        )
+    def _validate_evidence(
+        self, package: Mapping[str, Any], evidence: Sequence[Mapping[str, Any]], *,
+        snapshot: EventSnapshot, phase: Literal["implementation", "post-integration"],
+        current_head: str | None = None,
+    ) -> None:
+        """Collect immutable files for pure rules using the operation's snapshot.
+
+        Resolve paths only here; the rules receive records and ledger entries
+        keyed by the original supplied path, preserving evidence hashes.
+        """
+        for item in evidence:
+            validate_check_evidence(item)
+        prior = [item["payload"]["amendment"] for item in snapshot.events if item["type"] == "technical-amendment-added"]
+        effective = materialize_contract(package, prior)
+        required = {check["id"] for check in effective["checks"] if check.get("required", True)}
+        supplied = {item["check_id"]: item for item in evidence}
+        if required - supplied.keys():
+            raise CogitoError("required verification evidence is missing")
+        evidence_root = (self.run_dir / "evidence").resolve()
+        recorded_evidence = {}
+        ledger = {}
+        for check_id in sorted(required):
+            original_path = supplied[check_id]["evidence_path"]
+            path = Path(original_path).resolve()
+            try:
+                path.relative_to(evidence_root)
+            except ValueError as exc:
+                raise CogitoError(f"evidence path is outside this run for {check_id}") from exc
+            if not path.is_file():
+                raise CogitoError(f"immutable evidence file is missing for {check_id}")
+            recorded_evidence[original_path] = _load_json(path)
+            entry = snapshot.state.get("evidence", {}).get(str(path))
+            if entry is not None:
+                ledger[original_path] = entry
         validate_gate_evidence(
-            package, evidence, events, self.load, self.run_dir, load_current_head
+            package, evidence, snapshot.events, ledger, recorded_evidence,
+            effective_contract=effective, phase=phase, current_head=current_head,
         )
 
     def next_action(self) -> dict[str, Any]:

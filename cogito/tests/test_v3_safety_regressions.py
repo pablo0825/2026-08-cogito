@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 
-from cogito_test_support import git, init_repo, package
+from cogito_test_support import GitTestCase, git, init_repo, package
 import cogito_common as common
 import cogito_gate_validation as validation
 import cogito_runner as runner
@@ -95,16 +95,18 @@ class GateSafetyTests(unittest.TestCase):
                 store.transition("review-fix-required", {"scope_within_contract": True})
 
     def test_missing_evidence_fails_before_loading_ledger_or_git(self) -> None:
+        from cogito_event_repository import EventSnapshot
         with tempfile.TemporaryDirectory() as directory:
-            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-            store.run_dir = Path(directory)
-            store.events_path = Path(directory) / "events.jsonl"
+            store = self.runtime.RunStore(directory, "DEV-missing-evidence")
             store.load = lambda: self.fail("missing evidence must not load the ledger")
             store._git = lambda *_args: self.fail("missing evidence must not query Git")
             with self.assertRaisesRegex(
                 self.runtime.CogitoError, "required verification evidence is missing"
             ):
-                store._validate_evidence(package(), [], require_current_head=True)
+                store._validate_evidence(
+                    package(), [], snapshot=EventSnapshot([], {"evidence": {}}),
+                    phase="post-integration", current_head="a" * 40,
+                )
 
     def test_invalid_evidence_shape_fails_before_loading_ledger(self) -> None:
         with self.assertRaisesRegex(
@@ -114,8 +116,7 @@ class GateSafetyTests(unittest.TestCase):
                 package(),
                 [{"check_id": "C-1", "status": "banana"}],
                 [],
-                lambda: self.fail("invalid evidence must not load the ledger"),
-                Path("/must-not-be-read"),
+                {}, {}, effective_contract={}, phase="implementation",
             )
 
     def test_legacy_evidence_without_executable_contract_fields_is_rejected(self) -> None:
@@ -156,7 +157,8 @@ class GateSafetyTests(unittest.TestCase):
                 self.runtime.CogitoError, "check evidence is missing fields"
             ):
                 validation.validate_evidence(
-                    value, [item], [], lambda: ledger, run_dir
+                    value, [item], [], ledger["evidence"], {str(evidence_path): item},
+                    effective_contract=effective, phase="implementation",
                 )
 
     def test_gate_rejects_evidence_from_a_changed_worktree(self) -> None:
@@ -218,13 +220,21 @@ class GateSafetyTests(unittest.TestCase):
                 self.runtime.CogitoError, "passed check evidence contains"
             ):
                 validation.validate_evidence(
-                    value, [item], [], lambda: ledger, run_dir
+                    value, [item], [], ledger["evidence"], {str(evidence_path): item},
+                    effective_contract=effective, phase="implementation",
                 )
 
     def test_frozen_human_predicate_cannot_be_disabled_by_event_payload(self) -> None:
-        store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-        store.load = lambda: {"state": "post-integration-verification", "counters": {}}
-        store.approved_package = lambda: package()
+        from cogito_event_repository import EventSnapshot
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        store = self.runtime.RunStore(temporary.name, "DEV-human-predicate")
+        store._events = mock.Mock()
+        store._events.snapshot.return_value = EventSnapshot([], {
+            "state": "post-integration-verification", "counters": {},
+            "last_event_hash": "b" * 64,
+        })
+        store._approved_package_from_state = lambda _state: package()
         store._validate_evidence = lambda _package, _evidence, **_kwargs: None
         store._git = lambda *_args: "a" * 40
         store.workflow = self.runtime.load_workflow()
@@ -273,8 +283,9 @@ class GateSafetyTests(unittest.TestCase):
             store.finalize("docs/cogito/results/DEV-safe-001.json", "docs/cogito/project-graph.json", "f" * 40)
 
 
-class PackageApprovalAndRunnerTests(unittest.TestCase):
+class PackageApprovalAndRunnerTests(GitTestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.runtime = runtime
         self.runner = runner
 
@@ -456,7 +467,7 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             self.assertNotEqual(clean["worktree_snapshot_hash"], dirty["worktree_snapshot_hash"])
 
 
-class MaintenanceEndToEndTests(unittest.TestCase):
+class MaintenanceEndToEndTests(GitTestCase):
     def test_single_commit_maintenance_auto_finalizes_and_reports(self) -> None:
         self._run_maintenance()
 

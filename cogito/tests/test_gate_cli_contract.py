@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cogito_test_support import COGITO, git, init_repo, minimal_package
+from cogito_test_support import GitTestCase, COGITO, git, init_repo, minimal_package
 from cogito_common import hash_json
 from cogito_contracts import package_hash
 
@@ -18,7 +18,7 @@ from cogito_contracts import package_hash
 GATE = COGITO / "scripts" / "cogito_gate.py"
 
 
-class GateCliContractTests(unittest.TestCase):
+class GateCliContractTests(GitTestCase):
     def test_amendment_validation_returns_hash_only_for_a_valid_history(self) -> None:
         package = minimal_package()
         prior = {"id": "TA-1", "reason": "add check", "added_checks": [{"id": "C-2", "argv": ["python3", "-V"]}]}
