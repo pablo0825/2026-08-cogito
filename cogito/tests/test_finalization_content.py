@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import tempfile
@@ -15,9 +16,43 @@ if str(SCRIPTS) not in sys.path:
 from cogito_common import CogitoError, hash_json
 from cogito_evidence_binding import working_tree_binding
 from cogito_finalization import validate_final_content_changes, validate_verified_content
+from cogito_finalization_rules import validate_verification_snapshot
 from cogito_git import GitRepository
 from cogito_gate_validation import validate_evidence
 from test_evidence_contract import valid_evidence
+
+
+class VerificationSnapshotRulesTests(unittest.TestCase):
+    def snapshot(self, tree="c" * 40) -> dict:
+        evidence = valid_evidence()
+        binding = {} if tree is None else {"content_tree": tree}
+        digest = hash_json(binding)
+        evidence["worktree_binding"] = {**binding, "snapshot_hash": digest}
+        for field in ("tree_hash", "worktree_snapshot_hash", "pre_worktree_snapshot_hash", "post_worktree_snapshot_hash"):
+            evidence[field] = digest
+        return evidence
+
+    def test_loaded_snapshot_returns_its_tree_without_changing_inputs(self) -> None:
+        evidence = self.snapshot()
+        ledger = {"evidence_hash": hash_json(evidence)}
+        before = copy.deepcopy((evidence, ledger))
+        self.assertEqual(validate_verification_snapshot(evidence, ledger, evidence["effective_contract_hash"]), "c" * 40)
+        self.assertEqual((evidence, ledger), before)
+
+    def test_snapshot_rejects_tampering_contract_drift_and_missing_tree_without_io(self) -> None:
+        for case in ("ledger", "contract", "binding", "failed", "missing-tree", "invalid-tree"):
+            with self.subTest(case=case):
+                evidence = self.snapshot(None if case == "missing-tree" else "invalid" if case == "invalid-tree" else "c" * 40)
+                expected_hash = evidence["effective_contract_hash"]
+                if case == "binding":
+                    evidence["worktree_binding"]["content_tree"] = "f" * 40
+                if case == "failed":
+                    evidence.update({"passed": False, "status": "failed", "exit_code": 1})
+                ledger = {"evidence_hash": "0" * 64 if case == "ledger" else hash_json(evidence)}
+                before = copy.deepcopy((evidence, ledger))
+                with self.assertRaises(CogitoError):
+                    validate_verification_snapshot(evidence, ledger, "0" * 64 if case == "contract" else expected_hash)
+                self.assertEqual((evidence, ledger), before)
 
 
 class FinalizationContentTests(unittest.TestCase):
