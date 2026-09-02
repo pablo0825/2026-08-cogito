@@ -104,7 +104,7 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
     if before == "pending":
         for dependency in projection["tasks"][task_id].get("depends_on", []):
             predecessor = projection["tasks"].get(dependency, {})
-            same_slice = predecessor.get("slice_id") == projection["tasks"][task_id].get("slice_id")
+            same_slice = (predecessor.get("slice_id") or "mini-package") == (projection["tasks"][task_id].get("slice_id") or "mini-package")
             allowed = {"complete", "verified", "reviewed", "integrated"} if same_slice else {"integrated"}
             if predecessor.get("status") not in allowed:
                 raise CogitoError("cross-Slice dependencies must be integrated before dispatch")

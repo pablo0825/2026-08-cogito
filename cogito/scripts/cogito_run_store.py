@@ -34,7 +34,7 @@ from cogito_gate_validation import (
 from cogito_projection import reduce_events
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_result_contract import validate_result
-from cogito_scheduler import edge_pair as _edge_pair, ready_tasks
+from cogito_scheduler import ready_tasks, tasks_with_dependencies
 from cogito_workflow import load_workflow, validate_transition
 
 _load_json = load_json
@@ -195,7 +195,12 @@ class RunStore:
             else:
                 worktree, branch = self._task_worktree(task, package)
             base_commit = self._git_at(worktree, "rev-parse", "HEAD")
-            prior_heads = [item["head_commit"] for item in current["agent_results"] if item.get("role") == "implementer" and current["tasks"].get(item.get("task_id"), {}).get("slice_id") == task.get("slice_id")]
+            task_slice = task.get("slice_id") or "mini-package"
+            prior_heads = [
+                item["head_commit"] for item in current["agent_results"]
+                if item.get("role") == "implementer"
+                and (current["tasks"].get(item.get("task_id"), {}).get("slice_id") or "mini-package") == task_slice
+            ]
             expected_base = prior_heads[-1] if prior_heads and current["state"] != "post-integration-correction" else self._git("rev-parse", "HEAD")
             if base_commit != expected_base:
                 raise CogitoError("a Slice worktree must start from the latest delivery HEAD")
@@ -488,6 +493,17 @@ class RunStore:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
         prior = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
         validate_amendment(package, prior, amendment)
+        # Correction tasks must finish before verification/integration can resume.
+        # A cross-Slice predecessor cannot reach integrated inside this cycle.
+        added_tasks = amendment.get("added_tasks", [])
+        tasks = dict(state["tasks"])
+        tasks.update({task["id"]: {**task, "status": "pending"} for task in added_tasks})
+        for task in added_tasks:
+            for dependency in task.get("depends_on", []):
+                predecessor = tasks[dependency]
+                same_slice = (predecessor.get("slice_id") or "mini-package") == task["slice_id"]
+                if not same_slice and predecessor.get("status") != "integrated":
+                    raise CogitoError("amendment cross-Slice dependencies must already be integrated")
         digest = effective_contract_hash(package, [*prior, amendment])
         payload = {"amendment": dict(amendment), "effective_contract_hash": digest}
         return self.record(
@@ -517,11 +533,7 @@ class RunStore:
         self._validate_policy(package)
         digest = package_hash(package)
         package["package_hash"] = digest
-        dependencies: dict[str, list[str]] = {item["id"]: [] for item in package["execution_dag"]["tasks"]}
-        for edge in package["execution_dag"]["edges"]:
-            source, target_task = _edge_pair(edge)
-            dependencies[target_task].append(source)
-        tasks = [{**dict(item), "depends_on": dependencies[item["id"]]} for item in package["execution_dag"]["tasks"]]
+        tasks = tasks_with_dependencies(package["execution_dag"])
         current = self.load()
         if current["state"] != "awaiting-package-approval":
             raise CogitoError("Package approval is not legal in the current state")

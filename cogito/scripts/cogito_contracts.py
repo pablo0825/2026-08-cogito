@@ -15,7 +15,7 @@ from cogito_contract_fields import (
     require_object, require_path, require_paths, require_string, require_strings,
     safe_repo_path, validate_document,
 )
-from cogito_scheduler import edge_pair, ready_tasks
+from cogito_scheduler import ready_tasks, slice_dependencies, tasks_with_dependencies
 from cogito_workflow import load_workflow
 
 
@@ -157,9 +157,14 @@ def _validate_execution_dag(package: Mapping[str, Any], mini: bool) -> None:
         for endpoint in ends:
             require_id(endpoint, "DAG endpoint")
     ready_tasks(dag["tasks"], dag["edges"])
+    for task, derived in zip(dag["tasks"], tasks_with_dependencies(dag)):
+        if "depends_on" in task and set(task["depends_on"]) != set(derived["depends_on"]):
+            raise CogitoError("task.depends_on must match execution_dag.edges")
     slice_ids = {item["id"] for item in package["slices"]}
     slice_paths = {item["id"]: item["worker"]["allowed_paths"] for item in package["slices"]}
     for task in dag["tasks"]:
+        if mini and task.get("slice_id") not in (None, "mini-package"):
+            raise CogitoError("Mini Package tasks use slice_id mini-package or omit it")
         if any(not path_allowed(path, package["approved_paths"]) for path in task.get("paths", [])):
             raise CogitoError("task paths must stay within approved_paths")
         if not mini and task.get("slice_id") not in slice_ids:
@@ -167,12 +172,7 @@ def _validate_execution_dag(package: Mapping[str, Any], mini: bool) -> None:
         if not mini and any(not path_allowed(path, slice_paths[task["slice_id"]]) for path in task.get("paths", [])):
             raise CogitoError("task path exceeds its Slice worker responsibility")
     if not mini:
-        task_slices = {task["id"]: task["slice_id"] for task in dag["tasks"]}
-        slice_edges = sorted({
-            (task_slices[source], task_slices[target])
-            for source, target in map(edge_pair, dag["edges"])
-            if task_slices[source] != task_slices[target]
-        })
+        slice_edges = sorted(slice_dependencies(dag))
         ready_tasks(
             [{"id": slice_id, "slice_id": slice_id, "status": "pending"} for slice_id in slice_ids],
             [{"from": source, "to": target} for source, target in slice_edges],
@@ -368,6 +368,23 @@ def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, 
         existing_tasks.add(task["id"])
     if any(not path_allowed(str(path), package["approved_paths"]) for path in amendment.get("path_fixes", [])):
         raise CogitoError("amendment path_fixes must stay within approved paths")
+    effective = {**package, "execution_dag": _amended_execution_dag(package, [*prior, amendment])}
+    _validate_execution_dag(effective, package["kind"] in {"maintenance", "documentation"})
+    if slice_dependencies(effective["execution_dag"]) != slice_dependencies(package["execution_dag"]):
+        raise CogitoError("amendment cannot change approved Slice dependencies")
+
+
+def _amended_execution_dag(package: Mapping[str, Any], amendments: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Translate append-only task prerequisites into the effective DAG edge model."""
+    dag = json.loads(json.dumps(package["execution_dag"]))
+    for amendment in amendments:
+        added = json.loads(json.dumps(amendment.get("added_tasks", [])))
+        dag["tasks"].extend(added)
+        dag["edges"].extend(
+            {"from": dependency, "to": task["id"]}
+            for task in added for dependency in task.get("depends_on", [])
+        )
+    return dag
 
 
 def effective_contract_hash(package: Mapping[str, Any], amendments: Sequence[Mapping[str, Any]]) -> str:
@@ -386,8 +403,8 @@ def materialize_contract(package: Mapping[str, Any], amendments: Sequence[Mappin
     for amendment in amendments:
         validate_amendment(package, validated, amendment)
         effective["checks"].extend(json.loads(json.dumps(amendment.get("added_checks", []))))
-        effective["execution_dag"]["tasks"].extend(json.loads(json.dumps(amendment.get("added_tasks", []))))
         validated.append(amendment)
+    effective["execution_dag"] = _amended_execution_dag(package, amendments)
     effective["effective_contract_hash"] = effective_contract_hash(package, amendments)
     return effective
 

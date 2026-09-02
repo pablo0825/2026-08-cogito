@@ -15,6 +15,22 @@ def edge_pair(edge: Any) -> tuple[str, str]:
     raise CogitoError("each DAG edge must contain from and to")
 
 
+def tasks_with_dependencies(dag: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Derive runtime prerequisites from validated DAG edges without changing input."""
+    dependencies: dict[str, list[str]] = {task["id"]: [] for task in dag["tasks"]}
+    for source, target in map(edge_pair, dag["edges"]):
+        if source not in dependencies[target]:
+            dependencies[target].append(source)
+    return [{**task, "depends_on": dependencies[task["id"]]} for task in dag["tasks"]]
+
+
+def slice_dependencies(dag: Mapping[str, Any]) -> set[tuple[str, str]]:
+    """Collapse task edges into the Slice dependencies frozen at approval."""
+    slices = {task["id"]: task.get("slice_id") or "mini-package" for task in dag["tasks"]}
+    return {(slices[source], slices[target]) for source, target in map(edge_pair, dag["edges"])
+            if slices[source] != slices[target]}
+
+
 def ready_tasks(tasks: Sequence[Mapping[str, Any]], edges: Sequence[Any], max_workers: int = 3) -> list[dict[str, Any]]:
     if not 1 <= max_workers <= 3:
         raise CogitoError("max_workers must be between 1 and 3")
@@ -50,7 +66,7 @@ def ready_tasks(tasks: Sequence[Mapping[str, Any]], edges: Sequence[Any], max_wo
 
     def dependency_ready(source: str, target: str) -> bool:
         source_task, target_task = by_id[source], by_id[target]
-        if source_task.get("slice_id") == target_task.get("slice_id"):
+        if (source_task.get("slice_id") or "mini-package") == (target_task.get("slice_id") or "mini-package"):
             return source_task.get("status") in {"complete", "verified", "reviewed", "integrated"}
         return source_task.get("status") == "integrated"
 

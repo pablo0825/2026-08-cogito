@@ -176,6 +176,22 @@ class ActionReplayTests(unittest.TestCase):
         self.assert_conflict(self.store.complete_correction, "TA-other", commit, "corrected")
         self.assert_conflict(self.store.complete_correction, "TA-1", self.head, "corrected")
 
+    def test_invalid_amendment_dependencies_do_not_append_events(self) -> None:
+        def added(task_id, dependencies):
+            return {"id": task_id, "slice_id": "mini-package", "paths": ["note.txt"], "depends_on": dependencies}
+
+        before = self.store.events_path.read_bytes()
+        for tasks in ([added("T-2", ["missing"])], [added("T-2", ["T-2"])],
+                      [added("T-2", ["T-3"]), added("T-3", ["T-2"])]):
+            with self.subTest(tasks=tasks), self.assertRaises(CogitoError):
+                self.store.add_amendment({"id": "TA-1", "reason": "fix", "added_tasks": tasks}, "amend")
+            self.assertEqual(self.store.events_path.read_bytes(), before)
+        # A rejected request did not consume this ID; a valid dependency can run.
+        self.store.add_amendment({"id": "TA-1", "reason": "fix", "added_tasks": [added("T-2", ["T-1"])]}, "amend")
+        self.store.enter_correction("correct")
+        state = self.store.update_task("T-2", "leased", "worker", "lease-fix")
+        self.assertEqual(state["tasks"]["T-2"]["status"], "leased")
+
     def test_review_fix_replay_binds_amendment_and_commit(self) -> None:
         pre = self.evidence("check")
         self.store.complete_verification([pre], "verify")
@@ -186,7 +202,7 @@ class ActionReplayTests(unittest.TestCase):
         self.store.enter_review_fix("fix-start")
         self.assert_replay(self.store.enter_review_fix, "fix-start")
         self.store.add_amendment({"id": "TA-1", "reason": "review finding", "added_tasks": [
-            {"id": "T-2", "slice_id": "mini-package", "paths": ["note.txt"]},
+            {"id": "T-2", "slice_id": "mini-package", "paths": ["note.txt"], "depends_on": ["T-1"]},
         ]}, "amend")
         self.store.update_task("T-2", "leased", "worker", "lease-fix")
         self.store.update_task("T-2", "running", "worker", "run-fix")
