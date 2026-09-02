@@ -128,7 +128,9 @@ def _apply_task_update(projection: dict[str, Any], payload: Mapping[str, Any]) -
 
 def _apply_transition(projection: dict[str, Any], workflow: Mapping[str, Any], event_type: str, payload: Mapping[str, Any]) -> None:
     transition = validate_transition(workflow, projection["state"], event_type, payload, projection["counters"], projection["limits"])
-    if transition["to"] == "blocked":
+    # Further findings belong to the same blocked interval. Its resume target
+    # remains the state that preceded the first block, including during replay.
+    if transition["to"] == "blocked" and projection["state"] != "blocked":
         projection["blocked_from"] = projection["state"]
     projection["state"] = transition["to"]
     if transition.get("counter"):

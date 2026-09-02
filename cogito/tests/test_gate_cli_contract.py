@@ -135,6 +135,24 @@ class GateCliContractTests(unittest.TestCase):
             self.assertEqual(available["ready_tasks"], ["T-004"])
             self.invoke(repo, "task", "--run-id", run_id, "--task-id", "T-004", "--status", "leased", "--agent-id", "worker-4", "--action-id", "lease-4")
             self.invoke(repo, "transition", "--run-id", run_id, "--event", "block", "--payload-json", '{"reason":"transient"}', "--action-id", "block-1")
+            additional_block = ("transition", "--run-id", run_id, "--event", "block",
+                                "--payload-json", '{"reason":"another finding"}', "--action-id", "block-2")
+            blocked = json.loads(self.invoke(repo, *additional_block).stdout)["data"]
+            self.assertEqual(blocked["blocked_from"], "executing")
+            events_path = repo / ".cogito/runs" / run_id / "events.jsonl"
+            events_before = events_path.read_bytes()
+            self.assertEqual(json.loads(self.invoke(repo, *additional_block).stdout)["data"], blocked)
+            self.assertEqual(events_path.read_bytes(), events_before)
+            # Older versions cached the second block as the origin. Only repair
+            # this disposable cache; both historical reasons must stay intact.
+            state_path = events_path.with_name("state.json")
+            state_path.write_text(json.dumps({**blocked, "blocked_from": "blocked"}))
+            restored = json.loads(self.invoke(repo, "status", "--run-id", run_id).stdout)["data"]
+            self.assertEqual(restored["blocked_from"], "executing")
+            self.assertEqual(json.loads(state_path.read_text()), restored)
+            self.assertEqual(events_path.read_bytes(), events_before)
+            block_reasons = [event["payload"]["reason"] for event in map(json.loads, events_before.splitlines()) if event["type"] == "block"]
+            self.assertEqual(block_reasons, ["transient", "another finding"])
             skipped = self.invoke(repo, "resume", "--run-id", run_id, "--target", "finalizing", "--action-id", "skip-1", ok=False)
             self.assertNotEqual(skipped.returncode, 0)
             resumed = self.invoke(repo, "resume", "--run-id", run_id, "--action-id", "resume-1")

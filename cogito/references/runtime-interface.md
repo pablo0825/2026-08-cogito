@@ -14,7 +14,7 @@ Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 
 
 Package 的 `stop_conditions` 由 Coordinator 在派工、驗證與狀態推進前，依目前證據逐項判讀。條件是否成立或證據是否足夠，不由 Gate 的欄位驗證代為決定。Gate 強制執行的是已實作的狀態轉移、重試上限、路徑、hash、DAG 與 evidence 等規則。
 
-停止條件成立或無法排除時，Coordinator 先停止新的派工與流程推進，記錄條件 ID、觀察與證據位置。若 Gate 能載入 run、通過既有 Package 與儲存檢查，且目前既非 `blocked` 也非終態，透過 `transition --event block` 登錄原因；例如：
+停止條件成立或無法排除時，Coordinator 先停止新的派工與流程推進，記錄條件 ID、觀察與證據位置。若 Gate 能載入 run、通過既有 Package 與儲存檢查，且目前尚非終態，透過 `transition --event block` 登錄原因；例如：
 
 ```sh
 python3 cogito/scripts/cogito_gate.py --repo <root> transition \
@@ -23,7 +23,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> transition \
   --action-id stop-SC-001
 ```
 
-相同操作重送沿用同一 action ID 與相同原因；不同發現使用新 ID。`block` 不會終止已啟動的 subprocess 或 Worker，Coordinator 仍須依其執行介面停止或收尾。已在 `blocked` 時先處理已登錄的問題，不重送新的 `block` 事件；恢復使用 `resume` Gate。
+相同操作重送沿用同一 action ID 與相同原因；不同發現使用新 ID。已在 `blocked` 時可用新 `block` 事件補記新原因，但 `blocked_from` 保留本次阻塞前的狀態。問題排除後使用 `resume` Gate；恢復會清除本次來源，下一次阻塞再記錄新的來源。舊版連續 `block` 造成的錯誤快取可從既有事件重新還原，不改寫事件歷史。`block` 不會終止已啟動的 subprocess 或 Worker，Coordinator 仍須依其執行介面停止或收尾。
 
 `outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `transition --event cancel` 提交授權結果；不能只因 Package 寫了 `cancelled` 就自行宣告授權。`awaiting-human` 只能經合法的 `post-verify` Human Gate 判定進入；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
 
