@@ -18,6 +18,7 @@ def working_tree_content_tree(worktree: Path) -> str:
 
     Copy the index so staged additions (including explicitly added ignored files)
     stay tracked, then stage current working files into only the temporary index.
+    Preserve its timestamp so Git still rechecks racily clean stat entries.
     The resulting objects are local snapshots, not commits or history changes.
     """
     try:
@@ -30,7 +31,13 @@ def working_tree_content_tree(worktree: Path) -> str:
             index_path = worktree / index_path
         with tempfile.TemporaryDirectory(prefix="cogito-snapshot-") as directory:
             temporary_index = Path(directory) / "index"
-            shutil.copyfile(index_path, temporary_index)
+            # Bind bytes and timestamps to the same index version, even if Git
+            # replaces the original path while we copy. A fresh index mtime
+            # could make an equal-size, same-second edit appear unchanged.
+            with index_path.open("rb") as source, temporary_index.open("wb") as target:
+                index_stat = os.fstat(source.fileno())
+                shutil.copyfileobj(source, target)
+            os.utime(temporary_index, ns=(index_stat.st_atime_ns, index_stat.st_mtime_ns))
             env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
             subprocess.run(
                 ["git", "-C", str(worktree), "add", "--all", "--", "."],
