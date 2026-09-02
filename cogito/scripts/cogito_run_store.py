@@ -25,7 +25,6 @@ from cogito_contracts import (
     validate_package,
 )
 from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
-from cogito_events import read_events
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
@@ -36,6 +35,7 @@ from cogito_gate_validation import (
     derive_review_decision,
 )
 from cogito_project_graph import formalize_project_graph, validate_project_graph
+from cogito_ports import EventRepositoryPort, GitRepositoryPort
 from cogito_run_queries import build_completion_report, derive_next_action
 from cogito_scheduler import ready_tasks, tasks_with_dependencies
 from cogito_task_rules import effective_slice_id, is_active_task
@@ -61,20 +61,29 @@ class RunStore:
         "check-evidence-recorded",
     }
 
-    def __init__(self, root: str | Path, run_id: str, workflow: Mapping[str, Any] | None = None):
+    def __init__(
+        self, root: str | Path, run_id: str, workflow: Mapping[str, Any] | None = None,
+        *, event_repository: EventRepositoryPort | None = None,
+        git_repository: GitRepositoryPort | None = None,
+    ):
         if not re.fullmatch(r"(?:DEV|MNT)-[A-Za-z0-9._-]+", run_id):
             raise CogitoError("run_id must use a safe DEV-* or MNT-* identifier")
         self.root = Path(root).resolve()
-        self._git_repo = GitRepository(self.root)
+        self._git_repo: GitRepositoryPort = (
+            git_repository if git_repository is not None else GitRepository(self.root)
+        )
         self.run_id = run_id
         self.run_dir = self.root / ".cogito" / "runs" / run_id
         self.events_path = self.run_dir / "events.jsonl"
         self.state_path = self.run_dir / "state.json"
         self.workflow = dict(workflow or load_workflow())
-        self._events = EventRepository(self.events_path, self.state_path, self.workflow)
+        self._events: EventRepositoryPort = (
+            event_repository if event_repository is not None
+            else EventRepository(self.events_path, self.state_path, self.workflow)
+        )
 
     def create(self, kind: str) -> RunState:
-        if self.events_path.exists():
+        if self._events.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
         self.run_dir.mkdir(parents=True, exist_ok=False)
         return self._events.create({"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
@@ -268,7 +277,7 @@ class RunStore:
         replay = self._replay(action_id, "check-evidence-recorded", request_hash)
         if replay is not None:
             return replay
-        if not self.events_path.is_file():
+        if not self._events.is_initialized():
             raise CogitoError("run must be initialized before controlled checks")
         with controlled_check_attempt(self.run_dir, action_id, request_hash) as started_path:
             # Another caller may have completed the action while we waited.
@@ -292,7 +301,7 @@ class RunStore:
                 raise CogitoError("verification checks must run in a completed Package Slice worktree")
         else:
             raise CogitoError("controlled checks are not legal in the current state")
-        prior = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
+        prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
         effective = materialize_contract(package, prior)
         checks = [check for check in effective["checks"] if check["id"] == check_id]
         if len(checks) != 1:
@@ -333,7 +342,7 @@ class RunStore:
         if replay is not None:
             return replay
         current = self.load()
-        events = read_events(self.events_path)
+        events = self._events.read()
         amendments = [item for item in events if item["type"] == "technical-amendment-added"]
         if not amendments:
             raise CogitoError("correction requires a validated Technical Amendment")
@@ -362,7 +371,7 @@ class RunStore:
         event = "technical-correction-complete" if current["state"] == "technical-correction" else "post-integration-correction-complete" if current["state"] == "post-integration-correction" else None
         if event is None:
             raise CogitoError("correction completion is not legal in the current state")
-        events = read_events(self.events_path)
+        events = self._events.read()
         added_ids = validate_correction_completion(current, events, amendment_id, commit_id)
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         message = self._git("show", "-s", "--format=%B", commit_id)
@@ -401,7 +410,7 @@ class RunStore:
         current = self.load()
         if current["state"] != "review-fix":
             raise CogitoError("review fix completion is not legal in the current state")
-        events = read_events(self.events_path)
+        events = self._events.read()
         validate_review_fix_completion(current, events, amendment_id, commit_id)
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         if f"Cogito-Amendment: {amendment_id}" not in self._git("show", "-s", "--format=%B", commit_id):
@@ -444,7 +453,7 @@ class RunStore:
                 raise CogitoError("integration is missing a Gate-recorded implementation Result")
             self._git("merge-base", "--is-ancestor", result["head_commit"], commit_id)
             source_heads.append(result["head_commit"])
-        history = read_events(self.events_path)
+        history = self._events.read()
         prior_integrations = [item for item in history if item["type"] in {"slice-integration-complete", "wave-integration-complete", "integration-complete"}]
         starts = [item for item in history if item["type"] == "start-gate-passed"]
         previous_head = prior_integrations[-1]["payload"]["commit_id"] if prior_integrations else starts[-1]["payload"]["delivery_head"]
@@ -465,7 +474,7 @@ class RunStore:
         state = self.load()
         if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification"}:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
-        prior = [item["payload"]["amendment"] for item in read_events(self.events_path) if item["type"] == "technical-amendment-added"]
+        prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
         digest = effective_contract_hash(package, [*prior, amendment])
         # Correction tasks must finish before verification/integration can resume.
         # A cross-Slice predecessor cannot reach integrated inside this cycle.
@@ -516,7 +525,7 @@ class RunStore:
             ApprovalArtifacts(target, package, graph_path, graph, graph_before),
             prior_state=current,
             workflow=self.workflow,
-            load_events=lambda: read_events(self.events_path),
+            load_events=self._events.read,
             record_approval=lambda: self.record(
                 "package-approved", event_payload, action_id,
                 self._GATE_AUTHORITY, request_hash=request_hash,
@@ -657,7 +666,7 @@ class RunStore:
             run_id=self.run_id,
             package=package,
             state=current,
-            load_events=lambda: read_events(self.events_path),
+            load_events=self._events.read,
             result_path=result_path,
             project_graph_path=project_graph_path,
             final_commit=final_commit,
@@ -673,7 +682,7 @@ class RunStore:
         """Read the Result from the recorded final commit, never the working copy."""
         if current["state"] != "accepted":
             raise CogitoError("completion report is only available for an accepted run")
-        final_events = [item for item in read_events(self.events_path) if item["type"] == "finalization-complete"]
+        final_events = [item for item in self._events.read() if item["type"] == "finalization-complete"]
         final = final_events[-1]["payload"]
         try:
             result = json.loads(self._git("show", f"{final['final_commit']}:{final['result_path']}"))
@@ -719,10 +728,8 @@ class RunStore:
         pending = self.run_dir / "check-actions" / hash_json(action_id) / "request.json"
         if pending.exists():
             require_same_request(_load_json(pending), request_hash, action_id)
-        if not self.events_path.exists():
-            return None
         expected = {event_type} if isinstance(event_type, str) else event_type
-        matches = [item for item in read_events(self.events_path) if item.get("action_id") == action_id]
+        matches = [item for item in self._events.read() if item.get("action_id") == action_id]
         if not matches:
             return None
         if len(matches) != 1 or matches[0]["type"] not in expected:

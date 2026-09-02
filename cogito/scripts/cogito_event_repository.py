@@ -29,6 +29,14 @@ class EventRepository:
     def read(self) -> list[dict[str, Any]]:
         return read_events(self.events_path)
 
+    def exists(self) -> bool:
+        """Preserve the distinction between absent and existing empty storage."""
+        return self.events_path.exists()
+
+    def is_initialized(self) -> bool:
+        """A file is initialized storage, even if its event history is empty."""
+        return self.events_path.is_file()
+
     def project(self) -> RunState:
         """Rebuild authoritative state without reading or repairing the cache."""
         return self.snapshot().state

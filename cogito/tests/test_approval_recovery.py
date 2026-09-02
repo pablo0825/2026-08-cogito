@@ -13,8 +13,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 from cogito_common import CogitoError, atomic_write_json, hash_json, load_json
 from cogito_events import append_event, read_events
+from cogito_event_repository import EventRepository
 from cogito_run_store import RunStore
 from cogito_test_support import minimal_package
+from cogito_workflow import load_workflow
 
 
 class ApprovalRecoveryTests(unittest.TestCase):
@@ -23,7 +25,9 @@ class ApprovalRecoveryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
         self.package = minimal_package()
-        self.store = RunStore(self.root, self.package["run_id"])
+        run_dir = self.root / ".cogito" / "runs" / self.package["run_id"]
+        self.events = EventRepository(run_dir / "events.jsonl", run_dir / "state.json", load_workflow())
+        self.store = RunStore(self.root, self.package["run_id"], event_repository=self.events)
         self.store.create("feature")
         self.store.transition("shared-understanding-ready", {
             "shared_understanding_hash": self.package["shared_understanding"]["hash"],
@@ -100,19 +104,20 @@ class ApprovalRecoveryTests(unittest.TestCase):
 
     def test_unknown_commit_outcome_leaves_artifacts_for_recovery(self) -> None:
         append_attempted = False
+        read_history = self.events.read
 
         def fail_append(*args, **kwargs):
             nonlocal append_attempted
             append_attempted = True
             raise OSError("injected append failure")
 
-        def fail_read_after_append(path):
+        def fail_read_after_append():
             if append_attempted:
                 raise CogitoError("injected unreadable event history")
-            return read_events(path)
+            return read_history()
 
         with mock.patch("cogito_event_repository.append_event", side_effect=fail_append), \
-                mock.patch("cogito_run_store.read_events", side_effect=fail_read_after_append):
+                mock.patch.object(self.events, "read", side_effect=fail_read_after_append):
             with self.assertRaisesRegex(CogitoError, "cannot determine.*approval"):
                 self.store.approve_package(self.package, "approve")
         self.assertTrue(self.package_path.exists())
@@ -133,17 +138,18 @@ class ApprovalRecoveryTests(unittest.TestCase):
 
     def test_missing_event_history_is_an_unknown_outcome_not_a_rollback(self) -> None:
         append_attempted = False
+        read_history = self.events.read
 
         def fail_append(*args, **kwargs):
             nonlocal append_attempted
             append_attempted = True
             raise OSError("injected append failure")
 
-        def missing_history(path):
-            return [] if append_attempted else read_events(path)
+        def missing_history():
+            return [] if append_attempted else read_history()
 
         with mock.patch("cogito_event_repository.append_event", side_effect=fail_append), \
-                mock.patch("cogito_run_store.read_events", side_effect=missing_history):
+                mock.patch.object(self.events, "read", side_effect=missing_history):
             with self.assertRaisesRegex(CogitoError, "cannot determine.*approval"):
                 self.store.approve_package(self.package, "approve")
         self.assertTrue(self.package_path.exists())

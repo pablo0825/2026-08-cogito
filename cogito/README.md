@@ -47,6 +47,8 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 
 證據驗證由 Gate 一次取得同一份事件歷史與狀態快照，讀取必要的不可變 evidence，再交給純資料規則判斷；整合前與整合後階段明確指定。寫入驗證結果時會比對快照的事件版本，若歷史已變更則拒絕並要求以相同 action_id 重試。整合後驗證的 evidence 與事件使用同一個 HEAD，寫入前再次確認 HEAD 未變更。
 
+`RunStore` 可用 keyword-only 的 `event_repository`／`git_repository` 注入依賴，省略時使用原本的檔案與 Git adapter。介面定義於 `cogito_ports.py`：事件 adapter 必須回傳已驗證的權威歷史、以相同 workflow 建立 snapshot，並在 append 時遵守 expected hash 衝突檢查；approval recovery 的 read 必須取得最新歷史。RunStore 仍管理 run 與 runner attempt 的檔案目錄，注入事件儲存不會取消這些保護。
+
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
 
 本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。

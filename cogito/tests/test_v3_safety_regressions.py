@@ -24,15 +24,20 @@ class GateSafetyTests(unittest.TestCase):
         self.runtime = runtime
 
     def test_completion_report_rejects_unaccepted_runs_before_reading_history_or_git(self) -> None:
+        from cogito_event_repository import EventRepository
+        from cogito_git import GitRepository
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         for state in ("executing", "finalizing", "cancelled"):
-            with self.subTest(state=state), mock.patch("cogito_run_store.read_events") as read_history:
-                store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-                store.load = mock.Mock(return_value={"state": state})
-                store._git = mock.Mock()
+            with self.subTest(state=state):
+                events = mock.create_autospec(EventRepository, instance=True)
+                git_repo = mock.create_autospec(GitRepository, instance=True)
+                events.project.return_value = {"state": state}
+                store = self.runtime.RunStore(temporary.name, "DEV-report", event_repository=events, git_repository=git_repo)
                 with self.assertRaisesRegex(self.runtime.CogitoError, "only available for an accepted run"):
                     store.completion_report()
-                read_history.assert_not_called()
-                store._git.assert_not_called()
+                events.read.assert_not_called()
+                git_repo.run.assert_not_called()
 
     def test_invalid_preflight_does_not_pollute_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -58,8 +63,7 @@ class GateSafetyTests(unittest.TestCase):
                 "hash": self.runtime.hash_json(project_policy),
                 "max_check_output_bytes": 2 * 1024 * 1024,
             })
-            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-            store.root = root
+            store = self.runtime.RunStore(root, value["run_id"])
             with self.assertRaisesRegex(
                 self.runtime.CogitoError, "output limit is looser"
             ):
@@ -271,9 +275,9 @@ class GateSafetyTests(unittest.TestCase):
             "result_commit": "f" * 40, "finalization_commit": "f" * 40,
             "effective_contract_hash": "e" * 64, "checks": [], "amendments": [],
         }
-        store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-        store.run_id = result["run_id"]
-        store.workflow = self.runtime.load_workflow()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        store = self.runtime.RunStore(temporary.name, result["run_id"])
         store.load = lambda: {"state": "finalizing", "counters": {}}
         approved = package()
         store.approved_package = lambda: approved
@@ -417,10 +421,7 @@ class PackageApprovalAndRunnerTests(GitTestCase):
             value = package()
             value["baseline_commit"] = commit
             winner = self.runner.run_check(value, "C-1", worktree)
-            store = self.runtime.RunStore.__new__(self.runtime.RunStore)
-            store.root = root
-            store.run_dir = root / ".cogito" / "runs" / "DEV-race"
-            store.events_path = store.run_dir / "events.jsonl"
+            store = self.runtime.RunStore(root, value["run_id"])
             self.runtime.append_event(store.events_path, {
                 "type": "run-created", "payload": {"run_id": value["run_id"], "kind": "feature"},
             })
