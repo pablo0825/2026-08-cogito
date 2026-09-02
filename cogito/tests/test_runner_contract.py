@@ -174,6 +174,32 @@ class ControlledRunnerContractTests(unittest.TestCase):
             self.assertEqual(evidence["status"], "failed")
             self.assertTrue(evidence["timed_out"])
 
+    def test_runner_waits_for_success_after_both_output_streams_close(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self.prepare_repo(root)
+            marker = root / "finished.txt"
+            program = (
+                "import os, pathlib, sys, time; "
+                "os.write(1, b'before stdout EOF\\n'); os.write(2, b'before stderr EOF\\n'); "
+                "os.close(1); os.close(2); time.sleep(.2); "
+                "pathlib.Path(sys.argv[1]).write_text('finished')"
+            )
+            package = self.write_package(root, commit, [{
+                "id": "C-close-streams", "argv": [sys.executable, "-c", program, str(marker)],
+                "timeout_seconds": 5,
+            }])
+            evidence_dir = root / "evidence"
+            result = self.invoke(package, "C-close-streams", repo, evidence_dir)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(marker.read_text(), "finished")
+            evidence = json.loads(next(evidence_dir.glob("*.json")).read_text())
+            self.assertTrue(evidence["passed"])
+            self.assertEqual(evidence["exit_code"], 0)
+            self.assertFalse(evidence["timed_out"])
+            self.assertEqual(evidence["stdout"], "before stdout EOF\n")
+            self.assertEqual(evidence["stderr"], "before stderr EOF\n")
+
     def test_runner_redacts_and_caps_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

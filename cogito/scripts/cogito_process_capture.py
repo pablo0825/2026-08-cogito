@@ -212,7 +212,9 @@ def run_bounded_process(
     termination_degraded = False
     termination_deadline: float | None = None
     termination_error: str | None = None
-    while len(closed) < 2:
+    # EOF only finishes capture. A process may close its streams and continue
+    # working, so keep the original deadline active until it also exits.
+    while process.poll() is None or len(closed) < 2:
         if termination_deadline is not None and time.monotonic() >= termination_deadline:
             _close_capture_pipes(process)
             break
@@ -225,8 +227,11 @@ def run_bounded_process(
         try:
             name, chunk = chunks.get(timeout=0.05)
         except queue.Empty:
-            if all(not reader.is_alive() for reader in readers):
-                break
+            # A reader's EOF sentinel can be dropped when the queue is full.
+            # Once all producers stopped, an empty queue means capture is done;
+            # it says nothing about whether the process itself has finished.
+            if all(not reader.is_alive() for reader in readers) and chunks.empty():
+                closed.update(("stdout", "stderr"))
             continue
         if chunk is None:
             closed.add(name)
