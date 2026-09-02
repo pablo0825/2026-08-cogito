@@ -19,7 +19,7 @@ from cogito_approval import ApprovalArtifacts, publish_approval, restore_approva
 from cogito_actions import controlled_check_attempt, request_fingerprint, require_same_request
 from cogito_contracts import (
     effective_contract_hash, materialize_contract, package_hash,
-    path_allowed as _path_allowed, required as _required,
+    path_allowed as _path_allowed,
     safe_repo_path as _safe_repo_path, validate_agent_result,
     validate_package,
 )

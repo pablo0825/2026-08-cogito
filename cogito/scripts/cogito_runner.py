@@ -26,7 +26,6 @@ from cogito_contracts import (
 )
 from cogito_evidence_binding import (
     safe_cwd as _safe_cwd,
-    safe_file as _safe_file,
     working_tree_binding as _working_tree_binding,
 )
 from cogito_evidence_contract import validate_check_evidence

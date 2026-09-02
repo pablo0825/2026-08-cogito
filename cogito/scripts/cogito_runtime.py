@@ -42,6 +42,7 @@ from cogito_workflow import (
 )
 
 ROOT = SCRIPT_DIR.parent
+# Retain the legacy direct-import alias for external facade consumers.
 _load_json = load_json
 
 __all__ = [
