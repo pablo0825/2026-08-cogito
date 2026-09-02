@@ -21,7 +21,7 @@ def read_events(path: str | Path) -> list[dict[str, Any]]:
     previous = "0" * 64
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise CogitoError(f"cannot read event log: {exc}") from exc
     for expected, line in enumerate(lines, 1):
         try:

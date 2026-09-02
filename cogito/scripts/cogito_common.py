@@ -29,7 +29,7 @@ def hash_json(value: Any) -> str:
 def load_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CogitoError(f"cannot read valid JSON from {path}: {exc}") from exc
 
 

@@ -33,7 +33,7 @@ def _json_arg(value: str | None) -> dict[str, Any]:
 def _read_object(path: str) -> dict[str, Any]:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CogitoError(f"cannot read {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise CogitoError(f"{path} must contain a JSON object")

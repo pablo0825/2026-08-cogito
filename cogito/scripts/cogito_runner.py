@@ -113,7 +113,7 @@ def write_evidence_once(directory: str | Path, record_id: str, evidence: Mapping
 def _object(path: str) -> dict[str, Any]:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CogitoError(f"cannot read JSON object {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise CogitoError(f"{path} must contain an object")
