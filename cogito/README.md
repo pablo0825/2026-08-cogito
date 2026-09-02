@@ -20,7 +20,8 @@ cogito/
 - `workflows/`：狀態、合法轉移、guard 與重試上限。
 - `scripts/`：Python executable contracts、Gate runtime 與 controlled runner。
 - `references/`：依 `next_action` 才載入的作業規則與模板。
-- `tests/`、`evals/`：狀態機、邊界與行為回歸。
+- `tests/`：可執行的 Python 回歸測試，涵蓋狀態機、邊界與端到端流程。
+- `evals/evals.json`：14 個 Agent 行為評測情境規格，保存 prompt、預期行為與驗收條件。
 
 3.0 不讀取或遷移舊 Blueprint。既有 `docs/project/`、舊 Spec 與其他文件保持原位並作為 read-only sources；第一次觸及相關能力時，以 lazy adoption 在同一 Package 收編必要來源，不建立額外核准點，也不搬移無關文件。
 
@@ -45,4 +46,6 @@ Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema�
 
 執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。
 
-維護時先執行 runtime/unit tests，再執行 skill validation 與 behavioral evals。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。
+本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。
+
+維護時執行上述 Python 回歸測試；skill 格式驗證與 Agent 行為評測若另有工具，分別執行並回報結果，未執行的項目明確標示。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。

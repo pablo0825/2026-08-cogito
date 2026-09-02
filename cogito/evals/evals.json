@@ -96,9 +96,9 @@
     {
       "id": 14,
       "scenario": "crash-window-idempotency",
-      "prompt": "整合 commit 已成功，但事件尚未寫入時程序崩潰；resume 後再次處理相同 action_id。",
-      "expected_output": "以 action_id 與 commit trailer 對帳既有 commit，補記事件而不重複整合。",
-      "expectations": ["Reconciles Git and event history", "Does not duplicate the commit", "Fails closed if reconciliation is ambiguous"]
+      "prompt": "整合 commit 已成功，但 Gate 事件尚未寫入時程序崩潰；Coordinator 已確認既有 commit ID 與原始 integrate 請求，現在恢復處理。",
+      "expected_output": "Coordinator 查詢 run 狀態，提供既有 commit ID，沿用原始 action_id 與相同參數重送 integrate；Gate 驗證該 commit 後補記事件，不再次 merge 或 commit。無法確認既有 commit 或驗證失敗時停止推進。resume 不會自動掃描 Git trailers 尋找 commit 或補記整合事件。",
+      "expectations": ["Coordinator supplies the existing commit ID and original request", "Gate validates the commit before recording integration", "Does not duplicate the commit", "Stops if the existing commit cannot be established or validated", "Does not claim automatic Git trailer recovery by resume"]
     }
   ]
 }
