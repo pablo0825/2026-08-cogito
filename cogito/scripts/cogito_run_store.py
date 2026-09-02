@@ -29,6 +29,7 @@ from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
 from cogito_finalization import validate_finalization
 from cogito_git import GitRepository
+from cogito_integration_rules import derive_integration_decision
 from cogito_gate_validation import (
     validate_evidence as validate_gate_evidence,
     validate_policy as validate_gate_policy,
@@ -441,29 +442,17 @@ class RunStore:
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         if self._git("branch", "--show-current") != package["delivery_branch"] or self._git("rev-parse", "HEAD") != commit_id:
             raise CogitoError("integration commit must be current HEAD on the delivery branch")
-        target_slice = slice_id or "mini-package"
-        task_ids = [task_id for task_id, task in current["tasks"].items() if effective_slice_id(task) == target_slice]
-        if not task_ids or any(current["tasks"][task_id].get("status") != "reviewed" for task_id in task_ids):
-            raise CogitoError("integration requires every task in the target Slice to be independently reviewed")
-        latest_implementation = {item.get("task_id"): item for item in current["agent_results"] if item.get("role") == "implementer" and item.get("status") == "complete"}
-        source_heads = []
-        for task_id in task_ids:
-            result = latest_implementation.get(task_id)
-            if not result:
-                raise CogitoError("integration is missing a Gate-recorded implementation Result")
-            self._git("merge-base", "--is-ancestor", result["head_commit"], commit_id)
-            source_heads.append(result["head_commit"])
-        history = self._events.read()
-        prior_integrations = [item for item in history if item["type"] in {"slice-integration-complete", "wave-integration-complete", "integration-complete"}]
-        starts = [item for item in history if item["type"] == "start-gate-passed"]
-        previous_head = prior_integrations[-1]["payload"]["commit_id"] if prior_integrations else starts[-1]["payload"]["delivery_head"]
-        self._git("merge-base", "--is-ancestor", previous_head, commit_id)
-        remaining_reviewed = any(task_id not in task_ids and task.get("status") == "reviewed" for task_id, task in current["tasks"].items())
-        remaining_unintegrated = any(task_id not in task_ids and task.get("status") != "integrated" for task_id, task in current["tasks"].items())
-        event = "slice-integration-complete" if remaining_reviewed else "wave-integration-complete" if remaining_unintegrated else "integration-complete"
-        payload = {"commit_id": commit_id, "slice_id": target_slice, "task_ids": sorted(task_ids), "source_heads": sorted(source_heads), "previous_delivery_head": previous_head}
-        validate_transition(self.workflow, current["state"], event, payload, current["counters"], current["limits"])
-        return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        decision = derive_integration_decision(current, self._events.read(), slice_id)
+        for source_head in decision.source_heads:
+            self._git("merge-base", "--is-ancestor", source_head, commit_id)
+        self._git("merge-base", "--is-ancestor", decision.previous_delivery_head, commit_id)
+        payload = {
+            "commit_id": commit_id, "slice_id": slice_id or "mini-package",
+            "task_ids": list(decision.task_ids), "source_heads": list(decision.source_heads),
+            "previous_delivery_head": decision.previous_delivery_head,
+        }
+        validate_transition(self.workflow, current["state"], decision.event, payload, current["counters"], current["limits"])
+        return self.record(decision.event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
     def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("amend", amendment=amendment)
