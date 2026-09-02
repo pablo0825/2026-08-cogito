@@ -181,6 +181,17 @@ def _validate_human_gate(package: Mapping[str, Any]) -> None:
         raise CogitoError("human high-risk hotspots must be repository-relative paths")
 
 
+def validate_check_environment(
+    check: Mapping[str, Any], allowed_environment: Sequence[str]
+) -> None:
+    """Keep a check's requested host environment within the frozen Package policy."""
+    requested = check.get("env_allowlist", [])
+    if not isinstance(requested, list) or not all(isinstance(item, str) for item in requested):
+        raise CogitoError("check env_allowlist must be an array of strings")
+    if set(requested) - set(allowed_environment):
+        raise CogitoError("check environment exceeds its frozen policy snapshot")
+
+
 def _validate_policy_snapshot(package: Mapping[str, Any], check_ids: Sequence[Any]) -> None:
     policy = package["policy_snapshot"]
     if not isinstance(policy, dict) or not isinstance(policy.get("max_workers"), int) or not 1 <= policy["max_workers"] <= 3 or not isinstance(policy.get("fetch_allowed"), bool):
@@ -191,8 +202,8 @@ def _validate_policy_snapshot(package: Mapping[str, Any], check_ids: Sequence[An
         raise CogitoError("policy_snapshot environment and required checks must be arrays")
     if set(required_checks) - set(check_ids):
         raise CogitoError("Package omits checks frozen by its policy snapshot")
-    if any(set(check.get("env_allowlist", [])) - set(allowed_environment) for check in package["checks"]):
-        raise CogitoError("Package check environment exceeds its frozen policy snapshot")
+    for check in package["checks"]:
+        validate_check_environment(check, allowed_environment)
     output_limit = policy.get("max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES)
     if (
         type(output_limit) is not int
@@ -216,6 +227,9 @@ def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, 
     for check in amendment.get("added_checks", []):
         if not isinstance(check, dict) or not check.get("id") or not check.get("argv") or check["id"] in existing_checks:
             raise CogitoError("added checks require new ids and non-empty argv")
+        validate_check_environment(
+            check, package["policy_snapshot"].get("allowed_environment", [])
+        )
         existing_checks.add(check["id"])
     existing_tasks = {item["id"] for item in package["execution_dag"]["tasks"]} | {task["id"] for item in prior for task in item.get("added_tasks", [])}
     for task in amendment.get("added_tasks", []):

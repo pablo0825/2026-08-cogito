@@ -70,7 +70,7 @@ Feature Slice ID 使用穩定的 `FS-001` 格式。Spec 路徑為 `docs/specs/<I
 
 適用邊界由 global defaults、可選 project policy 與 Package snapshot 疊加，較嚴格者優先；缺少 project policy 不阻塞。永久放寬或修改 project policy 需另行取得 project-level approval。
 
-Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
+Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
 
 ## 最終化
 

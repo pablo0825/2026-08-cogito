@@ -10,7 +10,7 @@ Implementer 完成後，由不同 Agent 進行獨立 review。獨立性逐 Slice
 
 測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash；commit 加上 `Cogito-Amendment: <ID>` trailer。
 
-Amendment 只能單調增加或加強工作，不能刪除/降級 required check、擴張路徑或改變產品契約。超出邊界就 `blocked` 並回到需要人類決策的流程。
+Amendment 只能單調增加或加強工作，不能刪除/降級 required check、擴張路徑、要求 Package policy snapshot 未核准的環境變數，或改變產品契約。超出邊界就 `blocked` 並回到需要人類決策的流程。
 
 ## 驗證、審查與整合
 

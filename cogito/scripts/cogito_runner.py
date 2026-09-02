@@ -21,6 +21,7 @@ from cogito_common import ID_RE, CogitoError, atomic_write_json, hash_json
 from cogito_contracts import (
     DEFAULT_MAX_CHECK_OUTPUT_BYTES,
     materialize_contract,
+    validate_check_environment,
     validate_package,
 )
 from cogito_evidence_binding import (
@@ -54,6 +55,9 @@ def run_check(
     if len(matching) != 1:
         raise CogitoError(f"expected exactly one check named {check_id!r}")
     check = matching[0]
+    validate_check_environment(
+        check, package["policy_snapshot"].get("allowed_environment", [])
+    )
     argv = check.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(value, str) and value for value in argv):
         raise CogitoError("check argv must be a non-empty string array")

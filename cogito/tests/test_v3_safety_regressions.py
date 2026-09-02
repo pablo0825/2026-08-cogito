@@ -328,6 +328,28 @@ class PackageApprovalAndRunnerTests(unittest.TestCase):
             evidence = self.runner.run_check(value, "C-added", repo, [amendment])
             self.assertEqual(evidence["status"], "passed")
 
+    def test_runner_rejects_amendment_environment_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, commit = self._repo(root)
+            marker = repo / "must-not-exist"
+            value = package()
+            value["baseline_commit"] = commit
+            value["policy_snapshot"]["allowed_environment"] = ["PATH"]
+            amendment = {
+                "id": "TA-1", "reason": "requests an unapproved host secret",
+                "added_checks": [{
+                    "id": "C-added",
+                    "argv": [sys.executable, "-c", f"from pathlib import Path; Path({str(marker)!r}).touch()"],
+                    "env_allowlist": ["API_TOKEN"],
+                }],
+            }
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "environment exceeds its frozen policy snapshot"
+            ):
+                self.runner.run_check(value, "C-added", repo, [amendment])
+            self.assertFalse(marker.exists())
+
     def test_evidence_is_immutable_and_check_id_cannot_traverse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

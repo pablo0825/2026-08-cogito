@@ -267,6 +267,40 @@ class AmendmentAndAgentContractTests(unittest.TestCase):
         amended_hash = self.runtime.effective_contract_hash(self.package, [amendment])
         self.assertNotEqual(first_hash, amended_hash)
 
+    def test_amendment_check_environment_stays_within_frozen_policy(self) -> None:
+        self.package["policy_snapshot"]["allowed_environment"] = ["PATH"]
+        approved = {
+            "id": "TA-001", "reason": "check needs the approved executable path",
+            "added_checks": [{"id": "C-2", "argv": ["python3", "-V"], "env_allowlist": ["PATH"]}],
+        }
+        self.assertIsNone(self.runtime.validate_amendment(self.package, [], approved))
+
+        unapproved = {
+            "id": "TA-002", "reason": "later check requests a new host secret",
+            "added_checks": [{"id": "C-3", "argv": ["python3", "-V"], "env_allowlist": ["API_TOKEN"]}],
+        }
+        with self.assertRaisesRegex(
+            self.runtime.CogitoError, "environment exceeds its frozen policy snapshot"
+        ):
+            self.runtime.validate_amendment(self.package, [approved], unapproved)
+
+    def test_rejected_amendment_does_not_append_an_event(self) -> None:
+        self.package["policy_snapshot"]["allowed_environment"] = ["PATH"]
+        amendment = {
+            "id": "TA-001", "reason": "requests an unapproved host secret",
+            "added_checks": [{"id": "C-2", "argv": ["python3", "-V"], "env_allowlist": ["API_TOKEN"]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.runtime.RunStore(directory, self.package["run_id"])
+            store.approved_package = lambda: self.package
+            store.load = lambda: {"state": "verifying"}
+            self.assertFalse(store.events_path.exists())
+            with self.assertRaisesRegex(
+                self.runtime.CogitoError, "environment exceeds its frozen policy snapshot"
+            ):
+                store.add_amendment(amendment)
+            self.assertFalse(store.events_path.exists())
+
     def test_amendment_cannot_relax_or_widen_contract(self) -> None:
         forbidden = [
             {"id": "TA-001", "reason": "x", "remove_checks": ["C-1"]},
