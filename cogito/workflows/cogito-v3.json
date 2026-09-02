@@ -11,6 +11,7 @@
   },
   "transitions": [
     {"from": "preparing", "event": "shared-understanding-ready", "to": "awaiting-shared-confirmation", "guard": "shared_understanding_frozen"},
+    {"from": "awaiting-shared-confirmation", "event": "shared-understanding-ready", "to": "awaiting-shared-confirmation", "guard": "shared_understanding_frozen"},
     {"from": "preparing", "event": "mini-package-ready", "to": "awaiting-package-approval", "guard": "mini_package_valid"},
     {"from": "awaiting-shared-confirmation", "event": "shared-understanding-confirmed", "to": "boundary-analysis", "guard": "shared_confirmed"},
     {"from": "boundary-analysis", "event": "boundary-complete", "to": "package-preparing", "guard": "boundary_ready"},

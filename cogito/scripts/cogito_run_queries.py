@@ -30,6 +30,8 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
     if state not in actions:
         raise CogitoError(f"no action is defined for state {state!r}")
     output: dict[str, Any] = {"state": state, "next_action": actions[state]}
+    if state == "awaiting-shared-confirmation":
+        output["shared_understanding_hash"] = projection["shared_understanding_hash"]
     if state == "preparing" and projection["kind"] in {"maintenance", "documentation"}:
         output["next_action"] = "assess-mini-package-eligibility"
     if state == "executing":

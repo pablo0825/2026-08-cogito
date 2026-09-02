@@ -146,6 +146,10 @@ def _apply_task_update(projection: RunState, payload: Mapping[str, Any]) -> None
 
 def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_type: str, payload: Mapping[str, Any]) -> None:
     missing_task: Mapping[str, Any] = {}
+    if (event_type == "shared-understanding-confirmed"
+            and ("shared_understanding_hash" in payload or projection.get("shared_understanding_revised", False))
+            and payload.get("shared_understanding_hash") != projection.get("shared_understanding_hash")):
+        raise CogitoError("Shared Understanding confirmation must name the latest summary hash")
     transition = validate_transition(workflow, projection["state"], event_type, payload, projection["counters"], projection["limits"])
     # Further findings belong to the same blocked interval. Its resume target
     # remains the state that preceded the first block, including during replay.
@@ -166,6 +170,9 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
     elif event_type in {"package-ready", "mini-package-ready"}:
         projection["candidate_package_hash"] = payload.get("candidate_package_hash")
     elif event_type == "shared-understanding-ready":
+        if (projection.get("shared_understanding_hash") is not None
+                and projection["shared_understanding_hash"] != payload.get("shared_understanding_hash")):
+            projection["shared_understanding_revised"] = True
         projection["shared_understanding_hash"] = payload.get("shared_understanding_hash")
     elif event_type == "boundary-complete":
         projection["boundary"] = dict(payload)

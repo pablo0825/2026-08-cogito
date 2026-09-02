@@ -62,6 +62,7 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 class _OptionalRunFields(TypedDict, total=False):
     amendments: list[dict[str, Any]]
+    shared_understanding_revised: bool
 
 
 class RunState(_OptionalRunFields):

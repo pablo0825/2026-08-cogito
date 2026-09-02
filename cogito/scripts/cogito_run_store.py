@@ -153,7 +153,10 @@ class RunStore:
             )
             payload = {**payload, **decision}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
-        return self.record(event, payload, action_id, request_hash=request_hash)
+        return self.record(
+            event, payload, action_id, request_hash=request_hash,
+            expected_previous_hash=current["last_event_hash"],
+        )
 
     def approved_package(self) -> dict[str, Any]:
         return self._approved_package_from_state(self.load())
