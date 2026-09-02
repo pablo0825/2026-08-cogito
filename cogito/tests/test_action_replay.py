@@ -190,29 +190,54 @@ class ActionReplayTests(GitTestCase):
         self.assert_conflict(self.store.add_amendment, {**amendment, "reason": "changed"}, "amend")
         self.store.enter_correction("correct")
         self.assert_replay(self.store.enter_correction, "correct")
-        self.git("add", "note.txt")
-        self.git("commit", "-qm", "fix\n\nCogito-Amendment: TA-1")
-        commit = self.git("rev-parse", "HEAD")
+        commit = self.head
         self.store.complete_correction("TA-1", commit, "corrected")
         self.assert_replay(self.store.complete_correction, "TA-1", commit, "corrected")
         self.assert_conflict(self.store.complete_correction, "TA-other", commit, "corrected")
-        self.assert_conflict(self.store.complete_correction, "TA-1", self.head, "corrected")
+        self.assert_conflict(self.store.complete_correction, "TA-1", "f" * 40, "corrected")
 
     def test_correction_without_tasks_still_requires_trailer_and_current_head(self) -> None:
-        self.store.add_amendment({"id": "TA-1", "reason": "fix", "path_fixes": ["note.txt"]})
-        self.store.enter_correction()
-        before = self.store.events_path.read_bytes()
-        self.git("add", "note.txt")
-        self.git("commit", "-qm", "missing trailer")
-        commit = self.git("rev-parse", "HEAD")
+        # Documentation retains committed corrections; Maintenance now uses
+        # uncommitted snapshots and puts its trailers on the final commit.
+        repo = self.root / "documentation"
+        repo.mkdir()
+        init_repo(repo)
+        git = GitRepository(repo).run
+        (repo / ".gitignore").write_text(".cogito/\ndocs/cogito/packages/\n")
+        (repo / "note.txt").write_text("before\n")
+        git("add", ".")
+        git("commit", "-qm", "baseline")
+        base = git("rev-parse", "HEAD")
+        draft = package("documentation")
+        draft.update({"baseline_commit": base, "approved_paths": ["note.txt"],
+                      "execution_dag": {"tasks": [{"id": "T-1", "paths": ["note.txt"]}], "edges": []}})
+        store = RunStore(repo, draft["run_id"])
+        store.create("documentation")
+        store.prepare_package(draft)
+        store.approve_package(draft)
+        store.start_gate()
+        store.update_task("T-1", "leased", "worker")
+        store.update_task("T-1", "running", "worker")
+        (repo / "note.txt").write_text("after\n")
+        git("add", "note.txt")
+        git("commit", "-qm", "implementation")
+        store.submit_agent_result({**self.result, "run_id": store.run_id,
+                                   "base_commit": base, "head_commit": git("rev-parse", "HEAD")})
+        store.update_task("T-1", "complete", "worker")
+        store.transition("implementation-complete", {})
+        store.add_amendment({"id": "TA-1", "reason": "fix", "path_fixes": ["note.txt"]})
+        store.enter_correction()
+        before = store.events_path.read_bytes()
+        git("commit", "--allow-empty", "-qm", "missing trailer")
+        commit = git("rev-parse", "HEAD")
         with self.assertRaisesRegex(CogitoError, "missing the Cogito-Amendment trailer"):
-            self.store.complete_correction("TA-1", commit, "corrected")
-        self.git("commit", "--amend", "-qm", "fix\n\nCogito-Amendment: TA-1")
-        old_head = self.git("rev-parse", "HEAD")
-        self.git("commit", "--allow-empty", "-qm", "new delivery head")
+            store.complete_correction("TA-1", commit, "corrected")
+        git("commit", "--allow-empty", "-qm", "fix\n\nCogito-Amendment: TA-1")
+        old_head = git("rev-parse", "HEAD")
+        git("commit", "--allow-empty", "-qm", "new delivery head")
         with self.assertRaisesRegex(CogitoError, "must use current delivery HEAD"):
-            self.store.complete_correction("TA-1", old_head, "corrected")
-        self.assertEqual(self.store.events_path.read_bytes(), before)
+            store.complete_correction("TA-1", old_head, "corrected")
+        self.assertEqual(store.events_path.read_bytes(), before)
 
     def test_invalid_amendment_dependencies_do_not_append_events(self) -> None:
         def added(task_id, dependencies):
@@ -244,15 +269,13 @@ class ActionReplayTests(GitTestCase):
         ]}, "amend")
         self.store.update_task("T-2", "leased", "worker", "lease-fix")
         self.store.update_task("T-2", "running", "worker", "run-fix")
-        self.git("add", "note.txt")
-        self.git("commit", "-qm", "fix\n\nCogito-Amendment: TA-1")
-        commit = self.git("rev-parse", "HEAD")
+        commit = self.head
         self.store.submit_agent_result({**self.result, "task_id": "T-2", "head_commit": commit}, "fix-result")
         self.store.update_task("T-2", "complete", "worker", "fix-complete")
         self.store.complete_review_fix("TA-1", commit, "fixed")
         self.assert_replay(self.store.complete_review_fix, "TA-1", commit, "fixed")
         self.assert_conflict(self.store.complete_review_fix, "TA-other", commit, "fixed")
-        self.assert_conflict(self.store.complete_review_fix, "TA-1", self.head, "fixed")
+        self.assert_conflict(self.store.complete_review_fix, "TA-1", "f" * 40, "fixed")
 
     def test_retry_and_resume_do_not_repeat_their_events(self) -> None:
         self.store.record_retry("transient", "interruption", "retry")

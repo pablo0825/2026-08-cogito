@@ -109,10 +109,13 @@ def _validate_commit_history(context: FinalizationContext, final_commit: str, gi
         git("cat-file", "-e", f"{commit}^{{commit}}")
         git("merge-base", "--is-ancestor", commit, final_commit)
     for item in result["amendments"]:
-        git("cat-file", "-e", f"{item['commit_id']}^{{commit}}")
+        commit = item.get("commit_id", final_commit)
+        git("cat-file", "-e", f"{commit}^{{commit}}")
+        if "commit_id" not in item:
+            git("cat-file", "-e", f"{item['content_tree']}^{{tree}}")
         if f"Cogito-Amendment: {item['id']}" not in git(
-            "show", "-s", "--format=%B", item["commit_id"]
-        ):
+            "show", "-s", "--format=%B", commit
+        ).splitlines():
             raise CogitoError("Result references an amendment commit without its trailer")
 
     post_events = [
@@ -125,7 +128,6 @@ def _validate_commit_history(context: FinalizationContext, final_commit: str, gi
 
     if package["kind"] == "maintenance":
         starts = [item for item in events if item["type"] == "start-gate-passed"]
-        if len(starts) != 1 or git("rev-parse", f"{final_commit}^") != starts[0]["payload"][
-            "delivery_head"
-        ]:
+        parents = git("rev-list", "--parents", "-n", "1", final_commit).split()[1:]
+        if len(starts) != 1 or parents != [starts[0]["payload"]["delivery_head"]]:
             raise CogitoError("Maintenance must finalize as one commit from the Start Gate head")

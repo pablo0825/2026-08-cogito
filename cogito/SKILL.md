@@ -74,6 +74,8 @@ Feature Slice ID 使用穩定的 `FS-001` 格式。Spec 路徑為 `docs/specs/<I
 
 Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
 
+Maintenance 修正先記錄未提交的工作樹快照並重跑 checks，直到唯一 final commit 才保存修正與全部 amendment trailers；Result 記錄基線與快照，結案報告再補 final commit ID。操作格式依 Execution Policy／Runtime Interface，不提前建立修正 commit。
+
 ## 最終化
 
 進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗先停止操作、查明事件是否已提交，再依 Runtime Interface 處理阻塞與復原。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。

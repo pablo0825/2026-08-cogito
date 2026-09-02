@@ -47,8 +47,12 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
 def build_completion_report(run_id: str, final_commit: str, result: Mapping[str, Any]) -> dict[str, Any]:
     """Present a validated committed Result without sharing its mutable fields."""
     validate_result(result)
-    return deepcopy({
+    report = deepcopy({
         "run_id": run_id, "status": "accepted", "final_commit": final_commit,
         "checks": result["checks"], "reviews": result["reviews"], "amendments": result["amendments"],
         "human_gate": result["human_gate"], "remaining_risks": result["remaining_risks"],
     })
+    for amendment in report["amendments"]:
+        if "commit_id" not in amendment:
+            amendment["commit_id"] = final_commit
+    return report

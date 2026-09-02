@@ -115,12 +115,10 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
         for item in events
         if item["type"] == "technical-amendment-added"
     ]
-    if [item.get("id") for item in result["amendments"]] != [item["id"] for item in amendments] or any(
-        not item.get("commit_id") for item in result["amendments"]
-    ):
+    if [item.get("id") for item in result["amendments"]] != [item["id"] for item in amendments]:
         raise CogitoError("Result amendment summary is incomplete or out of order")
-    completion_commits = {
-        item["payload"].get("amendment_id"): item["payload"].get("commit_id")
+    completions = {
+        item["payload"].get("amendment_id"): item["payload"]
         for item in events
         if item["type"]
         in {
@@ -129,11 +127,18 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
             "review-fix-complete",
         }
     }
-    if any(
-        completion_commits.get(item["id"]) != item["commit_id"]
-        for item in result["amendments"]
-    ):
-        raise CogitoError("Result amendment commits do not match correction history")
+    for item in result["amendments"]:
+        completion = completions.get(item["id"], {})
+        if completion.get("completion_mode") == "working-tree":
+            starts = [event for event in events if event["type"] == "start-gate-passed"]
+            if (context.package["kind"] != "maintenance" or len(starts) != 1
+                    or "commit_id" in item or not item.get("content_tree")
+                    or item.get("base_commit") != starts[0]["payload"]["delivery_head"]
+                    or item.get("base_commit") != completion.get("commit_id")
+                    or item["content_tree"] != completion.get("content_tree")):
+                raise CogitoError("Result working-tree amendment does not match Maintenance correction history")
+        elif not item.get("commit_id") or completion.get("commit_id") != item["commit_id"]:
+            raise CogitoError("Result amendment commits do not match correction history")
 
 
 def _validate_verification_summary(context: FinalizationContext) -> set[str]:

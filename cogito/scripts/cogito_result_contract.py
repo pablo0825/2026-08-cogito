@@ -50,9 +50,16 @@ def validate_result(result: Any) -> None:
         if "commit_id" in review:
             require_string(review["commit_id"], "review commit_id", GIT_OBJECT_RE)
     for amendment in require_array(result["amendments"], "Result.amendments"):
-        require_object(amendment, "Result amendment", "id", "commit_id")
+        require_object(amendment, "Result amendment", "id")
         require_id(amendment["id"], "Result amendment.id")
-        require_string(amendment["commit_id"], "Result amendment.commit_id", GIT_OBJECT_RE)
+        if "commit_id" in amendment:
+            if "base_commit" in amendment or "content_tree" in amendment:
+                raise CogitoError("Result amendment cannot mix commit and working-tree completion")
+            require_string(amendment["commit_id"], "Result amendment.commit_id", GIT_OBJECT_RE)
+        else:
+            require_object(amendment, "Result working-tree amendment", "base_commit", "content_tree")
+            require_string(amendment["base_commit"], "Result amendment.base_commit", GIT_OBJECT_RE)
+            require_string(amendment["content_tree"], "Result amendment.content_tree", GIT_OBJECT_RE)
     human = require_object(result["human_gate"], "Result.human_gate", "required", "outcome")
     require_boolean(human["required"], "Result.human_gate.required")
     require_choice(human["outcome"], "Result.human_gate.outcome", {"approved", "not-required"})

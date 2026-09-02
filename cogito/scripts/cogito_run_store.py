@@ -405,17 +405,45 @@ class RunStore:
             raise CogitoError("correction completion is not legal in the current state")
         events = self._events.read()
         added_ids = validate_correction_completion(current, events, amendment_id, commit_id)
-        self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
-        message = self._git("show", "-s", "--format=%B", commit_id)
-        if f"Cogito-Amendment: {amendment_id}" not in message:
-            raise CogitoError("correction commit is missing the Cogito-Amendment trailer")
         package = self.approved_package()
+        if package["kind"] == "maintenance":
+            payload.update(self._maintenance_correction_snapshot(package, events, commit_id))
+        else:
+            self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
+            message = self._git("show", "-s", "--format=%B", commit_id)
+            if f"Cogito-Amendment: {amendment_id}" not in message:
+                raise CogitoError("correction commit is missing the Cogito-Amendment trailer")
         if current["state"] == "post-integration-correction" and (self._git("branch", "--show-current") != package["delivery_branch"] or self._git("rev-parse", "HEAD") != commit_id):
             raise CogitoError("post-integration correction commit must be current delivery HEAD")
         if not added_ids and commit_id != self._git("rev-parse", "HEAD"):
             raise CogitoError("a correction without added tasks must use current delivery HEAD")
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
-        return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self.record(
+            event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash,
+            expected_previous_hash=current["last_event_hash"],
+        )
+
+    def _maintenance_correction_snapshot(
+        self, package: Mapping[str, Any], events: Sequence[Mapping[str, Any]], commit_id: str,
+    ) -> dict[str, str]:
+        """Record uncommitted Maintenance work; its only commit is finalization."""
+        from cogito_evidence_binding import working_tree_content_tree
+
+        starts = [item for item in events if item["type"] == "start-gate-passed"]
+        if (len(starts) != 1 or starts[0]["payload"]["delivery_head"] != commit_id
+                or self._git("rev-parse", "HEAD") != commit_id
+                or self._git("branch", "--show-current") != package["delivery_branch"]):
+            raise CogitoError("Maintenance correction must use the unchanged Start Gate HEAD on the delivery branch")
+        tree = working_tree_content_tree(self.root)
+        changed = self._git("diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", commit_id, tree, "--")
+        control = {f"docs/cogito/packages/{self.run_id}.json", "docs/cogito/project-graph.json"}
+        if any(path not in control and not _path_allowed(path, package["approved_paths"])
+               for path in filter(None, changed.split("\0"))):
+            raise CogitoError("Maintenance correction snapshot exceeds approved paths")
+        if (self._git("rev-parse", "HEAD") != commit_id
+                or self._git("branch", "--show-current") != package["delivery_branch"]):
+            raise CogitoError("Maintenance delivery HEAD changed during correction snapshot")
+        return {"completion_mode": "working-tree", "content_tree": tree}
 
     def enter_review_fix(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("review-fix-start")
@@ -444,11 +472,18 @@ class RunStore:
             raise CogitoError("review fix completion is not legal in the current state")
         events = self._events.read()
         validate_review_fix_completion(current, events, amendment_id, commit_id)
-        self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
-        if f"Cogito-Amendment: {amendment_id}" not in self._git("show", "-s", "--format=%B", commit_id):
-            raise CogitoError("review fix commit is missing the Cogito-Amendment trailer")
+        package = self.approved_package()
+        if package["kind"] == "maintenance":
+            payload.update(self._maintenance_correction_snapshot(package, events, commit_id))
+        else:
+            self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
+            if f"Cogito-Amendment: {amendment_id}" not in self._git("show", "-s", "--format=%B", commit_id):
+                raise CogitoError("review fix commit is missing the Cogito-Amendment trailer")
         validate_transition(self.workflow, current["state"], "review-fix-complete", payload, current["counters"], current["limits"])
-        return self.record("review-fix-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self.record(
+            "review-fix-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash,
+            expected_previous_hash=current["last_event_hash"],
+        )
 
     def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("retry", kind=kind, reason=reason)
