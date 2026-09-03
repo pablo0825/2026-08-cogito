@@ -1,0 +1,843 @@
+{
+  "recorded_at": "2026-09-03T10:41:14.825482+00:00",
+  "method": "Real temporary Git repositories, public RunStore Gates, actual controlled Python checks; synthetic human and reviewer inputs.",
+  "passed": 2,
+  "scenarios": [
+    {
+      "kind": "feature",
+      "passed": true,
+      "human_inputs": "Synthetic fixture feedback and explicit approval; not real user sign-off.",
+      "reviewers": "Distinct synthetic reviewer identities; no claim of live agent quality assessment.",
+      "preparation_commits": [
+        {
+          "base_commit": "6f7af2238a041824051ee459120de476fc846442",
+          "branch": "main",
+          "commit_id": "6d8f931c4e033f513349692537f5ee82b5c1fe98",
+          "files": {
+            "docs/cogito/checkpoints/DEV-stage-feature/0003-shared-understanding.json": "3e4ffeaac548be44d14f8db66adf602481ffa562b476f34edef6cf8600bee99d",
+            "docs/shared.md": "3c13923290be33b19dca71f8704fc9f8df52e69d5390a40d39b0589b54693417"
+          },
+          "stage": "shared-understanding",
+          "stage_sequence": 3
+        },
+        {
+          "base_commit": "6d8f931c4e033f513349692537f5ee82b5c1fe98",
+          "branch": "main",
+          "commit_id": "157a07aaeedb535dde4b0d082cca01be6fce4faa",
+          "files": {
+            "docs/cogito/checkpoints/DEV-stage-feature/0005-boundary.json": "8989ead3d0b2e4bf9fcadef3dfa4740b13157661c606c85e66a6a6c88f372430"
+          },
+          "stage": "boundary",
+          "stage_sequence": 5
+        },
+        {
+          "base_commit": "157a07aaeedb535dde4b0d082cca01be6fce4faa",
+          "branch": "main",
+          "commit_id": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+          "files": {
+            "docs/cogito/checkpoints/DEV-stage-feature/0008-package.json": "baeaa71031acde3f880b9f77939e84c4881128f70c250035ef52df2b283eba40",
+            "docs/cogito/packages/DEV-stage-feature.json": "c8b225e5354b7eefbd567e48ec21922e5abe446275728a3eab41639be846819f",
+            "docs/cogito/project-graph.json": "c87f4ba98123292f0d5ab81983a3ba8fcd575ad3d5070f71e7662f8b1a0e07af",
+            "docs/plan.md": "b038299d9537eb187c03ad7a2eef6fe41ece689fca3d0e102e1404a9430e1878",
+            "docs/shared.md": "3c13923290be33b19dca71f8704fc9f8df52e69d5390a40d39b0589b54693417",
+            "docs/spec.md": "22e2a7038d4656e496779ea49cad97919f04c2f0f78f609eae5875677661938b"
+          },
+          "stage": "package",
+          "stage_sequence": 8
+        }
+      ],
+      "start_commit": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+      "implementation_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+      "integration_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+      "correction_commit": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+      "final_commit": "1b4cd4ac7387c29fdbcb02be2a4a846930df9948",
+      "product_commits": [
+        "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+        "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+        "1b4cd4ac7387c29fdbcb02be2a4a846930df9948"
+      ],
+      "transitions": [
+        {
+          "step": "initial human acceptance",
+          "state": "awaiting-human"
+        },
+        {
+          "step": "synthetic human rejects label",
+          "state": "human-correction"
+        },
+        {
+          "step": "correction complete",
+          "state": "human-correction-verifying"
+        },
+        {
+          "step": "fresh checks and independent review",
+          "state": "awaiting-human"
+        },
+        {
+          "step": "explicit synthetic human acceptance",
+          "state": "finalizing"
+        },
+        {
+          "step": "final Result and Graph commit accepted",
+          "state": "accepted"
+        }
+      ],
+      "assertions": [
+        "No finalization before explicit human acceptance",
+        "All applicable preparation stages have separate recorded commits",
+        "Missing and tampered summary rejected by finalization record rules",
+        "CLI summary matches public RunStore summary",
+        "Fresh correction checks and separate reviewer identity",
+        "Result summary persisted in final Git commit",
+        "Clean final checkout",
+        "Feature fast-forward adds no integration-only commit"
+      ],
+      "delivery_summary": {
+        "schema_version": "1.0",
+        "preparation": [
+          {
+            "event_sequence": 4,
+            "event": "stage-committed",
+            "stage_sequence": 3,
+            "stage": "shared-understanding",
+            "commit_id": "6d8f931c4e033f513349692537f5ee82b5c1fe98",
+            "base_commit": "6f7af2238a041824051ee459120de476fc846442",
+            "branch": "main",
+            "files": {
+              "docs/cogito/checkpoints/DEV-stage-feature/0003-shared-understanding.json": "3e4ffeaac548be44d14f8db66adf602481ffa562b476f34edef6cf8600bee99d",
+              "docs/shared.md": "3c13923290be33b19dca71f8704fc9f8df52e69d5390a40d39b0589b54693417"
+            }
+          },
+          {
+            "event_sequence": 6,
+            "event": "stage-committed",
+            "stage_sequence": 5,
+            "stage": "boundary",
+            "commit_id": "157a07aaeedb535dde4b0d082cca01be6fce4faa",
+            "base_commit": "6d8f931c4e033f513349692537f5ee82b5c1fe98",
+            "branch": "main",
+            "files": {
+              "docs/cogito/checkpoints/DEV-stage-feature/0005-boundary.json": "8989ead3d0b2e4bf9fcadef3dfa4740b13157661c606c85e66a6a6c88f372430"
+            }
+          },
+          {
+            "event_sequence": 9,
+            "event": "stage-committed",
+            "stage_sequence": 8,
+            "stage": "package",
+            "commit_id": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+            "base_commit": "157a07aaeedb535dde4b0d082cca01be6fce4faa",
+            "branch": "main",
+            "files": {
+              "docs/cogito/checkpoints/DEV-stage-feature/0008-package.json": "baeaa71031acde3f880b9f77939e84c4881128f70c250035ef52df2b283eba40",
+              "docs/cogito/packages/DEV-stage-feature.json": "c8b225e5354b7eefbd567e48ec21922e5abe446275728a3eab41639be846819f",
+              "docs/cogito/project-graph.json": "c87f4ba98123292f0d5ab81983a3ba8fcd575ad3d5070f71e7662f8b1a0e07af",
+              "docs/plan.md": "b038299d9537eb187c03ad7a2eef6fe41ece689fca3d0e102e1404a9430e1878",
+              "docs/shared.md": "3c13923290be33b19dca71f8704fc9f8df52e69d5390a40d39b0589b54693417",
+              "docs/spec.md": "22e2a7038d4656e496779ea49cad97919f04c2f0f78f609eae5875677661938b"
+            }
+          }
+        ],
+        "implementation": [
+          {
+            "event_sequence": 13,
+            "event": "agent-result-recorded",
+            "task_id": "T-1",
+            "status": "complete",
+            "base_commit": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+            "head_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "evidence": [],
+            "changed_paths": [
+              "src/note.txt"
+            ],
+            "requested_transition": "verifying",
+            "agent_id": "initial-worker",
+            "completion_mode": "commit"
+          },
+          {
+            "event_sequence": 29,
+            "event": "agent-result-recorded",
+            "task_id": "T-H-1",
+            "status": "complete",
+            "base_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "head_commit": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "evidence": [],
+            "changed_paths": [
+              "src/note.txt"
+            ],
+            "requested_transition": "verifying",
+            "agent_id": "human-worker-1",
+            "completion_mode": "commit"
+          }
+        ],
+        "integration": [
+          {
+            "event_sequence": 20,
+            "event": "integration-complete",
+            "commit_id": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "previous_delivery_head": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+            "slice_id": "FS-1",
+            "task_ids": [
+              "T-1"
+            ],
+            "source_heads": [
+              "0858e68eb0b2e6e577a5843cfcc2e35e25244e07"
+            ]
+          }
+        ],
+        "corrections": [
+          {
+            "event_sequence": 31,
+            "event": "human-correction-complete",
+            "amendment_id": "TA-1",
+            "commit_id": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "completion_mode": "commit"
+          }
+        ],
+        "verification": [
+          {
+            "event_sequence": 16,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-8f43a96a15db2b06.json",
+            "evidence_hash": "1831329626afff9e784d17db773978a92f13ebba1d1aa387adb9d916e1acb32f",
+            "head_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "effective_contract_hash": "0b012f14750c74f7b013190f741c2212885ace928c2726b9e41f6dd6ea8e6e82"
+          },
+          {
+            "event_sequence": 17,
+            "event": "verification-passed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-8f43a96a15db2b06.json"
+            ],
+            "passed": true
+          },
+          {
+            "event_sequence": 19,
+            "event": "review-approved",
+            "approved": true,
+            "reviews": [
+              "T-1"
+            ],
+            "independent": true
+          },
+          {
+            "event_sequence": 21,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-f235a762f4dbc010.json",
+            "evidence_hash": "9b7bc862c2848102ccdd116a973a531dd05243f9bef79a087395429b55c918f2",
+            "head_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "effective_contract_hash": "0b012f14750c74f7b013190f741c2212885ace928c2726b9e41f6dd6ea8e6e82"
+          },
+          {
+            "event_sequence": 22,
+            "event": "human-review-required",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-f235a762f4dbc010.json"
+            ],
+            "passed": true,
+            "delivery_head": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "human_required": true,
+            "reviewer_escalation": true
+          },
+          {
+            "event_sequence": 32,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-bdfaae0537f542bb.json",
+            "evidence_hash": "2ec0c59091a59100360752659878777ad83839e3e44e7494d4ffc1cd818391e9",
+            "head_commit": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90"
+          },
+          {
+            "event_sequence": 33,
+            "event": "check-evidence-recorded",
+            "check_id": "C-human-label",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-human-label-354a4ad0fd44a32c.json",
+            "evidence_hash": "4d4ca0846bce1e9bcfac271d627d5013779907d2bbc72e114fa2b9b6c004f33c",
+            "head_commit": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90"
+          },
+          {
+            "event_sequence": 34,
+            "event": "human-correction-verified",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            }
+          },
+          {
+            "event_sequence": 36,
+            "event": "human-correction-reviewed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            },
+            "feedback_hash": "350877edc66c7caa1a2f80f16b1c0750c5697fe842bad01f242a278e26e32b00",
+            "approved": true,
+            "conditional": false,
+            "reviews": [
+              "T-H-1"
+            ],
+            "independent": true
+          }
+        ],
+        "reviews": [
+          {
+            "event_sequence": 18,
+            "event": "agent-result-recorded",
+            "task_id": "T-1",
+            "status": "complete",
+            "base_commit": "fbcf0deb4a75c1bc1ca2d15fc80f1349f665909c",
+            "head_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "evidence": [],
+            "changed_paths": [],
+            "requested_transition": "review-approved",
+            "reviewer": "initial-reviewer",
+            "implementer": "initial-worker"
+          },
+          {
+            "event_sequence": 35,
+            "event": "agent-result-recorded",
+            "task_id": "T-H-1",
+            "status": "complete",
+            "base_commit": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "head_commit": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "evidence": [],
+            "changed_paths": [],
+            "requested_transition": "review-approved",
+            "reviewer": "human-reviewer-1",
+            "implementer": "human-worker-1"
+          }
+        ],
+        "human_acceptance": [
+          {
+            "event_sequence": 22,
+            "event": "human-review-required",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-f235a762f4dbc010.json"
+            ],
+            "passed": true,
+            "delivery_head": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07",
+            "human_required": true,
+            "reviewer_escalation": true
+          },
+          {
+            "event_sequence": 23,
+            "event": "human-feedback-recorded",
+            "binding": {
+              "content_tree": "813dde770011cea47af7000ccff56d8fa60e2b0e",
+              "effective_contract_hash": "0b012f14750c74f7b013190f741c2212885ace928c2726b9e41f6dd6ea8e6e82",
+              "head": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07"
+            },
+            "feedback_hash": "350877edc66c7caa1a2f80f16b1c0750c5697fe842bad01f242a278e26e32b00",
+            "feedback": {
+              "id": "HF-1",
+              "acceptance_complete": false,
+              "close_after_fixes": false,
+              "item_ids": [
+                "I-1"
+              ]
+            }
+          },
+          {
+            "event_sequence": 24,
+            "event": "human-feedback-classified",
+            "triage": {
+              "feedback_id": "HF-1",
+              "route": "local",
+              "active_item_ids": [
+                "I-1"
+              ],
+              "deferred_item_ids": [],
+              "split_authorized": false,
+              "assessments": [
+                {
+                  "id": "I-1",
+                  "disposition": "local"
+                }
+              ]
+            }
+          },
+          {
+            "event_sequence": 26,
+            "event": "human-correction-started",
+            "binding": {
+              "content_tree": "813dde770011cea47af7000ccff56d8fa60e2b0e",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "0858e68eb0b2e6e577a5843cfcc2e35e25244e07"
+            },
+            "amendment_id": "TA-1",
+            "task_ids": [
+              "T-H-1"
+            ]
+          },
+          {
+            "event_sequence": 31,
+            "event": "human-correction-complete",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            },
+            "amendment_id": "TA-1",
+            "commit_id": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "resolution": {
+              "feedback_id": "HF-1",
+              "resolved_item_ids": [
+                "I-1"
+              ],
+              "summary": "Corrected label"
+            }
+          },
+          {
+            "event_sequence": 34,
+            "event": "human-correction-verified",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            }
+          },
+          {
+            "event_sequence": 36,
+            "event": "human-correction-reviewed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpq4g41djk/.cogito/runs/DEV-stage-feature/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            },
+            "feedback_hash": "350877edc66c7caa1a2f80f16b1c0750c5697fe842bad01f242a278e26e32b00",
+            "approved": true,
+            "conditional": false,
+            "reviews": [
+              "T-H-1"
+            ],
+            "independent": true
+          },
+          {
+            "event_sequence": 37,
+            "event": "human-approved",
+            "binding": {
+              "content_tree": "db86a0d728e6086b884c349b4b054b92e3c56707",
+              "effective_contract_hash": "cb62ac8eccf24e6ec61ab9610f776850501b58bb611111c2c2336ae379cfbc90",
+              "head": "1f5a4b9826657bd439f8040db0b21e1599b7ce7c"
+            },
+            "feedback_hash": "350877edc66c7caa1a2f80f16b1c0750c5697fe842bad01f242a278e26e32b00",
+            "approved": true
+          }
+        ]
+      }
+    },
+    {
+      "kind": "maintenance",
+      "passed": true,
+      "human_inputs": "Synthetic fixture feedback and explicit approval; not real user sign-off.",
+      "reviewers": "Distinct synthetic reviewer identities; no claim of live agent quality assessment.",
+      "preparation_commits": [
+        {
+          "base_commit": "abae9865f5024af5a4d787ebd886697e0ab89e4f",
+          "branch": "main",
+          "commit_id": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+          "files": {
+            "docs/cogito/checkpoints/DEV-stage-maintenance/0003-package.json": "3e20800163741490e94802330fcce324e247b7f60ef74f3c92af50af2ebee6de",
+            "docs/cogito/packages/DEV-stage-maintenance.json": "63db71a2e01e5b8e8ba07d0163cd6add91cd53440e9a716cd1f129a698aaf505",
+            "docs/cogito/project-graph.json": "4a13e8fa12f9ea04b18cc92834d8bc5a5408cbad520dfd152ab5162f5522e907"
+          },
+          "stage": "package",
+          "stage_sequence": 3
+        }
+      ],
+      "start_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+      "implementation_commit": null,
+      "integration_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+      "correction_commit": null,
+      "final_commit": "35c544c9d7da68e28c439683589189b21a02dfd2",
+      "product_commits": [
+        "35c544c9d7da68e28c439683589189b21a02dfd2"
+      ],
+      "transitions": [
+        {
+          "step": "initial human acceptance",
+          "state": "awaiting-human"
+        },
+        {
+          "step": "synthetic human rejects label",
+          "state": "human-correction"
+        },
+        {
+          "step": "correction complete",
+          "state": "human-correction-verifying"
+        },
+        {
+          "step": "fresh checks and independent review",
+          "state": "awaiting-human"
+        },
+        {
+          "step": "explicit synthetic human acceptance",
+          "state": "finalizing"
+        },
+        {
+          "step": "final Result and Graph commit accepted",
+          "state": "accepted"
+        }
+      ],
+      "assertions": [
+        "No finalization before explicit human acceptance",
+        "All applicable preparation stages have separate recorded commits",
+        "Missing and tampered summary rejected by finalization record rules",
+        "CLI summary matches public RunStore summary",
+        "Fresh correction checks and separate reviewer identity",
+        "Result summary persisted in final Git commit",
+        "Clean final checkout",
+        "Maintenance retains one product commit after Start Gate"
+      ],
+      "delivery_summary": {
+        "schema_version": "1.0",
+        "preparation": [
+          {
+            "event_sequence": 4,
+            "event": "stage-committed",
+            "stage_sequence": 3,
+            "stage": "package",
+            "commit_id": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "base_commit": "abae9865f5024af5a4d787ebd886697e0ab89e4f",
+            "branch": "main",
+            "files": {
+              "docs/cogito/checkpoints/DEV-stage-maintenance/0003-package.json": "3e20800163741490e94802330fcce324e247b7f60ef74f3c92af50af2ebee6de",
+              "docs/cogito/packages/DEV-stage-maintenance.json": "63db71a2e01e5b8e8ba07d0163cd6add91cd53440e9a716cd1f129a698aaf505",
+              "docs/cogito/project-graph.json": "4a13e8fa12f9ea04b18cc92834d8bc5a5408cbad520dfd152ab5162f5522e907"
+            }
+          }
+        ],
+        "implementation": [
+          {
+            "event_sequence": 8,
+            "event": "agent-result-recorded",
+            "task_id": "T-1",
+            "status": "complete",
+            "base_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "evidence": [],
+            "changed_paths": [
+              "src/note.txt"
+            ],
+            "requested_transition": "verifying",
+            "agent_id": "initial-worker",
+            "completion_mode": "working-tree",
+            "content_tree": "fe4e99d552b7ccb5b729997dbdfcaba783c247c7",
+            "index_tree": "402156ac0a396f313d01c5a717592caae8be7092"
+          },
+          {
+            "event_sequence": 23,
+            "event": "agent-result-recorded",
+            "task_id": "T-H-1",
+            "status": "complete",
+            "base_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "evidence": [],
+            "changed_paths": [
+              "src/note.txt"
+            ],
+            "requested_transition": "verifying",
+            "agent_id": "human-worker-1",
+            "completion_mode": "working-tree",
+            "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+            "index_tree": "402156ac0a396f313d01c5a717592caae8be7092"
+          }
+        ],
+        "integration": [
+          {
+            "event_sequence": 14,
+            "event": "integration-complete",
+            "commit_id": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "previous_delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "slice_id": "mini-package",
+            "task_ids": [
+              "T-1"
+            ],
+            "source_heads": [
+              "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            ]
+          }
+        ],
+        "corrections": [
+          {
+            "event_sequence": 25,
+            "event": "human-correction-complete",
+            "amendment_id": "TA-1",
+            "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+            "completion_mode": "working-tree",
+            "base_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+          }
+        ],
+        "verification": [
+          {
+            "event_sequence": 11,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-8f43a96a15db2b06.json",
+            "evidence_hash": "08967fe39f9cb2f951e642e4b2c0cffbb50de91eae7b941ba5f8c1ab34768ea9",
+            "head_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "effective_contract_hash": "0b27292caada249af40bd00f0795ff514b6e8786c261696a9d261cfef03692fe"
+          },
+          {
+            "event_sequence": 12,
+            "event": "verification-passed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-8f43a96a15db2b06.json"
+            ],
+            "passed": true
+          },
+          {
+            "event_sequence": 13,
+            "event": "review-approved",
+            "approved": true,
+            "reviews": [
+              "T-1"
+            ],
+            "independent": false
+          },
+          {
+            "event_sequence": 15,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-f235a762f4dbc010.json",
+            "evidence_hash": "27a215fd896cbc0697751122ff6bf71dc6f16b8c9530bd12479360bd69df02f0",
+            "head_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "effective_contract_hash": "0b27292caada249af40bd00f0795ff514b6e8786c261696a9d261cfef03692fe"
+          },
+          {
+            "event_sequence": 16,
+            "event": "human-review-required",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-f235a762f4dbc010.json"
+            ],
+            "passed": true,
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "human_required": true,
+            "reviewer_escalation": true
+          },
+          {
+            "event_sequence": 26,
+            "event": "check-evidence-recorded",
+            "check_id": "C-1",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-bdfaae0537f542bb.json",
+            "evidence_hash": "4223d98dffef5c57912370e4107dcf281b710a04d4e2afa476e199586145cd33",
+            "head_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8"
+          },
+          {
+            "event_sequence": 27,
+            "event": "check-evidence-recorded",
+            "check_id": "C-human-label",
+            "evidence_path": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-human-label-354a4ad0fd44a32c.json",
+            "evidence_hash": "ebdbd18208d2c9e20d85fcfd614a9db2e4f6b1fc325cfa019e5a1b5af91abc8d",
+            "head_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8"
+          },
+          {
+            "event_sequence": 28,
+            "event": "human-correction-verified",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            }
+          },
+          {
+            "event_sequence": 30,
+            "event": "human-correction-reviewed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "feedback_hash": "d877bbca893bfcc995c64d8c3b92e0f448ce7e5e0a9c6cd368e59ff2779c8985",
+            "approved": true,
+            "conditional": false,
+            "reviews": [
+              "T-H-1"
+            ],
+            "independent": true
+          }
+        ],
+        "reviews": [
+          {
+            "event_sequence": 29,
+            "event": "agent-result-recorded",
+            "task_id": "T-H-1",
+            "status": "complete",
+            "base_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "head_commit": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "evidence": [],
+            "changed_paths": [],
+            "requested_transition": "review-approved",
+            "reviewer": "human-reviewer-1",
+            "implementer": "human-worker-1"
+          }
+        ],
+        "human_acceptance": [
+          {
+            "event_sequence": 16,
+            "event": "human-review-required",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-f235a762f4dbc010.json"
+            ],
+            "passed": true,
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "human_required": true,
+            "reviewer_escalation": true
+          },
+          {
+            "event_sequence": 17,
+            "event": "human-feedback-recorded",
+            "binding": {
+              "content_tree": "fe4e99d552b7ccb5b729997dbdfcaba783c247c7",
+              "effective_contract_hash": "0b27292caada249af40bd00f0795ff514b6e8786c261696a9d261cfef03692fe",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "feedback_hash": "d877bbca893bfcc995c64d8c3b92e0f448ce7e5e0a9c6cd368e59ff2779c8985",
+            "feedback": {
+              "id": "HF-1",
+              "acceptance_complete": false,
+              "close_after_fixes": false,
+              "item_ids": [
+                "I-1"
+              ]
+            }
+          },
+          {
+            "event_sequence": 18,
+            "event": "human-feedback-classified",
+            "triage": {
+              "feedback_id": "HF-1",
+              "route": "local",
+              "active_item_ids": [
+                "I-1"
+              ],
+              "deferred_item_ids": [],
+              "split_authorized": false,
+              "assessments": [
+                {
+                  "id": "I-1",
+                  "disposition": "local"
+                }
+              ]
+            }
+          },
+          {
+            "event_sequence": 20,
+            "event": "human-correction-started",
+            "binding": {
+              "content_tree": "fe4e99d552b7ccb5b729997dbdfcaba783c247c7",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "amendment_id": "TA-1",
+            "task_ids": [
+              "T-H-1"
+            ]
+          },
+          {
+            "event_sequence": 25,
+            "event": "human-correction-complete",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "amendment_id": "TA-1",
+            "commit_id": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "completion_mode": "working-tree",
+            "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+            "resolution": {
+              "feedback_id": "HF-1",
+              "resolved_item_ids": [
+                "I-1"
+              ],
+              "summary": "Corrected label"
+            }
+          },
+          {
+            "event_sequence": 28,
+            "event": "human-correction-verified",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            }
+          },
+          {
+            "event_sequence": 30,
+            "event": "human-correction-reviewed",
+            "evidence": [
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-1-bdfaae0537f542bb.json",
+              "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/tmpkr3vilor/.cogito/runs/DEV-stage-maintenance/evidence/C-human-label-354a4ad0fd44a32c.json"
+            ],
+            "delivery_head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "feedback_hash": "d877bbca893bfcc995c64d8c3b92e0f448ce7e5e0a9c6cd368e59ff2779c8985",
+            "approved": true,
+            "conditional": false,
+            "reviews": [
+              "T-H-1"
+            ],
+            "independent": true
+          },
+          {
+            "event_sequence": 31,
+            "event": "human-approved",
+            "binding": {
+              "content_tree": "06a4cb6a3a67cbc7f1e86bca549ee9031406ecfe",
+              "effective_contract_hash": "205570824a56f8c78914712a08c88c30644e538071483ffccddf0e6cddb749c8",
+              "head": "061a70f0cfa6cbb6e70ab68c5832649fa6f2b181"
+            },
+            "feedback_hash": "d877bbca893bfcc995c64d8c3b92e0f448ce7e5e0a9c6cd368e59ff2779c8985",
+            "approved": true
+          }
+        ]
+      }
+    }
+  ]
+}

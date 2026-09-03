@@ -1,0 +1,11 @@
+WARN `--no-project` was provided, but no project was found
+cogito/scripts/cogito_projection.py:91: error: Unexpected keyword argument "status" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:91: error: Unexpected keyword argument "adoption" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:91: error: Unexpected keyword argument "worktree" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:95: error: No overload variant of "get" of "dict" matches argument type "str"  [call-overload]
+cogito/scripts/cogito_projection.py:95: note: Possible overload variants:
+cogito/scripts/cogito_projection.py:95: note:     def get(self, Never, None = ..., /) -> None
+cogito/scripts/cogito_projection.py:95: note:     def get(self, Never, Never, /) -> Never
+cogito/scripts/cogito_projection.py:95: note:     def [_T] get(self, Never, _T, /) -> _T
+cogito/scripts/cogito_projection.py:107: error: Incompatible types in assignment (expression has type "TaskState | None", variable has type "TaskState")  [assignment]
+Found 5 errors in 1 file (checked 19 source files)
