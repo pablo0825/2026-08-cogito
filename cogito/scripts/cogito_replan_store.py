@@ -13,6 +13,7 @@ from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_replan_lock import project_lock, replan_authority, replans
 from cogito_replan_state import project_replan, TERMINAL
+from cogito_replan_snapshot import ReplanRuntime, entries as snapshot_entries
 from cogito_run_store import RunStore
 from cogito_scheduler import tasks_with_dependencies
 
@@ -64,6 +65,8 @@ class ReplanStore:
 
     def _emit(self, kind, payload, action_id, operation, request):
         old = read_events(self.events_path)
+        if old:
+            payload = {**payload, 'runtime_logs': self._runtime(project_replan(old)).log_bindings()}
         event = dict(type=kind, payload=payload, action_id=action_id,
                      request_hash=request_fingerprint(operation, **request))
         project_replan([*old, event])
@@ -121,6 +124,9 @@ class ReplanStore:
     def _capture(self):
         source = self.source()
         current = source.load()
+        for evidence_path, ledger in current.get('evidence', {}).items():
+            if hash_json(load_json(Path(evidence_path))) != ledger.get('evidence_hash'):
+                raise CogitoError('source runtime evidence differs from its recorded hash')
         worktrees = {}
         for task in current['tasks'].values():
             if task.get('worktree'):
@@ -130,11 +136,67 @@ class ReplanStore:
                 worktrees[str(path)] = dict(index_tree=index, content_tree=tree,
                     head=source._git_at(path,'rev-parse','HEAD'), branch=source._git_at(path,'branch','--show-current'))
         index, tree = capture_index_and_worktree_trees(self.root)
-        return dict(source_event_hash=current['last_event_hash'], package_hash=current['package_hash'],
+        saved = dict(source_event_hash=current['last_event_hash'], package_hash=current['package_hash'],
             effective_contract_hash=current['effective_contract_hash'], tasks=current['tasks'],
             worktrees=worktrees, delivery=dict(index_tree=index, content_tree=tree,
                 head=source._git('rev-parse','HEAD'),branch=source._git('branch','--show-current')),
             graph=load_json(self.root/'docs/cogito/project-graph.json'))
+        saved['runtime'] = self._runtime().capture(saved['delivery'], worktrees)
+        return saved
+
+    def _runtime(self, state=None):
+        state = state or self.load()
+        source = RunStore(self.root, state['source_run_id'])
+        package = source.approved_package()
+        documents = [d for sl in package['slices'] for d in (sl['spec'], sl['plan'])]
+        documents.extend(package.get('source_registry', []))
+        if package.get('shared_understanding', {}).get('path'):
+            documents.append(package['shared_understanding'])
+        for document in documents:
+            source._validate_content_hash(document['path'], document['hash'])
+        protected = {d['path'] for d in documents}
+        return ReplanRuntime(self.root, state, protected)
+
+    def _verified_successor_links(self, state):
+        """Only journaled, exactly verified worktree gitlinks may leave delivery."""
+        links: dict[str, str] = {}
+        if state['state'] != 'handing-off':
+            return links
+        package = state['proposal']['package']
+        approved = {str((self.root / sl['worker']['worktree']).resolve()): sl['worker']['branch']
+                    for sl in package['slices']}
+        base = package['baseline_commit']
+        base_tree = self.source()._git('rev-parse', base + '^{tree}')
+        baseline = dict(head=base, index_tree=base_tree, content_tree=base_tree)
+        for path, branch in approved.items():
+            worktree = Path(path)
+            for source_path in state['snapshot']['worktrees']:
+                original = Path(source_path)
+                if original != self.root and (worktree == original or original in worktree.parents
+                                              or worktree in original.parents):
+                    raise CogitoError('successor worktree overlaps preserved source worktree')
+            if not worktree.exists():
+                continue
+            bindings = [self._last_targets(state).get(path, baseline)]
+            plans = [p for p in state['transfer_plans'].values() if p['worktree'] == path]
+            if plans and plans[-1]['task_id'] not in state['transfers']:
+                # _transfer reconciles precisely these journaled crash points.
+                plan = plans[-1]
+                bindings = [plan['before'], plan['after'], dict(
+                    head=plan['before']['head'], index_tree=plan['after']['index_tree'],
+                    content_tree=plan['after']['content_tree'])]
+            actual = self._target_binding(worktree)
+            if (actual not in bindings
+                    or self.source()._git_at(worktree, 'branch', '--show-current') != branch):
+                raise CogitoError('transferred worktree changed before activation')
+            relative = worktree.relative_to(self.root).as_posix()
+            # A preexisting product entry cannot be hidden by a new target.
+            for field in ('index_tree', 'content_tree'):
+                if any(p == relative or p.startswith(relative + '/') for p in
+                       snapshot_entries(self.root, state['snapshot']['delivery'][field])):
+                    raise CogitoError('successor worktree overlaps stopped delivery content')
+            links[relative] = actual['head']
+        return links
 
     @mutation
     def stop(self, action_id):
@@ -159,6 +221,9 @@ class ReplanStore:
 
     def _assert_source(self, proposal=None, activated=False):
         state = self.load()
+        successor = RunStore(self.root, state['successor_run_id'])
+        if successor.events_path.exists():
+            successor.load()
         saved = state['snapshot']
         actual = self._capture()
         events = self.source()._events.read()
@@ -171,6 +236,15 @@ class ReplanStore:
                 raise CogitoError('saved source worktree drifted')
         if any(actual['delivery'][k] != saved['delivery'][k] for k in ('head','branch')):
             raise CogitoError('delivery baseline drifted since stop checkpoint')
+        runtime = self._runtime(state)
+        frozen_runtime = runtime.assert_snapshot(saved)
+        for event in read_events(self.events_path):
+            if 'runtime_logs' in event['payload']:
+                runtime.assert_logs(event['payload']['runtime_logs'])
+        successor_links = self._verified_successor_links(state)
+        source_links = runtime.worker_links(saved['worktrees'])
+        runtime.assert_index(saved['delivery']['index_tree'], actual['delivery']['index_tree'],
+                             frozen_runtime, source_links)
         allowed = {'docs/cogito/project-graph.json'}
         if proposal:
             package = proposal['package']
@@ -178,8 +252,15 @@ class ReplanStore:
             olddocs = {d['path'] for s in self.source().approved_package()['slices'] for d in (s['spec'],s['plan'])}
             allowed.update(d['path'] for s in package['slices'] for d in (s['spec'],s['plan']) if d['path'] not in olddocs)
         for field in ('index_tree','content_tree'):
-            changed = set(self.source()._git('diff','--name-only',saved['delivery'][field],actual['delivery'][field],'--').splitlines())
-            if changed - allowed: raise CogitoError('delivery content drifted outside new control documents')
+            runtime.assert_frozen_tree(actual['delivery'][field], frozen_runtime)
+            before = runtime.product_tree(saved['delivery'][field], immutable_files=frozen_runtime,
+                                          worker_links=source_links)
+            after = runtime.product_tree(actual['delivery'][field], worker_links=source_links | successor_links,
+                                         immutable_files=frozen_runtime)
+            changed = set(filter(None, self.source()._git('diff','--name-only','--no-renames','-z',before,after,'--').split('\0')))
+            if changed - allowed:
+                raise CogitoError('delivery content drifted outside new control documents: '
+                                  + ', '.join(sorted(changed - allowed)))
         expected = state['approval']['graph'] if activated else saved['graph']
         if actual['graph'] != expected: raise CogitoError('Project Graph drifted; preserve state and reconcile')
 
@@ -248,7 +329,7 @@ class ReplanStore:
         # Prove deterministic imports before review/approval, while a proposal
         # can still be revised. Never discover an intrinsic merge conflict only
         # after the user has approved and Graph activation has begun.
-        simulated = {}
+        simulated: dict[str | None, str] = {}
         transfer_trees = {}
         for row in manifest:
             if row['disposition']=='omit': continue
@@ -356,7 +437,7 @@ class ReplanStore:
 
     @mutation
     def handoff(self, action_id):
-        request={}
+        request: dict[str, Any] = {}
         if self._replay(action_id,'handoff',request): return self.load()
         state=self.load()
         if state['state'] not in {'ready-for-handoff','handing-off'}:
