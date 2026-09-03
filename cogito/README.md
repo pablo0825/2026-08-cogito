@@ -66,3 +66,7 @@ Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快�
 核心狀態資料流另提供靜態型別檢查：在 repo 根目錄使用 mypy 1.20.2 執行 `python3 -m mypy --config-file cogito/mypy.ini`。範圍由設定檔列出，包含拒絕錯誤欄位與狀態值的靜態範例；尚未將全部 JSON 邊界與測試程式納入型別檢查。mypy 僅為開發工具，執行 Cogito 不需要安裝。
 
 維護時執行上述 Python 回歸測試；skill 格式驗證與 Agent 行為評測若另有工具，分別執行並回報結果，未執行的項目明確標示。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。
+
+## 契約變更與重新規劃
+
+超出 Technical Amendment 的變更使用獨立 `RP-*` 單：全體停止並保存、分析差異、獨立覆核、使用者核准新 Package，再由新 run 承接成果。核准與正式啟用分離，交接各步可對帳恢復；accepted 原紀錄保持不變。使用方法與第一版證據沿用限制見 [重新規劃](references/replanning.md)。

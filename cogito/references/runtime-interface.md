@@ -58,3 +58,7 @@ Finalization 先產生不含自身 final commit ID 的 Result 與 Project Graph�
 Maintenance 修正使用未提交快照：`correction-complete`／`review-fix-complete` 的 `--commit-id` 指定 Start Gate HEAD，checkout 必須仍在原 delivery branch 與相同 HEAD。Gate 追加的 completion payload 包含 `completion_mode: working-tree`、`commit_id`（基線檢查點）與 `content_tree`。Result amendment 將後兩者記為 `base_commit`、`content_tree`，不含 `commit_id`；final commit 帶齊 trailers，結案報告再補實際 amendment commit ID。不可把此格式套用到其他 kind，或跳過修正後的正式 checks；詳見 Execution Policy。
 
 Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證據遺失、hash 不符、DAG 有環、超出允許路徑或 action 無法對帳時，Coordinator 必須停止推進並依上述方式處理。命令報錯不等於已寫入 `block` 事件；提交後的快取或權限錯誤也可能發生在事件已落盤之後，應先查詢事件還原的狀態。若 Gate 不可用、歷史無法驗證、Package 漂移或儲存故障使 `block` 本身也被拒絕，保留現場並回報無法登錄阻塞，不編輯 `state.json`，也不宣稱 run 已變為 `blocked`。
+
+## 重新規劃 Gate
+
+`replan` 子命令管理獨立 `RP-*` 單，提供 begin、stop、propose、review、approve、reject、handoff、abandon、status，以及 executor 登錄／停止回報與 advance-adoptions。執行規則與 payload 見 [Replanning](replanning.md)。`next` 在原或新 run 被限制時會回傳 replan ID 與下一階段，不再建議普通 resume。
