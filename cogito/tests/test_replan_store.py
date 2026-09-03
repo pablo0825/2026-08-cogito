@@ -108,10 +108,15 @@ class ReplanStoreTests(GitTestCase):
             return original(store,event,*args,**kwargs)
         with mock.patch.object(RunStore,'transition',new=fail):
             with self.assertRaises(CogitoError):rp.abandon('cancel-source','infeasible','cancel-choice')
-        self.assertEqual(rp.load()['state'],'resolving-decision')
+        from cogito_disposition_store import DispositionStore
+        disposition=DispositionStore(repo,'DP-RP-api')
+        self.assertEqual(disposition.load()['state'],'stopping')
+        self.assertEqual(rp.load()['state'],'reviewing')
         with self.assertRaises(CogitoError):old.resume_gate()
         rp.abandon('cancel-source','infeasible','cancel-choice')
         self.assertEqual(old.load()['state'],'cancelled')
+        self.assertEqual(rp.load()['state'],'disposition')
+        self.assertEqual(disposition.load()['state'],'analyzing')
         graph=load_json(repo/'docs/cogito/project-graph.json')
         self.assertIsNone(graph['active_run_id'])
         self.assertEqual(graph['slices']['FS-1']['disposition'],'cancelled')

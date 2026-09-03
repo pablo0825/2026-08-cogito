@@ -57,6 +57,8 @@ def check_run_fence(root, run_id, operation):
             if run_id == source:
                 raise CogitoError('source run was superseded; continue its successor')
             continue
+        if state['state'] == 'disposition':
+            continue
         if state['state'] == 'abandoned':
             if run_id == successor:
                 raise CogitoError('successor belongs to an abandoned replan')
@@ -90,6 +92,8 @@ def run_mutation(method: F) -> F:
                 operation = 'preparation-transition' if operation == 'transition' else 'preparation-record'
             if operation == 'record' and event in {'planning-begun', 'planning-reviewed', 'planning-withdrawn'}:
                 operation = 'planning-record'
+            from cogito_disposition_lock import check_disposition_fence
+            check_disposition_fence(self, operation, args, kwargs)
             check_run_fence(self.root, self.run_id, operation)
             return method(self, *args, **kwargs)
     return cast(F, wrapped)

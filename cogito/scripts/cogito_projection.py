@@ -60,6 +60,22 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             if not payload.get("replan_id") or not payload.get("source_run_id"):
                 raise CogitoError("human review mandate requires RP lineage")
             projection["human_review_mandate"] = dict(payload)
+        elif event_type == "disposition-resumed":
+            if projection['state'] != 'blocked' or payload.get('validated') is not True or not payload.get('disposition_id'):
+                raise CogitoError('disposition resumption requires a validated paused original run')
+            if payload.get('target') not in workflow['resume_targets']:
+                raise CogitoError('invalid disposition resumption target')
+            projection['state'] = payload['target']
+            projection['blocked_from'] = None
+            projection['project_graph_hash'] = payload['project_graph_hash']
+            projection['carryover_worktrees'] = payload['carryover_worktrees']
+            if projection.get('human'):
+                projection.setdefault('withdrawn_human_feedback', []).append(projection.pop('human'))
+                projection['human_review_mandate'] = {'disposition_id': payload['disposition_id'], 'source_run_id': projection['run_id']}
+            for task in projection['tasks'].values():
+                if is_active_task(task):
+                    task['status'] = 'pending'
+                    task['released_by'] = payload['disposition_id']
         elif event_type == "run-superseded":
             if projection['state'] != 'blocked' or not _required(payload, 'replan_id', 'successor_run_id'):
                 raise CogitoError('supersession requires a blocked source and explicit successor')
@@ -205,6 +221,11 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
     if transition.get("counter"):
         key = transition["counter"]
         projection["counters"][key] = projection["counters"].get(key, 0) + 1
+    if event_type == "cancel" and payload.get('disposition_id'):
+        for task in projection['tasks'].values():
+            if is_active_task(task):
+                task['status'] = 'blocked'
+                task['released_by'] = payload['disposition_id']
     if event_type == "package-approved":
         projection["package_path"] = payload["package_path"]
         projection["package_hash"] = payload["package_hash"]
@@ -212,6 +233,8 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
         projection["max_workers"] = int(payload["max_workers"])
         projection["project_graph_hash"] = payload["project_graph_hash"]
         projection["limits"].update(payload["limits"])
+        if payload.get("human_review_mandate"):
+            projection["human_review_mandate"] = dict(payload["human_review_mandate"])
         projection["tasks"] = {item["id"]: cast(TaskState, {**dict(item), "status": "pending"}) for item in payload.get("tasks", [])}
     elif event_type in {"package-ready", "mini-package-ready"}:
         projection["candidate_package_hash"] = payload.get("candidate_package_hash")

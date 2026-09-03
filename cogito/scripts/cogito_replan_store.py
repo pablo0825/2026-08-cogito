@@ -313,6 +313,8 @@ class ReplanStore:
             if state['state']!='awaiting-approval' or proposal_hash!=state['proposal_hash']:
                 raise CogitoError('human approval must reference independently reviewed current proposal')
             proposal=state['proposal']
+            from cogito_disposition_scope import check_package
+            check_package(self.root, proposal['package'], state['successor_run_id'])
             self._assert_source(proposal)
             new=self.successor()
             if new.load()['candidate_package_hash']!=package_hash(proposal['package']):
@@ -484,8 +486,57 @@ class ReplanStore:
         self._emit('work-transferred',receipt,'transfer:'+task_id,'transfer',{'row':row})
 
     @mutation
+    def delegate_disposition(self, disposition_id, action_id):
+        """Retire an RP only after its linked disposition has stopped all work.
+
+        This also provides an append-only exit for legacy resolving-decision
+        journals and partially applied handoffs. Transfer receipts stay intact.
+        """
+        request = dict(disposition_id=disposition_id)
+        if self._replay(action_id, 'delegate-disposition', request): return self.load()
+        state = self.load()
+        if state['state'] in TERMINAL:
+            raise CogitoError('terminal replan cannot delegate another disposition')
+        from cogito_disposition_store import DispositionStore
+        from cogito_execution_registry import quiescent
+        disposition = DispositionStore(self.root, disposition_id).load()
+        saved = disposition.get('snapshot', {})
+        if (disposition.get('replan_id') != self.replan_id or
+                disposition.get('source_run_id') != state['source_run_id']):
+            raise CogitoError('disposition does not own this replan source')
+        if disposition['state'] == 'stopping' or not saved:
+            raise CogitoError('confirm disposition stop and snapshots before delegating replan')
+        required = {state['source_run_id']}
+        if self.successor().events_path.exists(): required.add(state['successor_run_id'])
+        if not required <= set(saved.get('runs', {})):
+            raise CogitoError('disposition must preserve source and successor snapshots')
+        if not all(quiescent(self.root, run_id, allow_external_receipts=True) for run_id in required):
+            raise CogitoError('source and successor executors must remain stopped')
+        graph = load_json(self.root/'docs/cogito/project-graph.json')
+        if graph.get('active_run_id') in required:
+            raise CogitoError('disposition must release source and successor execution ownership')
+        return self._emit('replan-disposition-started', request, action_id,
+                          'delegate-disposition', request)
+
+    @mutation
     def abandon(self, disposition, reason, action_id):
         request=dict(disposition=disposition,reason=reason)
+        if disposition == 'cancel-source':
+            # Cancellation owns an independent, recoverable disposition. Do
+            # not record the old RP intent, which cannot track artifact review.
+            state = self.load()
+            if state['state'] in {'completed', 'abandoned'}:
+                raise CogitoError('terminal replan cannot cancel its source')
+            if not state.get('snapshot'):
+                raise CogitoError('confirm all executors stopped and capture work before cancellation')
+            if state['source_state'] == 'accepted':
+                raise CogitoError('accepted source cannot cancel')
+            from cogito_disposition_store import DispositionStore
+            linked = state.get('disposition_id', 'DP-'+self.replan_id)
+            store = DispositionStore(self.root, linked)
+            store.begin(state['source_run_id'], reason, 'replan-cancel:'+action_id,
+                        replan_id=self.replan_id, cancel_source=True)
+            return store.stop('replan-cancel-stop:'+action_id)
         if self._replay(action_id,'abandon',request): return self.load()
         state=self.load()
         if state['state']!='resolving-decision':
@@ -497,6 +548,11 @@ class ReplanStore:
             if disposition in {'resume-source','cancel-source'} and state['source_state']=='accepted':
                 raise CogitoError('accepted source cannot resume or cancel')
             if state.get('snapshot'): self._assert_source(state.get('proposal'))
+            # A decision becomes durable only after its source operation is
+            # feasible. In particular, abandoning a proposal does not withdraw
+            # the human feedback which caused its escalation.
+            if disposition == 'resume-source':
+                self.source().validate_resume()
             graph=load_json(self.root/'docs/cogito/project-graph.json')
             if graph.get('active_run_id') not in {None,state['source_run_id']}:
                 raise CogitoError('another run owns Project Graph')
@@ -523,13 +579,4 @@ class ReplanStore:
                     saved=state['snapshot']['worktrees'][task['worktree']]
                     source.record('work-carried',{'worktree':task['worktree'],'binding':{k:saved[k] for k in ('head','index_tree','content_tree')}},
                         'resume-binding:'+self.replan_id+':'+task_id,source._GATE_AUTHORITY)
-        elif disposition=='cancel-source':
-            before=state['decision']['graph_before'];after=copy.deepcopy(before)
-            after['active_run_id']=None
-            for sl in source.approved_package()['slices']:
-                after['slices'][sl['id']]['disposition']='cancelled'
-            path=self.root/'docs/cogito/project-graph.json';actual=load_json(path)
-            if actual not in (before,after): raise CogitoError('Project Graph changed during cancellation')
-            source.transition('cancel',{'authorized':True,'reason':reason},'replan-cancel:'+self.replan_id)
-            if actual!=after: atomic_write_json(path,after)
         return self._emit('replan-abandoned',request,action_id,'abandon',request)
