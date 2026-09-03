@@ -62,6 +62,23 @@ class PackageRevisionTests(GitTestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout)
         return result
 
+    def begin_revision(self, store: RunStore, first: dict) -> None:
+        store.planning_begin({
+            "round": 1, "candidate_hash": package_hash(first), "author_id": "planner",
+            "reason": "Record a newly identified stop condition without changing approved scope.",
+            "level": "plan",
+            "impact": {key: {"disposition": "reuse", "reason": "This contract component is unchanged."}
+                       for key in ("requirements", "boundary", "spec", "plan", "dag", "acceptance")},
+        }, "begin-revision")
+
+    def review_revision(self, store: RunStore) -> None:
+        store.planning_review({
+            "round": 2, "proposal_hash": store.load()["planning"]["proposal_hash"],
+            "reviewer_id": "independent-reviewer", "findings": [],
+            "assessment": {key: "Compared original and revised inputs; only the stop condition changed."
+                           for key in ("consistency", "impact", "reuse")},
+        }, "review-revision")
+
     def test_candidate_revisions_require_latest_approval_and_freeze_after_approval(self) -> None:
         for kind in ("feature", "maintenance", "documentation"):
             with self.subTest(kind=kind):
@@ -69,15 +86,20 @@ class PackageRevisionTests(GitTestCase):
                 run_id = first["run_id"]
                 revised = copy.deepcopy(first)
                 revised["stop_conditions"].append("newly identified contract risk")
+                revised["planning_round"] = 2
                 revised_path = first_path.with_name("package-v2.json")
                 revised_path.write_text(json.dumps(revised))
                 prepare = ("prepare-package", "--run-id", run_id, "--package")
                 initial = json.loads(self.invoke(repo, *prepare, str(first_path), "--action-id", "candidate-v1").stdout)["data"]
                 self.assertEqual(initial["candidate_package_hash"], package_hash(first))
+                store = RunStore(repo, run_id)
+                self.begin_revision(store, first)
                 revision_args = (*prepare, str(revised_path), "--action-id", "candidate-v2")
                 updated = json.loads(self.invoke(repo, *revision_args).stdout)["data"]
                 self.assertEqual(updated["state"], "awaiting-package-approval")
                 self.assertEqual(updated["candidate_package_hash"], package_hash(revised))
+                self.review_revision(store)
+                updated = store.load()
                 events_path = repo / ".cogito/runs" / run_id / "events.jsonl"
                 events_before = events_path.read_bytes()
                 self.assertEqual(json.loads(self.invoke(repo, *revision_args).stdout)["data"], updated)
@@ -132,6 +154,7 @@ class PackageRevisionTests(GitTestCase):
         store.prepare_package(first, "candidate-v1")
         revised = copy.deepcopy(first)
         revised["stop_conditions"].append("newly identified contract risk")
+        revised["planning_round"] = 2
         graph_path = repo / "docs/cogito/project-graph.json"
         canonical = repo / "docs/cogito/packages" / f"{first['run_id']}.json"
         old_graph = {"schema_version": "3.0", "active_run_id": None, "slices": {}, "dependencies": []}
@@ -141,7 +164,10 @@ class PackageRevisionTests(GitTestCase):
         def publish_then_revise(path, value):
             atomic_write_json(path, value)
             if path == graph_path:
-                RunStore(repo, first["run_id"]).prepare_package(revised, "candidate-v2")
+                revision_store = RunStore(repo, first["run_id"])
+                self.begin_revision(revision_store, first)
+                revision_store.prepare_package(revised, "candidate-v2")
+                self.review_revision(revision_store)
 
         with mock.patch("cogito_approval.atomic_write_json", side_effect=publish_then_revise):
             with self.assertRaisesRegex(CogitoError, "history changed"):

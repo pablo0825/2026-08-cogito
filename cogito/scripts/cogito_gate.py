@@ -46,6 +46,13 @@ def parser() -> argparse.ArgumentParser:
     commands = top.add_subparsers(dest="command", required=True)
     replan = commands.add_parser("replan", help="independent replanning lifecycle")
     replan.add_argument("replan_args", nargs=argparse.REMAINDER)
+    planning = commands.add_parser("planning", help="versioned preparation in the same run")
+    planning.add_argument("operation", choices=["begin", "review", "withdraw", "history", "compare", "recover"])
+    planning.add_argument("--run-id", required=True)
+    planning.add_argument("--input")
+    planning.add_argument("--action-id")
+    planning.add_argument("--from-round", type=int)
+    planning.add_argument("--to-round", type=int)
     init = commands.add_parser("init")
     init.add_argument("--run-id", required=True)
     init.add_argument("--kind", required=True, choices=["feature", "change", "correction", "maintenance", "documentation"])
@@ -150,7 +157,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     repo = Path(args.repo).resolve()
     try:
-        if args.command == "replan":
+        if args.command == "planning":
+            store = RunStore(repo, args.run_id)
+            if args.operation == "history":
+                output = store.planning_history()
+            elif args.operation == "compare":
+                if args.from_round is None or args.to_round is None:
+                    raise CogitoError("planning compare requires --from-round and --to-round")
+                output = store.planning_compare(args.from_round, args.to_round)
+            elif args.operation == "recover":
+                output = store.planning_recover()
+            else:
+                if not args.input or not args.action_id:
+                    raise CogitoError("planning mutations require --input and --action-id")
+                operation = {"begin": store.planning_begin, "review": store.planning_review,
+                             "withdraw": store.planning_withdraw}[args.operation]
+                output = operation(_read_object(args.input), args.action_id)
+        elif args.command == "replan":
             from cogito_replan_cli import run as run_replan
             output = run_replan(repo, args.replan_args)
         elif args.command == "init":

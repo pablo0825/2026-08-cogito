@@ -16,6 +16,10 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from cogito_state_types import AgentResult, RunState, TaskStatus
 from cogito_replan_lock import run_mutation, project_lock, check_run_fence
+from cogito_planning import (
+    PlanningMixin, PLANNING_EVENTS, capture_candidate, assert_files,
+    document_snapshot, guard_preparation, validate_revision_candidate,
+)
 from cogito_event_types import (
     AgentResultRecordedEvent, AgentResultRecordedPayload,
     CheckEvidenceRecordedEvent, CheckEvidenceRecordedPayload,
@@ -54,9 +58,10 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore:
+class RunStore(PlanningMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
+        *PLANNING_EVENTS,
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
@@ -115,10 +120,35 @@ class RunStore:
 
     def _validate_preparation_input(self, event: str, payload: Mapping[str, Any]) -> None:
         validate_preparation_event(event, payload)
+        guard_preparation(self._events.project(), event, payload)
         if event == "shared-understanding-confirmed":
             # An old run may contain a malformed, unconfirmed summary. Keep it
             # readable and revisable, but never freeze it via a new confirmation.
             validate_shared_understanding_hash(self._events.project().get("shared_understanding_hash"))
+
+    def _planning_preparation_payload(self, event, payload):
+        current = self._events.project()
+        planning = current.get("planning")
+        if not planning or not planning.get("revision") or event not in {
+            "shared-understanding-ready", "shared-understanding-confirmed", "boundary-complete",
+        }:
+            return payload
+        self._planning_environment(current, documents=event == "boundary-complete")
+        payload = dict(payload)
+        if event == "shared-understanding-ready":
+            document = payload.get("document")
+            saved = document_snapshot(self.root, document)
+            if saved["hash"] != payload.get("shared_understanding_hash"):
+                raise CogitoError("Shared Understanding document does not match its confirmation hash")
+            if "document_snapshot" in payload and payload["document_snapshot"] != saved:
+                raise CogitoError("Shared Understanding changed during preparation")
+            payload["document_snapshot"] = saved
+        elif event == "shared-understanding-confirmed":
+            document = planning.get("shared_document")
+            if not document:
+                raise CogitoError("prepare the current Shared Understanding document first")
+            document_snapshot(self.root, document)
+        return payload
 
     @run_mutation
     def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> RunState:
@@ -128,6 +158,11 @@ class RunStore:
         replay = self._replay(action_id, event_type, request_hash)
         if replay is not None:
             return replay
+        if expected_previous_hash is not None and self._events.project().get("last_event_hash", expected_previous_hash) != expected_previous_hash:
+            raise CogitoError("event history changed during validation; retry with the same action_id")
+        if event_type == "package-approved":
+            self._planning_approval_binding(self._events.project())
+        payload = self._planning_preparation_payload(event_type, payload)
         self._validate_preparation_input(event_type, payload)
         return self._events.append({
             "type": event_type, "payload": dict(payload),
@@ -149,6 +184,7 @@ class RunStore:
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
             return replay
+        payload = self._planning_preparation_payload(event, payload)
         self._validate_preparation_input(event, payload)
         current = self.load()
         if event in self._PROTECTED_TRANSITION_EVENTS:
@@ -216,6 +252,10 @@ class RunStore:
         current = self.load()
         if package["kind"] != current["kind"]:
             raise CogitoError("Package kind must match the run kind")
+        if current.get("candidate_package_hash") and current["candidate_package_hash"] != package_hash(package):
+            raise CogitoError("a different candidate requires a new planning round")
+        self._planning_environment(current)
+        validate_revision_candidate(current, package)
         mini = package["kind"] in {"maintenance", "documentation"}
         if not mini and package["shared_understanding"]["hash"] != current.get("shared_understanding_hash"):
             raise CogitoError("Package is not bound to the confirmed Shared Understanding")
@@ -223,7 +263,13 @@ class RunStore:
             raise CogitoError("Package is not bound to the recorded Boundary Gate result")
         event = "mini-package-ready" if mini else "package-ready"
         expected_state = "preparing" if mini else "package-preparing"
-        payload = {"package_valid": True, "candidate_package_hash": package_hash(package)}
+        planning = current.get("planning")
+        if planning and planning.get("shared_document") and package["shared_understanding"] != planning["shared_document"]:
+            raise CogitoError("Package must use the confirmed planning document")
+        snapshot = capture_candidate(self.root, package, planning["round"] if planning else 1,
+                                     strict=bool(planning and planning["revision"]))
+        payload = {"package_valid": True, "candidate_package_hash": package_hash(package),
+                   "candidate_snapshot": snapshot}
         if current["state"] not in {expected_state, "awaiting-package-approval"}:
             raise CogitoError("Package preparation is not legal in the current state")
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
@@ -743,12 +789,15 @@ class RunStore:
             raise CogitoError("Package approval is not legal in the current state")
         if current.get("candidate_package_hash") != digest:
             raise CogitoError("approved Package differs from the Gate-validated candidate")
+        planning_approval = self._planning_approval_binding(current)
         graph_path = self.root / "docs" / "cogito" / "project-graph.json"
         graph_before = graph_path.read_bytes() if graph_path.exists() else None
         # Finish validation before publishing anything. Package creation is
         # exclusive, so rollback can distinguish our file from an existing one.
         graph = self._formalize_project_graph(package, graph_path)
         event_payload = {"approved": True, "package_path": relative.as_posix(), "package_hash": digest, "tasks": tasks, "max_workers": package["policy_snapshot"]["max_workers"], "project_graph_hash": hash_json(graph), "project_graph_snapshot": graph, "limits": package["limits"]}
+        if planning_approval:
+            event_payload["planning_approval"] = planning_approval
         return publish_approval(
             ApprovalArtifacts(target, package, graph_path, graph, graph_before),
             prior_state=current,
@@ -874,6 +923,8 @@ class RunStore:
         current = self.load()
         if current["state"] != "blocked" or not current.get("blocked_from"):
             raise CogitoError("only a blocked run with a recorded origin may resume")
+        if not current.get("package_hash") and current.get("planning", {}).get("revision"):
+            self.planning_recover()
         target = current["blocked_from"]
         if target not in self.workflow["resume_targets"]:
             raise CogitoError("blocked origin is not a legal resume target")
@@ -1066,7 +1117,16 @@ class RunStore:
         from cogito_replan_lock import replans
         for replan in replans(self.root):
             if self.run_id in {replan["source_run_id"], replan["successor_run_id"]} and replan["state"] not in {"completed", "abandoned"}:
-                return {"state": self.load()["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"]}
+                from cogito_replan_store import ReplanStore
+                replan = ReplanStore(self.root, replan["replan_id"]).load()
+                projection = self.load()
+                if self.run_id == replan["successor_run_id"] and not projection.get("package_hash") and projection.get("planning", {}).get("revision"):
+                    output = derive_next_action(projection)
+                    if output["next_action"] == "request-package-approval":
+                        output["next_action"] = "prepare-replan-proposal"
+                    output.update(replan_id=replan["replan_id"], replan_state=replan["state"])
+                    return output
+                return {"state": projection["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"]}
         projection = self.load()
         output = derive_next_action(projection)
         if projection["state"] == "accepted":

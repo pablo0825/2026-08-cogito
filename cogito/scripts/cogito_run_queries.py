@@ -30,6 +30,15 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
     if state not in actions:
         raise CogitoError(f"no action is defined for state {state!r}")
     output: dict[str, Any] = {"state": state, "next_action": actions[state]}
+    planning = projection.get("planning")
+    if planning and not projection.get("package_hash"):
+        output["planning_round"] = planning["round"]
+        output["candidate_package_hash"] = projection["candidate_package_hash"]
+        output["proposal_hash"] = planning["proposal_hash"]
+        if planning["revision"]:
+            output["revision_reason"] = planning["revision"]["request"]["reason"]
+            if state == "awaiting-package-approval" and not planning["review"]:
+                output["next_action"] = "request-independent-planning-review"
     if state == "awaiting-shared-confirmation":
         output["shared_understanding_hash"] = projection["shared_understanding_hash"]
     if state == "preparing" and projection["kind"] in {"maintenance", "documentation"}:

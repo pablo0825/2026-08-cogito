@@ -66,6 +66,7 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    planning: dict[str, Any]
     carryover_worktrees: dict[str, dict[str, str]]
     amendments: list[dict[str, Any]]
     shared_understanding_revised: bool

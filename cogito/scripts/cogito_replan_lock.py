@@ -65,8 +65,15 @@ def check_run_fence(root, run_id, operation):
             raise CogitoError('project approval is fenced by an active replan')
         if run_id == source:
             raise CogitoError(f"run is fenced by {state['replan_id']}; use the replan Gate")
+        preparation = {
+            'create', 'prepare_package', 'preparation-transition', 'preparation-record',
+            'planning_begin', 'planning_review', 'planning_withdraw', 'planning_recover', 'planning-record',
+        }
+        if run_id == successor and operation in preparation and state['state'] in {'ready-for-handoff', 'handing-off'}:
+            raise CogitoError('successor preparation is frozen by approved replan authorization')
         if run_id == successor and operation not in {
             'create', 'prepare_package', 'preparation-transition', 'preparation-record',
+            'planning_begin', 'planning_review', 'planning_withdraw', 'planning_recover', 'planning-record',
         }:
             raise CogitoError('successor execution is fenced until approved handoff completes')
 
@@ -81,6 +88,8 @@ def run_mutation(method: F) -> F:
                 'package-ready', 'mini-package-ready',
             }:
                 operation = 'preparation-transition' if operation == 'transition' else 'preparation-record'
+            if operation == 'record' and event in {'planning-begun', 'planning-reviewed', 'planning-withdrawn'}:
+                operation = 'planning-record'
             check_run_fence(self.root, self.run_id, operation)
             return method(self, *args, **kwargs)
     return cast(F, wrapped)

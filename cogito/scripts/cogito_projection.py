@@ -12,6 +12,7 @@ from cogito_event_types import (
 from cogito_common import CogitoError
 from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
+from cogito_planning import project_planning, project_candidate, guard_preparation
 
 
 def _required(payload: Mapping[str, Any], *keys: str) -> bool:
@@ -48,7 +49,10 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             continue
         if projection is None:
             raise CogitoError("event log must begin with run-created")
-        if event_type == "run-superseded":
+        guard_preparation(projection, event_type, payload)
+        if project_planning(projection, event_type, payload):
+            pass
+        elif event_type == "run-superseded":
             if projection['state'] != 'blocked' or not _required(payload, 'replan_id', 'successor_run_id'):
                 raise CogitoError('supersession requires a blocked source and explicit successor')
             projection['state'] = 'superseded'
@@ -203,13 +207,16 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
         projection["tasks"] = {item["id"]: cast(TaskState, {**dict(item), "status": "pending"}) for item in payload.get("tasks", [])}
     elif event_type in {"package-ready", "mini-package-ready"}:
         projection["candidate_package_hash"] = payload.get("candidate_package_hash")
+        project_candidate(projection, payload)
     elif event_type == "shared-understanding-ready":
         if (projection.get("shared_understanding_hash") is not None
                 and projection["shared_understanding_hash"] != payload.get("shared_understanding_hash")):
             projection["shared_understanding_revised"] = True
         projection["shared_understanding_hash"] = payload.get("shared_understanding_hash")
+        if projection.get("planning", {}).get("revision"):
+            projection["planning"]["shared_document"] = dict(payload["document"])
     elif event_type == "boundary-complete":
-        projection["boundary"] = dict(payload)
+        projection["boundary"] = {k: v for k, v in payload.items() if k != "planning_round"}
     elif event_type == "verification-passed":
         for task in projection["tasks"].values():
             if task.get("status") == "complete":

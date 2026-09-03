@@ -45,6 +45,11 @@ class ReplanStore:
 
     def load(self):
         state = project_replan(read_events(self.events_path))
+        if state.get('proposal') and state['state'] in {'reviewing','awaiting-approval','awaiting-decision'}:
+            successor = RunStore(self.root, state['successor_run_id']).load()
+            state['proposal_stale'] = successor.get('candidate_package_hash') != package_hash(state['proposal']['package'])
+            if state['proposal_stale']:
+                state['next_action'] = 'finish current successor planning, replace the RP proposal and repeat independent review'
         atomic_write_json(self.directory / 'state.json', state)
         return state
 
@@ -200,6 +205,7 @@ class ReplanStore:
         current = new.load()
         if current['state'] != 'awaiting-package-approval' or current['candidate_package_hash'] != package_hash(package):
             raise CogitoError('successor Package must pass normal preparation Gates before proposal')
+        new._planning_approval_binding(current)
         self._assert_source(proposal)
         if package['baseline_commit'] != state['snapshot']['delivery']['head']:
             raise CogitoError('successor baseline must match saved delivery HEAD')
@@ -270,6 +276,8 @@ class ReplanStore:
             raise CogitoError('review must include a structured assessment')
         if state['state']!='reviewing' or review.get('proposal_hash')!=state['proposal_hash']:
             raise CogitoError('independent review must reference current proposal')
+        if state.get('proposal_stale'):
+            raise CogitoError('successor planning changed; prepare a new RP proposal before review')
         reviewer=text_field(review.get('reviewer_id'),'reviewer_id')
         if reviewer==state['proposal']['author_id']: raise CogitoError('proposal author cannot independently review it')
         if review.get('findings')!=[]: raise CogitoError('resolve review findings before requesting approval')
@@ -310,6 +318,7 @@ class ReplanStore:
             if new.load()['candidate_package_hash']!=package_hash(proposal['package']):
                 raise CogitoError('prepared successor changed after review')
             new._validate_policy(proposal['package'])
+            new._planning_approval_binding(new.load())
             # Durable authorization precedes publication, so recovery never invents approval.
             self._emit('successor-approved',{'proposal_hash':proposal_hash,'graph':self._planned_graph(proposal)},action_id,'approve',request)
         self._publish_successor()
@@ -321,6 +330,9 @@ class ReplanStore:
         current=new.load()
         if current.get('package_hash') is None and current.get('candidate_package_hash') != digest:
             raise CogitoError('successor candidate changed after authorization')
+        planning_approval = new._planning_approval_binding(current) if current.get('package_hash') is None else (
+            {'round': current['planning']['round'], 'proposal_hash': current['planning']['proposal_hash']}
+            if current.get('planning', {}).get('revision') else None)
         relative=f'docs/cogito/packages/{new.run_id}.json'; path=self.root/relative
         if not atomic_create_json(path,package) and load_json(path)!=package:
             raise CogitoError('successor immutable Package differs from approved proposal')
@@ -328,6 +340,7 @@ class ReplanStore:
         payload=dict(approved=True,package_path=relative,package_hash=digest,
             tasks=tasks_with_dependencies(package['execution_dag']),max_workers=package['policy_snapshot']['max_workers'],
             project_graph_hash=hash_json(graph),project_graph_snapshot=graph,limits=package['limits'])
+        if planning_approval: payload['planning_approval']=planning_approval
         new.record('package-approved',payload,'replan-approval:'+self.replan_id,new._GATE_AUTHORITY)
         path.chmod(0o444)
 
