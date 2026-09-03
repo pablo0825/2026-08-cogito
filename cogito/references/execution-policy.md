@@ -41,6 +41,8 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 
 ## Finalizing
 
+啟用階段提交的 run 先執行 `delivery-summary --run-id <ID>`，將輸出原樣存入 Result 的 `delivery_summary`。摘要由事件產生，涵蓋準備、各次實作與修正、實際整合、checks、獨立審查及人工驗收；缺項、過期或與事件不符都拒絕結案。Gate 另確認準備與已提交 amendment 的 commit 都是 final commit 的祖先。先前 blocked／失敗的 Agent Result 仍是歷史，不要求未採用的工作版本被整合。完整操作見 [Stage Commits](stage-commits.md)。
+
 以一個 final commit 原子保存 Result、Project Graph 最終 disposition、清除 `active_run_id` 及當時已知的 commit/amendment 摘要。只有該 run 的 canonical Result 與 Project Graph 可以不同於最後驗證的 `content_tree`；必要 Spec/Plan 更新必須先完成再執行最後驗證。Feature／Change／Correction 的 final commit 也只能改這兩份結案紀錄。Maintenance／documentation 可提交已驗證的工作樹內容，但不能夾帶驗證後的修改或漏交檔案。缺少 `content_tree` 或其 Git object 時必須重跑 checks，不改寫既有 evidence。Result 不能內嵌包含自身的 final commit ID；commit 成功後，Gate 將實際 ID 追加到 event history 並用於結案報告，然後才能 `accepted`。失敗不可先報結案，應進入既有 blocked／修正流程。
 
 所有 Package kind 結案時都再次檢查 Start Gate HEAD 到 final commit 的完整交付範圍，套用上述精確控制文件規則，再驗證 Result／Project Graph 結案內容。已通過 integration、post checks 或符合 verified content tree，都不能取代核准範圍檢查。

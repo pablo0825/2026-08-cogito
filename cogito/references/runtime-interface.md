@@ -76,4 +76,6 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 
 ## 階段提交
 
+在 `finalizing` 使用 `delivery-summary --run-id <ID>` 取得 Result 的 `delivery_summary` 欄位，查詢不建立 commit 或追加事件。Gate 從同一份事件快照產生摘要，`finalize` 再與已提交 Result 逐項核對。啟用階段提交的 run 必填，舊 run 可省略；若提供也須與事件相符。`report` 讀取 final commit 內的摘要，並另外提供 final commit ID，不從目前工作副本重建或改寫 Result。
+
 一般 run 的 `init` 預設啟用 `stage_commits`，有效 RP successor 保留既有 frozen-delivery 協定。Shared Understanding confirmation、Boundary complete 與 Package approval 後，`next` 先回傳 `commit-stage-artifacts`；未登記對應 commit 前拒絕推進。`checkpoint prepare` 產生精確路徑清單與不可變階段紀錄，Coordinator 建立本地 commit，再以 `checkpoint record --commit-id ... --action-id ...` 交給 Gate 驗證。操作與相容性詳見 [Stage Commits](stage-commits.md)。
