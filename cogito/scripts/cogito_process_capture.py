@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -177,17 +178,33 @@ def run_bounded_process(
     process_kwargs = {"start_new_session": True} if os.name == "posix" else {
         "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
     }
+    from cogito_execution_registry import execution_context, register_process, _group_alive
+    from cogito_replan_lock import project_lock, check_run_fence
+    registration = execution_context()
     try:
-        process = subprocess.Popen(
-            list(argv),
-            cwd=cwd,
-            env=dict(env),
-            shell=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            **process_kwargs,
-        )
+        with project_lock(registration[0]) if registration else nullcontext():
+            if registration:
+                check_run_fence(registration[0], registration[1], 'run_controlled_check')
+            process = subprocess.Popen(
+                list(argv),
+                cwd=cwd,
+                env=dict(env),
+                shell=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                **process_kwargs,
+            )
+            if registration:
+                try:
+                    register_process(*registration, process.pid)
+                except CogitoError:
+                    if process.poll() is None or _group_alive(process.pid):
+                        _stop_process_group(process)
+                        process.wait(timeout=2)
+                        if process.stdout: process.stdout.close()
+                        if process.stderr: process.stderr.close()
+                        raise
     except OSError as exc:
         message = str(exc).encode("utf-8", errors="replace")
         stderr_buffer.append(message)
@@ -218,7 +235,12 @@ def run_bounded_process(
         if termination_deadline is not None and time.monotonic() >= termination_deadline:
             _close_capture_pipes(process)
             break
-        if not timed_out and not output_limit_exceeded and time.monotonic() >= deadline:
+        externally_due = False
+        if registration:
+            from cogito_execution_registry import stop_deadline
+            stop_at = stop_deadline(registration[0], registration[1])
+            externally_due = stop_at is not None and time.time() >= stop_at
+        if not timed_out and not output_limit_exceeded and (time.monotonic() >= deadline or externally_due):
             timed_out = True
             degraded, error = _stop_process_group(process)
             termination_degraded |= degraded

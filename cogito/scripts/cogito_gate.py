@@ -44,6 +44,8 @@ def parser() -> argparse.ArgumentParser:
     top = argparse.ArgumentParser(description=__doc__)
     top.add_argument("--repo", default=".", help="repository root")
     commands = top.add_subparsers(dest="command", required=True)
+    replan = commands.add_parser("replan", help="independent replanning lifecycle")
+    replan.add_argument("replan_args", nargs=argparse.REMAINDER)
     init = commands.add_parser("init")
     init.add_argument("--run-id", required=True)
     init.add_argument("--kind", required=True, choices=["feature", "change", "correction", "maintenance", "documentation"])
@@ -148,7 +150,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     repo = Path(args.repo).resolve()
     try:
-        if args.command == "init":
+        if args.command == "replan":
+            from cogito_replan_cli import run as run_replan
+            output = run_replan(repo, args.replan_args)
+        elif args.command == "init":
             output = RunStore(repo, args.run_id).create(args.kind)
         elif args.command in {"status", "next"}:
             store = RunStore(repo, args.run_id)

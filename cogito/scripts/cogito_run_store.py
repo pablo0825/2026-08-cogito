@@ -57,6 +57,7 @@ _load_json = load_json
 class RunStore:
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
+        "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
         "verification-passed", "verification-correction-required",
@@ -259,7 +260,12 @@ class RunStore:
             ]
             expected_base = prior_heads[-1] if prior_heads and current["state"] != "post-integration-correction" else self._git("rev-parse", "HEAD")
             if base_commit != expected_base:
-                raise CogitoError("a Slice worktree must start from the latest delivery HEAD")
+                carried = current.get('carryover_worktrees', {}).get(str(worktree))
+                index, tree = capture_index_and_worktree_trees(worktree)
+                if (prior_heads or not carried or carried != {'head': base_commit, 'index_tree': index, 'content_tree': tree}
+                        or current['state'] != 'executing'):
+                    raise CogitoError("a Slice worktree must start from the latest delivery HEAD")
+                self._git('merge-base', '--is-ancestor', package['baseline_commit'], expected_base)
             payload.update({"worktree": str(worktree), "branch": branch, "base_commit": base_commit})
             if package["kind"] == "maintenance":
                 index_tree, content_tree = capture_index_and_worktree_trees(worktree)
@@ -496,7 +502,9 @@ class RunStore:
             if not path.exists():
                 raise CogitoError("controlled-check outcome is unknown; inspect the interrupted attempt before issuing another action")
         if not path.exists():
-            evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
+            from cogito_execution_registry import controlled_executor
+            with controlled_executor(self.root, self.run_id, record_id):
+                evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
             try:
                 path = write_evidence_once(self.run_dir / "evidence", record_id, evidence)
             except EvidenceAlreadyExists as collision:
@@ -660,6 +668,7 @@ class RunStore:
         self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
         if self._git("branch", "--show-current") != package["delivery_branch"] or self._git("rev-parse", "HEAD") != commit_id:
             raise CogitoError("integration commit must be current HEAD on the delivery branch")
+        self._validate_adopted_worktrees(current, slice_id)
         decision = derive_integration_decision(current, self._events.read(), slice_id)
         for source_head in decision.source_heads:
             self._git("merge-base", "--is-ancestor", source_head, commit_id)
@@ -783,6 +792,10 @@ class RunStore:
             raise CogitoError("Project Graph is not formalized for this Package")
         dirty = []
         for line in self._git("status", "--porcelain", "--untracked-files=all").splitlines():
+            # GitRepository.run strips leading whitespace from its whole output.
+            # Restore the first unstaged-status column before reading the path.
+            if len(line) > 2 and line[0] != " " and line[1] == " " and line[2] != " ":
+                line = " " + line
             path = line[3:].split(" -> ")[-1] if len(line) > 3 else ""
             if not path.startswith(".cogito/") and path not in allowed_control:
                 dirty.append(line)
@@ -794,6 +807,34 @@ class RunStore:
         }
         validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
         return self.record("start-gate-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+
+    def _validate_adopted_worktrees(self, current, slice_id=None):
+        for task in current['tasks'].values():
+            receipt=task.get('adoption')
+            if not receipt or task['status']!='reviewed' or (slice_id and task.get('slice_id')!=slice_id):
+                continue
+            worktree=Path(task['worktree'])
+            index,tree=capture_index_and_worktree_trees(worktree)
+            if (index!=receipt['content_tree'] or tree!=receipt['content_tree']
+                    or self._git_at(worktree,'rev-parse','HEAD')!=receipt['target_implementation_head']):
+                raise CogitoError('adopted work changed after approval; fresh verification and review are required')
+
+    @run_mutation
+    def advance_adoptions(self, action_id: str) -> RunState:
+        current = self.load()
+        if current['state'] != 'executing':
+            raise CogitoError('adoption progression requires executing state')
+        tasks = list(current['tasks'].values())
+        if any(is_active_task(t) or t['status'] in {'complete','verified'} for t in tasks):
+            raise CogitoError('finish active implementation before adoption progression')
+        edges = [{'from': d, 'to': t['id']} for t in tasks for d in t.get('depends_on', [])]
+        if ready_tasks(tasks, edges, current['max_workers']):
+            raise CogitoError('dispatch remaining ready work before adoption progression')
+        reviewed = [t['id'] for t in tasks if t['status']=='reviewed']
+        if not reviewed or not all('adoption' in current['tasks'][t] for t in reviewed):
+            raise CogitoError('no fully adopted review wave is ready')
+        self._validate_adopted_worktrees(current)
+        return self.record('adoption-ready', {'task_ids': reviewed}, action_id, self._GATE_AUTHORITY)
 
     @run_mutation
     def decide_post_verification(self, passed_evidence: Sequence[Mapping[str, Any]], reviewer_escalation: bool = False, action_id: str | None = None) -> RunState:
@@ -1022,6 +1063,10 @@ class RunStore:
         )
 
     def next_action(self) -> dict[str, Any]:
+        from cogito_replan_lock import replans
+        for replan in replans(self.root):
+            if self.run_id in {replan["source_run_id"], replan["successor_run_id"]} and replan["state"] not in {"completed", "abandoned"}:
+                return {"state": self.load()["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"]}
         projection = self.load()
         output = derive_next_action(projection)
         if projection["state"] == "accepted":

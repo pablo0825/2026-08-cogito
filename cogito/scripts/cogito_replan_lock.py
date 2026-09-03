@@ -6,6 +6,9 @@ from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
 from threading import RLock
+from typing import Any, Callable, TypeVar, cast
+
+F = TypeVar("F", bound=Callable[..., Any])
 from cogito_common import CogitoError
 from cogito_events import read_events
 from cogito_replan_state import project_replan, TERMINAL
@@ -67,7 +70,7 @@ def check_run_fence(root, run_id, operation):
         }:
             raise CogitoError('successor execution is fenced until approved handoff completes')
 
-def run_mutation(method):
+def run_mutation(method: F) -> F:
     @wraps(method)
     def wrapped(self, *args, **kwargs):
         with project_lock(self.root):
@@ -80,4 +83,4 @@ def run_mutation(method):
                 operation = 'preparation-transition' if operation == 'transition' else 'preparation-record'
             check_run_fence(self.root, self.run_id, operation)
             return method(self, *args, **kwargs)
-    return wrapped
+    return cast(F, wrapped)

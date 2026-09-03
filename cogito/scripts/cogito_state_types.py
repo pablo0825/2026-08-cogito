@@ -24,6 +24,7 @@ class _OptionalTaskFields(TypedDict, total=False):
     maintenance_start_index_tree: str
     maintenance_end_tree: str
     maintenance_end_index_tree: str
+    adoption: dict[str, Any]
     released_by: str
 
 
@@ -65,6 +66,7 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    carryover_worktrees: dict[str, dict[str, str]]
     amendments: list[dict[str, Any]]
     shared_understanding_revised: bool
 

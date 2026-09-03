@@ -48,7 +48,32 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             continue
         if projection is None:
             raise CogitoError("event log must begin with run-created")
-        if event_type == "task-updated":
+        if event_type == "run-superseded":
+            if projection['state'] != 'blocked' or not _required(payload, 'replan_id', 'successor_run_id'):
+                raise CogitoError('supersession requires a blocked source and explicit successor')
+            projection['state'] = 'superseded'
+            for task in projection['tasks'].values():
+                if is_active_task(task): task['released_by'] = payload['replan_id']
+        elif event_type == "work-carried":
+            if projection['state'] != 'executing' or not payload.get('worktree') or not payload.get('binding'):
+                raise CogitoError('invalid work carryover receipt')
+            projection.setdefault('carryover_worktrees', {})[payload['worktree']] = payload['binding']
+        elif event_type == "work-adopted":
+            receipt = payload.get('receipt', {})
+            target = receipt.get('target_task_id')
+            if (projection['state'] != 'executing' or target not in projection['tasks']
+                    or projection['tasks'][target]['status'] != 'pending'
+                    or receipt.get('successor_run_id') != projection['run_id']
+                    or not receipt.get('evidence') or not receipt.get('source_reviewers')):
+                raise CogitoError('invalid work adoption receipt')
+            projection['tasks'][target].update(status='reviewed', adoption=receipt, worktree=payload['worktree'])
+        elif event_type == "adoption-ready":
+            ids = payload.get('task_ids', [])
+            if (projection['state'] != 'executing' or not ids
+                    or any(projection['tasks'].get(t, {}).get('status')!='reviewed' for t in ids)):
+                raise CogitoError('invalid adoption progression')
+            projection['state'] = 'integrating'
+        elif event_type == "task-updated":
             _apply_task_update(projection, payload)
         elif event_type == "agent-result-recorded":
             result = payload.get("result")

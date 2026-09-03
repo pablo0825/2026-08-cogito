@@ -189,6 +189,8 @@ def _validate_acceptance_history(context: FinalizationContext) -> None:
         for item in state.get("agent_results", [])
         if item.get("role") == "reviewer" and item.get("status") == "complete"
     }
+    for task in state.get('tasks', {}).values():
+        reviewer_ids.update(task.get('adoption', {}).get('source_reviewers', []))
     if package["kind"] != "maintenance" and reviewer_ids != {
         item.get("reviewer") for item in result["reviews"]
     }:

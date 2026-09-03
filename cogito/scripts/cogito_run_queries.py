@@ -25,7 +25,7 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
         "post-integration-verification": "run-post-integration-checks", "awaiting-human": "request-human-review",
         "post-integration-correction": "dispatch-post-integration-correction",
         "finalizing": "write-result-and-finalize", "blocked": "resolve-and-run-resume-gate",
-        "accepted": "report-completion", "cancelled": "report-cancellation",
+        "accepted": "report-completion", "cancelled": "report-cancellation", "superseded": "continue-successor",
     }
     if state not in actions:
         raise CogitoError(f"no action is defined for state {state!r}")
@@ -41,6 +41,8 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
             for task in tasks for dependency in task.get("depends_on", [])
         ]
         output["ready_tasks"] = [item["id"] for item in ready_tasks(tasks, edges, projection["max_workers"])]
+        if not output['ready_tasks'] and any(t.get('adoption') and t['status']=='reviewed' for t in tasks):
+            output['next_action'] = 'advance-adoptions'
         active_slices = {effective_slice_id(item) for item in tasks if is_active_task(item)}
         output["worker_capacity"] = max(0, projection["max_workers"] - len(active_slices))
     return output

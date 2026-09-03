@@ -12,9 +12,11 @@ TRANSITIONS = {
     'proposal-rejected': ({'reviewing', 'awaiting-approval'}, 'awaiting-decision'),
     'successor-approved': ({'awaiting-approval'}, 'ready-for-handoff'),
     'handoff-started': ({'ready-for-handoff'}, 'handing-off'),
+    'work-transfer-planned': ({'handing-off'}, 'handing-off'),
     'work-transferred': ({'handing-off'}, 'handing-off'),
     'handoff-completed': ({'handing-off'}, 'completed'),
-    'replan-abandoned': ({'stopping', 'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'}, 'abandoned'),
+    'replan-abandon-started': ({'stopping', 'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'}, 'resolving-decision'),
+    'replan-abandoned': ({'resolving-decision'}, 'abandoned'),
 }
 NEXT = {
     'stopping': 'stop executors, collect executor receipts and capture stable snapshots',
@@ -25,11 +27,12 @@ NEXT = {
     'ready-for-handoff': 'apply approved handoff; successor dispatch remains fenced',
     'handing-off': 'reconcile recorded checkpoints and continue the same approved handoff',
     'completed': 'continue the successor run through its regular Gates',
+    'resolving-decision': 'reconcile the authorized source disposition before releasing the fence',
     'abandoned': 'follow the explicitly selected original-run disposition',
 }
 
 def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {'state': None, 'transfers': {}}
+    result: dict[str, Any] = {'state': None, 'transfers': {}, 'transfer_plans': {}}
     for event in events:
         kind, payload = event.get('type'), event.get('payload')
         if kind not in TRANSITIONS or not isinstance(payload, dict):
@@ -58,11 +61,15 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             result['approval'] = payload
         elif kind == 'handoff-started':
             result['handoff'] = payload
+        elif kind == 'work-transfer-planned':
+            result['transfer_plans'][payload['task_id']] = payload
         elif kind == 'work-transferred':
             key = payload['task_id']
             if key in result['transfers']:
                 raise CogitoError('duplicate work transfer')
             result['transfers'][key] = payload
+        elif kind == 'replan-abandon-started':
+            result['decision'] = payload
         elif kind == 'replan-abandoned':
             result['disposition'] = payload['disposition']
         result.update(state=target, sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))

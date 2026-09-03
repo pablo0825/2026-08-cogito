@@ -1,7 +1,7 @@
 {
   "version": "3.0.0",
   "initial_state": "preparing",
-  "terminal_states": ["accepted", "cancelled"],
+  "terminal_states": ["accepted", "cancelled", "superseded"],
   "limits": {
     "max_workers": 3,
     "transient_retries": 2,

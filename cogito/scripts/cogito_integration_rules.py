@@ -44,8 +44,12 @@ def derive_integration_decision(
     for task_id in task_ids:
         result = latest_implementation.get(task_id)
         if not result:
-            raise CogitoError("integration is missing a Gate-recorded implementation Result")
-        source_heads.append(result["head_commit"])
+            adoption = state['tasks'][task_id].get('adoption')
+            if not adoption:
+                raise CogitoError("integration is missing a Gate-recorded implementation Result")
+            source_heads.append(adoption['target_implementation_head'])
+        else:
+            source_heads.append(result["head_commit"])
     prior_integrations = [
         item for item in events if item["type"] in {
             "slice-integration-complete", "wave-integration-complete", "integration-complete",
