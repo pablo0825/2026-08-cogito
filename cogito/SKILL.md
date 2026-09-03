@@ -14,10 +14,10 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 - 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 只確認理解正確；Boundary Gate pass 只確認邊界，兩者都不授權實作。
 - Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
 - Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
-- Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免獨立審查。
+- Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免一般開發審查；人工驗收退回修正仍須獨立審查。
 - 正式 checks 只由 controlled runner 執行；Agent 敘述不是證據。runner 比對 check 前後的 worktree snapshot，期間有變動即拒絕該次 evidence；只保留 bounded head/tail 診斷輸出，合計輸出超過 Policy/Package 固定上限時終止 check 並 fail closed。證據衝突時依「核准契約 > machine evidence > Agent description」保守處理。
 - 核准、Boundary、check closure、獨立審查、human applicability 與狀態轉移等敏感 verdict 只能由 runtime CLI 根據可驗證輸入計算。Agent 只回報觀察、證據與建議，不得用 boolean 自行宣告 guard 通過。
-- 沒有適用的 Human Integration、Human Acceptance 或高風險 hotspot 時，完成 `finalizing` 後自動 `accepted`，只向使用者提供結案報告；否則停在單一 human gate。
+- 沒有適用的 Human Integration、Human Acceptance 或高風險 hotspot 時，完成 `finalizing` 後自動 `accepted`，只向使用者提供結案報告；否則進入 human gate；人工驗收來源的 RP successor 也必須重新人工驗收。
 
 ## 啟動與續接
 
@@ -42,6 +42,8 @@ preparing -> awaiting-shared-confirmation -> boundary-analysis
 
 允許的受控循環：`verifying -> technical-correction -> verifying`，總計最多三輪；`reviewing -> review-fix -> verifying -> reviewing`，最多三輪；`post-integration-verification -> post-integration-correction -> post-integration-verification` 共用前者 correction 預算，修正後不重複 integration。Transient retry 最多兩次。任何超限、契約漂移或不可恢復衝突，Coordinator 都須停止推進並依 Runtime Interface 登錄 `block`；命令報錯不代表狀態已自動改變。
 
+人工退回走 `awaiting-human -> human-feedback-triage -> human-correction -> human-correction-verifying -> human-correction-reviewing -> awaiting-human | finalizing`。人工修正同一 run 獨立累計三輪；每輪實際 start 計次，不因分批、resume 或換 Agent 重設。局部修正若沒有明確「其餘已接受、修好可結案」授權，完成後仍回人工驗收；混合變更或影響擴大依 RP 處理。先讀 [Human Acceptance](references/human-acceptance.md)。
+
 Package 的 `stop_conditions` 是供 Coordinator 依證據判讀的凍結政策，Gate 只驗證欄位格式，不解析任意條件文字。宣告的 `outcome` 不會取代合法狀態轉移、Human Gate 判定或取消授權。
 
 Package 核准前候選需變更時，先讀 [Planning Revisions](references/planning-revisions.md)，以 `planning begin` 在同一 run 建立新輪次，保存舊方案並暫停其核准。依影響重新確認需求／Boundary／文件；不同候選都需新輪次，經獨立覆核後才呈現新版供使用者核准。語意影響與沿用理由由 Agent 判斷，不能把 hash 一致當作內容正確。
@@ -53,6 +55,7 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 | Gate action | 必須完整讀取 |
 |---|---|
 | 核准前候選修訂、規劃輪次、比較、撤回與恢復 | [planning-revisions.md](references/planning-revisions.md) |
+| 人工驗收回饋、修正、條件式結案與升級 | [human-acceptance.md](references/human-acceptance.md) |
 | 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |

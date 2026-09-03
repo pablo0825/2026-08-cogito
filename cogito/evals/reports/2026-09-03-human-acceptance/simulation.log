@@ -1,0 +1,27 @@
+[
+  {
+    "scenario": "automatic-close",
+    "state": "accepted",
+    "passed": true
+  },
+  {
+    "scenario": "unfinished-acceptance",
+    "state": "awaiting-human",
+    "passed": true
+  },
+  {
+    "scenario": "mixed-feedback",
+    "state": "human-feedback-triage",
+    "passed": true
+  },
+  {
+    "scenario": "scope-expansion",
+    "state": "blocked",
+    "passed": true
+  },
+  {
+    "scenario": "budget",
+    "state": "blocked",
+    "passed": true
+  }
+]

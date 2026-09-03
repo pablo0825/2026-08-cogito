@@ -25,7 +25,7 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 - 內容快照複製 Git index 時，從同一個開啟的檔案取得內容與時間戳，保留時間戳於可寫的暫存副本，讓 Git 仍能重新檢查同秒、同長度的檔案修改。只更新暫存 index，不改動使用者 index 的內容、修改時間或權限。
 - 升級前產生且缺少目前 Evidence Contract 欄位的 evidence 不得補寫或遷移，必須由 controlled runner 重跑。
 - Controlled runner 不把完整 stdout/stderr 寫入暫存檔；每個 stream 只保留固定大小的 head/tail 診斷資料。兩者合計超過 Package policy snapshot 的 `max_check_output_bytes` 時，runner 嘗試終止受控 process group/tree、在固定期限後關閉 capture pipes，記錄 `output_limit_exceeded: true` 並判定失敗。平台限制導致只能終止 direct child 時另記錄 `termination_degraded: true`；不得把該次執行當成通過 evidence。缺少 Package 欄位時使用 10 MiB 相容預設值，但舊 evidence 若沒有實際上限欄位必須重跑。
-- correction 最多三輪，review/fix 最多三輪，transient retry 最多兩次；計數器不得因 resume 或換 Agent 重設。
+- 開發 correction 最多三輪，review/fix 最多三輪，transient retry 最多兩次；人工驗收修正另外使用同一 run 累計三輪額度，每次 start 計次，分批回饋也不重設。所有計數器不得因 resume 或換 Agent 重設。
 - Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改 check、worktree 或執行契約。已發布 evidence 可在事件追加失敗後補登錄。若 attempt 已開始但沒有完整 evidence，結果視為未知，先確認程序與外部副作用再處理，不以自動重跑假裝恢復成功。
 - 每一執行波依 `complete -> verified -> reviewed -> integrated` 推進；Reviewer closure 逐 task 計算，不能用一筆結果關閉整個 Slice。Coordinator 串行記錄每個 Slice 的 source heads、前一 delivery head 與 integration commit。相依 Slice 只在這一步完成後解鎖。所有 Slice 整合完成後，在最新 delivery branch 重跑 post-integration checks；失敗共用 correction 預算，修正完直接回到 post-integration verification，不重做已完成的 integration。
 
@@ -33,7 +33,9 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 
 核准後需隨合法 commit 保存的控制文件只按精確路徑例外處理：本 run 的凍結 Package 必須內容相符，整合時的 Project Graph 必須符合核准 hash；Package 指定的 Spec／Plan 可依既有政策在最後驗證前更新；source registry 中 `adopted`／`updated` 的來源若依賴控制文件例外提交，必須符合凍結的原始 bytes hash，已在 `approved_paths` 的來源則可按核准範圍更新。其他文件不能因位於 `docs/` 就取得例外。
 
-沒有適用的人工作業或判斷時直接 `finalizing`。有適用 `HI-*`、`HA-*` 或高風險 hotspot 時，彙整成唯一一次 `awaiting-human` 門閥。
+沒有適用的人工作業或判斷時直接 `finalizing`。有適用 `HI-*`、`HA-*` 或高風險 hotspot 時，彙整進入 `awaiting-human` 門閥。人工退回可修正後再次回到此門閥；人工來源 RP 的 successor 即使沒有這些 predicate，也須重新人工驗收。
+
+人工退回使用專用分類、修正、驗證與審查階段，詳見 [Human Acceptance](human-acceptance.md)。局部且影響明確才可原任務修正；操作流程改變、較大邏輯調整或修正中影響擴大轉 RP。混合回饋預設整批走 RP，只有使用者明確要求分批才拆開。每輪使用新的 Amendment／task，重跑正式 post-integration checks 及獨立 review，包含 Maintenance。未表明驗收完成時先修再等待；只有本批明確授權「其餘接受、修好即可」且內容／證據相符才可進 finalizing。第三輪仍未通過就停止並回報失敗分析，不能以新回饋或恢復重設額度。
 
 ## Finalizing
 

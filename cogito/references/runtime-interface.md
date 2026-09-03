@@ -6,7 +6,7 @@ CLI 是敏感 verdict 的唯一寫入介面。Agent payload 可提供觀察、�
 
 Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規則。核准的 Maintenance 語意宣告仍由 Coordinator 依來源、diff 與 checks 判斷；Agent ID 與實際執行者的對應由 Coordinator 及執行環境維護。Guard 為 true 或兩個 ID 不同，分別不代表語意等價證明或外部身分認證。具體分工見 [Package Authoring](package-authoring.md#package-核准後) 與 [Execution Policy](execution-policy.md#派發與隔離)。
 
-先以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步。敏感操作使用專用 subcommand：`prepare-package`、`approve`、`start`、`amend`、`task`、`agent-result`、`run-check`、`verify`、`correction-start`、`correction-complete`、`review-fix-start`、`review-fix-complete`、`integrate`、`retry`、`post-verify`、`human-approve`、`finalize`、`resume`、`report`；實際參數以各 subcommand 的 `--help` 為準。`implementation-complete` 與 `review-approved` 由通用 `transition` 提交，但 Gate 仍會從已登錄 Result 與 task milestone 推導 verdict。不要透過通用 `transition`、直接呼叫 runner 或直接呼叫 runtime `record()` 寫入其他敏感事件。每個有副作用的呼叫都提供穩定 `--action-id`；只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
+先以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步。敏感操作使用專用 subcommand：`prepare-package`、`approve`、`start`、`amend`、`task`、`agent-result`、`run-check`、`verify`、`correction-start`、`correction-complete`、`review-fix-start`、`review-fix-complete`、`integrate`、`retry`、`post-verify`、`human`、`human-approve`、`finalize`、`resume`、`report`；實際參數以各 subcommand 的 `--help` 為準。`implementation-complete` 與 `review-approved` 由通用 `transition` 提交，但 Gate 仍會從已登錄 Result 與 task milestone 推導 verdict。不要透過通用 `transition`、直接呼叫 runner 或直接呼叫 runtime `record()` 寫入其他敏感事件。每個有副作用的呼叫都提供穩定 `--action-id`；只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
 
 `render --type workflow` 與 `render --type project` 可由權威 JSON 即時產生 Mermaid 狀態圖或 Slice 相依圖。圖是衍生 view，不得反向編輯或取代 workflow／Project Graph。
 
@@ -35,7 +35,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> transition \
 
 相同操作重送沿用同一 action ID 與相同原因；不同發現使用新 ID。已在 `blocked` 時可用新 `block` 事件補記新原因，但 `blocked_from` 保留本次阻塞前的狀態。問題排除後使用 `resume` Gate；恢復會清除本次來源，下一次阻塞再記錄新的來源。舊版連續 `block` 造成的錯誤快取可從既有事件重新還原，不改寫事件歷史。`block` 不會終止已啟動的 subprocess 或 Worker，Coordinator 仍須依其執行介面停止或收尾。
 
-`outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `transition --event cancel` 提交授權結果；不能只因 Package 寫了 `cancelled` 就自行宣告授權。`awaiting-human` 只能經合法的 `post-verify` Human Gate 判定進入；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
+`outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `transition --event cancel` 提交授權結果；不能只因 Package 寫了 `cancelled` 就自行宣告授權。首次 `awaiting-human` 經合法的 `post-verify` Human Gate 判定進入，人工退回修正也可經專用 review 回到該狀態；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
 
 ## 儲存與復原
 
@@ -65,3 +65,11 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 
 
 `planning` 子命令處理同一 run 核准前的 begin、review、withdraw、history、compare、recover；與核准後的 `replan` 分開。`history` 可讀取各輪保存的文件內容，`compare --from-round N --to-round M` 輸出前後欄位與文件差異。`recover` 檢查目前綁定資料後回報下一步，發現漂移時拒絕繼續，不默默選用某一版。有效 RP 的未核准 successor 可建立 planning 輪次，但最後仍須以最新候選重新提出 RP proposal、獨立覆核及 RP approval，不能用普通 approve 越過承接流程。
+
+## 人工驗收退回 Gate
+
+`human feedback|triage|start|complete|verify|review|escalate --run-id <ID> --action-id <action>` 管理同一 run 的專用人工退回流程。除 `verify` 使用可重複的 `--evidence <path>`、`review` 不接輸入外，其餘操作使用 `--input <JSON-file>`。不得以通用 transition 偽造 `human-*` 敏感事件。完整 payload、分類及三輪計數規則見 [Human Acceptance](human-acceptance.md)。
+
+修正仍使用 `amend`、task lease、Agent Results 與 controlled `run-check`；每輪 start 消耗人工專用額度，verify 核對最新 delivery 及 effective contract 的 post-integration evidence，review 核對驗證後登錄的本輪獨立 Reviewer Results。Maintenance 同樣需人工退回審查，completion JSON 的 commit_id 使用不變的 Start Gate HEAD 及工作樹快照。未明確完成驗收時回 awaiting-human；有效的本批條件式授權才能進 finalizing，最後仍由 finalize 驗證結案。
+
+`human escalate` 登錄阻塞與升級，不會直接終止外部執行者；Coordinator 必須停止實際程序並依 RP 留存停止回報。已升級或額度耗盡不能透過普通 resume 取得修正或自動結案權限。人工來源 RP 的 successor 保留重新人工驗收要求。
