@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from cogito_state_types import AgentResult, RunState, TaskStatus
+from cogito_replan_lock import run_mutation, project_lock, check_run_fence
 from cogito_event_types import (
     AgentResultRecordedEvent, AgentResultRecordedPayload,
     CheckEvidenceRecordedEvent, CheckEvidenceRecordedPayload,
@@ -91,6 +92,7 @@ class RunStore:
             else EventRepository(self.events_path, self.state_path, self.workflow)
         )
 
+    @run_mutation
     def create(self, kind: str) -> RunState:
         if self._events.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
@@ -117,6 +119,7 @@ class RunStore:
             # readable and revisable, but never freeze it via a new confirmation.
             validate_shared_understanding_hash(self._events.project().get("shared_understanding_hash"))
 
+    @run_mutation
     def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> RunState:
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
@@ -139,6 +142,7 @@ class RunStore:
             request_hash=request_hash,
         )
 
+    @run_mutation
     def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("transition", event=event, payload=payload)
         replay = self._replay(action_id, event, request_hash)
@@ -197,6 +201,7 @@ class RunStore:
             raise CogitoError("approved Package hash mismatch")
         return package
 
+    @run_mutation
     def prepare_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("prepare-package", draft=draft)
         replay = self._replay(action_id, {"mini-package-ready", "package-ready"}, request_hash)
@@ -226,6 +231,7 @@ class RunStore:
             expected_previous_hash=current["last_event_hash"],
         )
 
+    @run_mutation
     def update_task(self, task_id: str, status: TaskStatus, agent_id: str, action_id: str | None = None) -> RunState:
         payload: TaskUpdatedPayload = {"task_id": task_id, "status": status, "agent_id": agent_id}
         request_hash = request_fingerprint("task", **payload)
@@ -290,6 +296,7 @@ class RunStore:
             request_hash=request_hash,
         )
 
+    @run_mutation
     def submit_agent_result(self, result: Mapping[str, Any], action_id: str | None = None) -> RunState:
         # This is the JSON boundary; validate_agent_result below checks its shape
         # before a new event can be recorded. Exact replays keep the early return.
@@ -415,6 +422,7 @@ class RunStore:
                 raise CogitoError("review evidence is not bound to this verification cycle")
         self._validate_evidence(self.approved_package(), matching, snapshot=snapshot, phase="implementation")
 
+    @run_mutation
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)
         replay = self._replay(action_id, "verification-passed", request_hash)
@@ -437,6 +445,8 @@ class RunStore:
     def run_controlled_check(self, check_id: str, worktree: str | Path, action_id: str) -> RunState:
         if not action_id:
             raise CogitoError("controlled check requires a stable action_id")
+        with project_lock(self.root):
+            check_run_fence(self.root, self.run_id, "run_controlled_check")
         supplied_worktree = Path(worktree).resolve()
         request_hash = request_fingerprint("run-check", check_id=check_id, worktree=str(supplied_worktree))
         replay = self._replay(action_id, "check-evidence-recorded", request_hash)
@@ -504,6 +514,7 @@ class RunStore:
             request_hash=request_hash,
         )
 
+    @run_mutation
     def enter_correction(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("correction-start")
         replay = self._replay(action_id, {"verification-correction-required", "post-verification-correction-required"}, request_hash)
@@ -529,6 +540,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def complete_correction(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("correction-complete", amendment_id=amendment_id, commit_id=commit_id)
         payload = {"scope_within_contract": True, "amendment_id": amendment_id, "commit_id": commit_id}
@@ -581,6 +593,7 @@ class RunStore:
             raise CogitoError("Maintenance delivery HEAD changed during correction snapshot")
         return {"completion_mode": "working-tree", "content_tree": tree}
 
+    @run_mutation
     def enter_review_fix(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("review-fix-start")
         replay = self._replay(action_id, "review-fix-required", request_hash)
@@ -597,6 +610,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "review-fix-required", payload, current["counters"], current["limits"])
         return self.record("review-fix-required", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def complete_review_fix(self, amendment_id: str, commit_id: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("review-fix-complete", amendment_id=amendment_id, commit_id=commit_id)
         payload = {"scope_within_contract": True, "amendment_id": amendment_id, "commit_id": commit_id}
@@ -621,6 +635,7 @@ class RunStore:
             expected_previous_hash=current["last_event_hash"],
         )
 
+    @run_mutation
     def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("retry", kind=kind, reason=reason)
         event = {"transient": "transient-retry", "format": "format-repair-recorded"}.get(kind)
@@ -632,6 +647,7 @@ class RunStore:
             return replay
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def complete_integration(self, commit_id: str, slice_id: str | None = None, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("integrate", commit_id=commit_id, slice_id=slice_id)
         replay = self._replay(action_id, {"slice-integration-complete", "wave-integration-complete", "integration-complete"}, request_hash)
@@ -664,6 +680,7 @@ class RunStore:
             request_hash=request_hash,
         )
 
+    @run_mutation
     def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("amend", amendment=amendment)
         replay = self._replay(action_id, "technical-amendment-added", request_hash)
@@ -693,6 +710,7 @@ class RunStore:
             action_id, self._GATE_AUTHORITY, request_hash=request_hash,
         )
 
+    @run_mutation
     def approve_package(self, draft: Mapping[str, Any], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("approve", draft=draft)
         relative = Path("docs") / "cogito" / "packages" / f"{self.run_id}.json"
@@ -734,6 +752,7 @@ class RunStore:
             ),
         )
 
+    @run_mutation
     def start_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("start")
         replay = self._replay(action_id, "start-gate-passed", request_hash)
@@ -776,6 +795,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
         return self.record("start-gate-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def decide_post_verification(self, passed_evidence: Sequence[Mapping[str, Any]], reviewer_escalation: bool = False, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("post-verify", evidence=passed_evidence, reviewer_escalation=reviewer_escalation)
         replay = self._replay(action_id, {"human-review-required", "auto-accept-ready"}, request_hash)
@@ -804,6 +824,7 @@ class RunStore:
             request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
         )
 
+    @run_mutation
     def resume_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("resume")
         replay = self._replay(action_id, "resume", request_hash)
@@ -845,6 +866,7 @@ class RunStore:
         reconciliation = hash_json({"target": target, "head": self._git("rev-parse", "HEAD"), "event_hash": current["last_event_hash"]})
         return self.record("resume", {"target": target, "validated": True, "reconciliation_hash": reconciliation}, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def approve_human_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("human-approve")
         replay = self._replay(action_id, "human-approved", request_hash)
@@ -855,6 +877,7 @@ class RunStore:
         validate_transition(self.workflow, current["state"], "human-approved", payload, current["counters"])
         return self.record("human-approved", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
     def finalize(self, result_path: str, project_graph_path: str, final_commit: str, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("finalize", result_path=result_path, project_graph_path=project_graph_path, final_commit=final_commit)
         replay = self._replay(action_id, "finalization-complete", request_hash)
