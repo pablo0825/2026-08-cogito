@@ -41,7 +41,7 @@ class MaintenanceCli:
         return path
 
     def create(self, kind):
-        return self.call("init", "--kind", kind)
+        return self.call("init", "--no-stage-commits", "--kind", kind)
 
     def load(self):
         return self.call("status")

@@ -45,7 +45,7 @@ class PreparationInputTests(GitTestCase):
                 item[name]["hash"] = hashlib.sha256((self.repo / item[name]["path"]).read_bytes()).hexdigest()
         self.run_id = self.draft["run_id"]
         self.store = RunStore(self.repo, self.run_id)
-        self.invoke("init", "--run-id", self.run_id, "--kind", "feature")
+        self.invoke("init", "--no-stage-commits", "--run-id", self.run_id, "--kind", "feature")
         self.files = (self.store.events_path, self.store.state_path, self.repo / ".git/index")
 
     def invoke(self, *args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:

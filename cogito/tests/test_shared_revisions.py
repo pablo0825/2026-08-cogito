@@ -40,7 +40,7 @@ class SharedRevisionTests(GitTestCase):
                 item[name]["hash"] = hashlib.sha256((self.repo / item[name]["path"]).read_bytes()).hexdigest()
         self.run_id = self.draft["run_id"]
         self.events_path = self.repo / ".cogito/runs" / self.run_id / "events.jsonl"
-        self.invoke("init", "--run-id", self.run_id, "--kind", "feature")
+        self.invoke("init", "--no-stage-commits", "--run-id", self.run_id, "--kind", "feature")
 
     def invoke(self, *args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(

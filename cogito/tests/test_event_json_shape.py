@@ -24,7 +24,7 @@ class EventJsonShapeTests(GitTestCase):
         git(self.repo, "add", ".gitignore")
         git(self.repo, "commit", "-qm", "baseline")
         self.run_id = "DEV-event-json-shape"
-        initialized = self.gate("init", "--run-id", self.run_id, "--kind", "feature")
+        initialized = self.gate("init", "--no-stage-commits", "--run-id", self.run_id, "--kind", "feature")
         self.assertEqual(initialized.returncode, 0, initialized.stderr)
         self.events = self.repo / ".cogito/runs" / self.run_id / "events.jsonl"
         self.cache = self.events.with_name("state.json")

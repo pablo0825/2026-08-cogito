@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, cast
 
+from cogito_checkpoints import guard_checkpoint, project_checkpoint
 from cogito_human_projection import HUMAN_EVENTS, project_human_metadata
 from cogito_state_types import EvidenceLedgerEntry, RunState, TaskState
 from cogito_event_types import (
@@ -47,11 +48,20 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                 "shared_understanding_hash": None, "boundary": None,
                 "limits": dict(workflow["limits"]),
             }
+            if payload.get("stage_commits") is True:
+                if not payload.get("checkpoint_head") or not payload.get("checkpoint_branch"):
+                    raise CogitoError("stage commits require a Git baseline and branch")
+                projection.update({"stage_commits": True, "checkpoint_head": payload["checkpoint_head"],
+                                   "checkpoint_branch": payload["checkpoint_branch"],
+                                   "checkpoints": [], "pending_checkpoint": None})
             continue
         if projection is None:
             raise CogitoError("event log must begin with run-created")
+        guard_checkpoint(projection, event_type)
         guard_preparation(projection, event_type, payload)
-        if project_planning(projection, event_type, payload):
+        if event_type == "stage-committed":
+            project_checkpoint(projection, item)
+        elif project_planning(projection, event_type, payload):
             pass
         elif event_type in HUMAN_EVENTS:
             _apply_transition(projection, workflow, event_type, payload)
@@ -137,6 +147,8 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             projection["blocked_from"] = None
         else:
             _apply_transition(projection, workflow, str(event_type), payload)
+        if event_type != "stage-committed":
+            project_checkpoint(projection, item)
         projection["sequence"] = item.get("sequence", projection["sequence"] + 1)
         projection["last_event_hash"] = item.get("event_hash")
     if projection is None:
@@ -221,6 +233,8 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
                 and projection["shared_understanding_hash"] != payload.get("shared_understanding_hash")):
             projection["shared_understanding_revised"] = True
         projection["shared_understanding_hash"] = payload.get("shared_understanding_hash")
+        if projection.get("stage_commits"):
+            projection["shared_document"] = dict(payload["document"])
         if projection.get("planning", {}).get("revision"):
             projection["planning"]["shared_document"] = dict(payload["document"])
     elif event_type == "boundary-complete":

@@ -200,6 +200,8 @@ def project_planning(state, event, payload):
         state["planning"] = old
         state["candidate_package_hash"] = package_hash(old["candidate"]["package"])
         state["shared_understanding_hash"] = source["shared_understanding_hash"]
+        if state.get("stage_commits") and "path" in old["candidate"]["package"]["shared_understanding"]:
+            state["shared_document"] = copy.deepcopy(old["candidate"]["package"]["shared_understanding"])
         state["shared_understanding_revised"] = source["shared_understanding_revised"]
         state["boundary"] = copy.deepcopy(source["boundary"])
         state["state"] = "awaiting-package-approval"
@@ -330,7 +332,8 @@ class PlanningMixin:
         planning = current.get("planning")
         if planning and planning["revision"]:
             revision = planning["revision"]
-            if self._git("rev-parse", "HEAD") != revision["delivery_head"] or self._git("branch", "--show-current") != revision["delivery_branch"]:
+            expected_head = current.get("checkpoint_head", revision["delivery_head"])
+            if self._git("rev-parse", "HEAD") != expected_head or self._git("branch", "--show-current") != revision["delivery_branch"]:
                 raise CogitoError("delivery changed during planning; reconcile before continuing")
             if documents and planning.get("shared_document"):
                 document_snapshot(self.root, planning["shared_document"])

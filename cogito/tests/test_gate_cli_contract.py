@@ -82,7 +82,7 @@ class GateCliContractTests(GitTestCase):
             }
             draft = root / "package.json"
             draft.write_text(json.dumps(package))
-            self.invoke(repo, "init", "--run-id", run_id, "--kind", "feature")
+            self.invoke(repo, "init", "--no-stage-commits", "--run-id", run_id, "--kind", "feature")
             self.invoke(repo, "transition", "--run-id", run_id, "--event", "shared-understanding-ready", "--payload-json", json.dumps({"shared_understanding_hash": "a" * 64}), "--action-id", "shared-ready-1")
             self.invoke(repo, "transition", "--run-id", run_id, "--event", "shared-understanding-confirmed", "--payload-json", '{"confirmed":true}', "--action-id", "shared-confirm-1")
             self.invoke(repo, "transition", "--run-id", run_id, "--event", "boundary-complete", "--payload-json", json.dumps(package["boundary"]), "--action-id", "boundary-1")

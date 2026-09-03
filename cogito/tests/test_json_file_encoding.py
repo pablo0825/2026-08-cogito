@@ -25,7 +25,7 @@ class JsonFileEncodingTests(GitTestCase):
         git(self.repo, 'add', '.')
         git(self.repo, 'commit', '-qm', 'baseline')
         self.run_id = 'MNT-json-encoding'
-        initialized = self.gate('init', '--run-id', self.run_id, '--kind', 'maintenance')
+        initialized = self.gate('init', '--no-stage-commits', '--run-id', self.run_id, '--kind', 'maintenance')
         self.assertEqual(initialized.returncode, 0, initialized.stderr)
         self.events = self.repo / '.cogito/runs' / self.run_id / 'events.jsonl'
         draft = package('maintenance')

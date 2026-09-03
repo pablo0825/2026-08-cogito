@@ -34,6 +34,9 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
     if state not in actions:
         raise CogitoError(f"no action is defined for state {state!r}")
     output: dict[str, Any] = {"state": state, "next_action": actions[state]}
+    if projection.get("pending_checkpoint") and state not in {"blocked", "cancelled", "superseded"}:
+        output.update(next_action="commit-stage-artifacts", checkpoint=deepcopy(projection["pending_checkpoint"]))
+        return output
     human = projection.get("human")
     if human:
         output.update(feedback_id=human["feedback"]["id"],

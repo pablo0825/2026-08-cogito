@@ -42,7 +42,7 @@ class PackageRevisionTests(GitTestCase):
                 item[name]["hash"] = hashlib.sha256((repo / item[name]["path"]).read_bytes()).hexdigest()
         draft = root / "package-v1.json"
         draft.write_text(json.dumps(value))
-        self.invoke(repo, "init", "--run-id", value["run_id"], "--kind", kind)
+        self.invoke(repo, "init", "--no-stage-commits", "--run-id", value["run_id"], "--kind", kind)
         if kind == "feature":
             for event, payload in (
                 ("shared-understanding-ready", {"shared_understanding_hash": value["shared_understanding"]["hash"]}),

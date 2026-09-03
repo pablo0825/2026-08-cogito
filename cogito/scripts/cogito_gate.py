@@ -60,11 +60,17 @@ def parser() -> argparse.ArgumentParser:
     planning.add_argument("--from-round", type=int)
     planning.add_argument("--to-round", type=int)
     init = commands.add_parser("init")
+    init.add_argument("--stage-commits", action=argparse.BooleanOptionalAction, default=None, help="require stage checkpoints (default on, except frozen RP successors)")
     init.add_argument("--run-id", required=True)
     init.add_argument("--kind", required=True, choices=["feature", "change", "correction", "maintenance", "documentation"])
     for name in ("status", "next"):
         item = commands.add_parser(name)
         item.add_argument("--run-id", required=True)
+    checkpoint = commands.add_parser("checkpoint", help="prepare or verify a confirmed stage commit")
+    checkpoint.add_argument("operation", choices=["prepare", "record"])
+    checkpoint.add_argument("--run-id", required=True)
+    checkpoint.add_argument("--commit-id")
+    checkpoint.add_argument("--action-id")
     transition = commands.add_parser("transition")
     transition.add_argument("--run-id", required=True)
     transition.add_argument("--event", required=True)
@@ -198,7 +204,17 @@ def main(argv: list[str] | None = None) -> int:
             from cogito_replan_cli import run as run_replan
             output = run_replan(repo, args.replan_args)
         elif args.command == "init":
-            output = RunStore(repo, args.run_id).create(args.kind)
+            from cogito_checkpoints import is_frozen_successor
+            stage_commits = args.stage_commits if args.stage_commits is not None else not is_frozen_successor(repo, args.run_id)
+            output = RunStore(repo, args.run_id).create(args.kind, stage_commits=stage_commits)
+        elif args.command == "checkpoint":
+            store = RunStore(repo, args.run_id)
+            if args.operation == "prepare":
+                output = store.prepare_checkpoint()
+            else:
+                if not args.commit_id or not args.action_id:
+                    raise CogitoError("checkpoint record requires --commit-id and --action-id")
+                output = store.record_checkpoint(args.commit_id, args.action_id)
         elif args.command in {"status", "next"}:
             store = RunStore(repo, args.run_id)
             output = store.load() if args.command == "status" else store.next_action()

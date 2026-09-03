@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from cogito_checkpoints import CheckpointMixin, guard_checkpoint
 from cogito_human import HumanMixin
 from cogito_human_projection import HUMAN_EVENTS
 from cogito_state_types import AgentResult, RunState, TaskStatus
@@ -60,10 +61,10 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(PlanningMixin, HumanMixin):
+class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
-        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated",
+        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
@@ -101,11 +102,20 @@ class RunStore(PlanningMixin, HumanMixin):
         )
 
     @run_mutation
-    def create(self, kind: str) -> RunState:
+    def create(self, kind: str, *, stage_commits: bool = False) -> RunState:
         if self._events.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
+        payload: dict[str, Any] = {"run_id": self.run_id, "kind": kind}
+        if stage_commits:
+            from cogito_checkpoints import is_frozen_successor
+            if is_frozen_successor(self.root, self.run_id):
+                raise CogitoError("RP successors require frozen-delivery initialization; omit --stage-commits")
+            payload.update(stage_commits=True, checkpoint_head=self._git("rev-parse", "HEAD"),
+                           checkpoint_branch=self._git("branch", "--show-current"))
+            if not payload["checkpoint_branch"]:
+                raise CogitoError("stage commits require a named delivery branch")
         self.run_dir.mkdir(parents=True, exist_ok=False)
-        return self._events.create({"type": "run-created", "payload": {"run_id": self.run_id, "kind": kind}, "action_id": f"create:{self.run_id}"})
+        return self._events.create({"type": "run-created", "payload": payload, "action_id": f"create:{self.run_id}"})
 
     def load(self) -> RunState:
         """Validate authoritative state and repair its disposable cache if needed."""
@@ -131,7 +141,7 @@ class RunStore(PlanningMixin, HumanMixin):
     def _planning_preparation_payload(self, event, payload):
         current = self._events.project()
         planning = current.get("planning")
-        if not planning or not planning.get("revision") or event not in {
+        if not (current.get("stage_commits") or (planning and planning.get("revision"))) or event not in {
             "shared-understanding-ready", "shared-understanding-confirmed", "boundary-complete",
         }:
             return payload
@@ -139,6 +149,8 @@ class RunStore(PlanningMixin, HumanMixin):
         payload = dict(payload)
         if event == "shared-understanding-ready":
             document = payload.get("document")
+            if current.get("stage_commits"):
+                self._checkpoint_document_path(document)
             saved = document_snapshot(self.root, document)
             if saved["hash"] != payload.get("shared_understanding_hash"):
                 raise CogitoError("Shared Understanding document does not match its confirmation hash")
@@ -146,7 +158,7 @@ class RunStore(PlanningMixin, HumanMixin):
                 raise CogitoError("Shared Understanding changed during preparation")
             payload["document_snapshot"] = saved
         elif event == "shared-understanding-confirmed":
-            document = planning.get("shared_document")
+            document = current.get("shared_document") if current.get("stage_commits") else (planning or {}).get("shared_document")
             if not document:
                 raise CogitoError("prepare the current Shared Understanding document first")
             document_snapshot(self.root, document)
@@ -162,6 +174,10 @@ class RunStore(PlanningMixin, HumanMixin):
             return replay
         if expected_previous_hash is not None and self._events.project().get("last_event_hash", expected_previous_hash) != expected_previous_hash:
             raise CogitoError("event history changed during validation; retry with the same action_id")
+        current = self._events.project()
+        guard_checkpoint(current, event_type)
+        if event_type in {"shared-understanding-ready", "shared-understanding-confirmed", "boundary-complete", "package-ready", "mini-package-ready", "package-approved"}:
+            self._checkpoint_baseline(current)
         if event_type == "package-approved":
             self._planning_approval_binding(self._events.project())
         payload = self._planning_preparation_payload(event_type, payload)
@@ -252,6 +268,7 @@ class RunStore(PlanningMixin, HumanMixin):
         validate_package_with_limits(package, self.workflow["limits"])
         self._validate_policy(package)
         current = self.load()
+        guard_checkpoint(current, "package-ready")
         if package["kind"] != current["kind"]:
             raise CogitoError("Package kind must match the run kind")
         if current.get("candidate_package_hash") and current["candidate_package_hash"] != package_hash(package):
@@ -268,8 +285,13 @@ class RunStore(PlanningMixin, HumanMixin):
         planning = current.get("planning")
         if planning and planning.get("shared_document") and package["shared_understanding"] != planning["shared_document"]:
             raise CogitoError("Package must use the confirmed planning document")
+        if current.get("stage_commits"):
+            if package["delivery_branch"] != current["checkpoint_branch"]:
+                raise CogitoError("Package must use the stage checkpoint branch")
+            if not mini and package["shared_understanding"] != current.get("shared_document"):
+                raise CogitoError("Package must reference the committed Shared Understanding document")
         snapshot = capture_candidate(self.root, package, planning["round"] if planning else 1,
-                                     strict=bool(planning and planning["revision"]))
+                                     strict=bool(current.get("stage_commits") or (planning and planning["revision"])))
         payload = {"package_valid": True, "candidate_package_hash": package_hash(package),
                    "candidate_snapshot": snapshot}
         if current["state"] not in {expected_state, "awaiting-package-approval"}:
@@ -811,6 +833,7 @@ class RunStore(PlanningMixin, HumanMixin):
         package["package_hash"] = digest
         tasks = tasks_with_dependencies(package["execution_dag"])
         current = self.load()
+        guard_checkpoint(current, "package-ready")
         if package["kind"] != current["kind"]:
             raise CogitoError("Package kind must match the run kind")
         if current["state"] != "awaiting-package-approval":
@@ -847,6 +870,7 @@ class RunStore(PlanningMixin, HumanMixin):
         current = self.load()
         if current["state"] != "start-gate":
             raise CogitoError("Start Gate is not legal in the current state")
+        self.validate_stage_commits()
         package = self.approved_package()
         self._validate_policy(package)
         head = self._git("rev-parse", "HEAD")
@@ -855,6 +879,9 @@ class RunStore(PlanningMixin, HumanMixin):
             raise CogitoError("Start Gate is not on the Package delivery branch")
         self._git("merge-base", "--is-ancestor", package["baseline_commit"], head)
         allowed_control = {self.load()["package_path"], "docs/cogito/project-graph.json"}
+        if current.get("stage_commits") and current.get("shared_document"):
+            document = current["shared_document"]
+            self._validate_content_hash(document["path"], document["hash"])
         for item in package["slices"]:
             for document in (item["spec"], item["plan"]):
                 self._validate_content_hash(document["path"], document["hash"])

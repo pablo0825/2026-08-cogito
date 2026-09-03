@@ -66,6 +66,12 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    stage_commits: bool
+    checkpoint_head: str
+    checkpoint_branch: str
+    pending_checkpoint: dict[str, Any] | None
+    checkpoints: list[dict[str, Any]]
+    shared_document: dict[str, Any]
     human: dict[str, Any]
     human_review_mandate: dict[str, Any]
     planning: dict[str, Any]

@@ -29,7 +29,7 @@ class GateJsonPayloadTests(GitTestCase):
         )
 
     def create_run(self, run_id: str) -> Path:
-        result = self.invoke("init", "--run-id", run_id, "--kind", "feature")
+        result = self.invoke("init", "--no-stage-commits", "--run-id", run_id, "--kind", "feature")
         self.assertEqual(result.returncode, 0, result.stderr)
         return self.repo / ".cogito" / "runs" / run_id / "events.jsonl"
 
