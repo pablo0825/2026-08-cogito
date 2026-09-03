@@ -66,6 +66,8 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    human: dict[str, Any]
+    human_review_mandate: dict[str, Any]
     planning: dict[str, Any]
     carryover_worktrees: dict[str, dict[str, str]]
     amendments: list[dict[str, Any]]

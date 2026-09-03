@@ -14,6 +14,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from cogito_human import HumanMixin
+from cogito_human_projection import HUMAN_EVENTS
 from cogito_state_types import AgentResult, RunState, TaskStatus
 from cogito_replan_lock import run_mutation, project_lock, check_run_fence
 from cogito_planning import (
@@ -58,10 +60,10 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(PlanningMixin):
+class RunStore(PlanningMixin, HumanMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
-        *PLANNING_EVENTS,
+        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
@@ -286,14 +288,18 @@ class RunStore(PlanningMixin):
         if replay is not None:
             return replay
         current = self.load()
-        if current["state"] not in {"executing", "technical-correction", "review-fix", "post-integration-correction"}:
+        if current["state"] not in {"executing", "technical-correction", "review-fix", "post-integration-correction", "human-correction"}:
             raise CogitoError("task updates are not legal in the current state")
         task = current["tasks"].get(task_id)
         if not task:
             raise CogitoError("task is outside the effective Package")
+        if current["state"] == "human-correction" and task_id not in current["human"]["task_ids"]:
+            raise CogitoError("human correction may dispatch only its current amendment tasks")
         if status == "leased":
+            if current['state'] == 'human-correction' and any(is_active_task(t) for t in current['tasks'].values()):
+                raise CogitoError('human correction uses one serial delivery checkout lease')
             package = self.approved_package()
-            if current["state"] == "post-integration-correction":
+            if current["state"] in {"post-integration-correction", "human-correction"}:
                 worktree, branch = self.root, package["delivery_branch"]
             else:
                 worktree, branch = self._task_worktree(task, package)
@@ -304,7 +310,7 @@ class RunStore(PlanningMixin):
                 if item.get("role") == "implementer"
                 and effective_slice_id(current["tasks"].get(item.get("task_id"), {})) == task_slice
             ]
-            expected_base = prior_heads[-1] if prior_heads and current["state"] != "post-integration-correction" else self._git("rev-parse", "HEAD")
+            expected_base = prior_heads[-1] if prior_heads and current["state"] not in {"post-integration-correction", "human-correction"} else self._git("rev-parse", "HEAD")
             if base_commit != expected_base:
                 carried = current.get('carryover_worktrees', {}).get(str(worktree))
                 index, tree = capture_index_and_worktree_trees(worktree)
@@ -361,14 +367,18 @@ class RunStore(PlanningMixin):
         validate_agent_result(result, package, workflow_limits=self.workflow["limits"])
         state = self.load()
         allowed_states = {
-            "implementer": {"executing", "technical-correction", "review-fix", "post-integration-correction"},
-            "reviewer": {"reviewing"}, "integrator": {"integrating"},
+            "implementer": {"executing", "technical-correction", "review-fix", "post-integration-correction", "human-correction"},
+            "reviewer": {"reviewing", "human-correction-reviewing"}, "integrator": {"integrating"},
         }
         if state["state"] not in allowed_states[result["role"]]:
             raise CogitoError(f"{result['role']} Result is not legal in state {state['state']}")
         task = state["tasks"].get(result["task_id"])
         if not task:
             raise CogitoError("Agent Result references a task outside the effective Package")
+        if state['state'] in {'human-correction', 'human-correction-reviewing'}:
+            key = 'task_ids' if result['role'] == 'implementer' else 'cohort_task_ids'
+            if result['task_id'] not in state['human'][key]:
+                raise CogitoError('Agent Result is outside the current human correction cohort')
         if result["role"] != "reviewer" and task.get("agent_id") != result["agent_id"]:
             raise CogitoError("Agent Result identity does not own the task lease")
         if result["role"] == "reviewer" and result.get("reviewed_implementer") != task.get("agent_id"):
@@ -449,7 +459,7 @@ class RunStore(PlanningMixin):
     def _validate_review_content(self, worktree: Path, content_tree: str) -> None:
         """A task review must refer to the current wave's verified content."""
         snapshot = self._events.snapshot()
-        verified = [event for event in snapshot.events if event["type"] == "verification-passed"]
+        verified = [event for event in snapshot.events if event["type"] in {"verification-passed", "human-correction-verified"}]
         if not verified:
             raise CogitoError("review requires recorded verification")
         paths = verified[-1]["payload"]["evidence"]
@@ -463,7 +473,7 @@ class RunStore(PlanningMixin):
         effective = materialize_contract_with_limits(self.approved_package(), amendments, self.workflow["limits"])
         checks = {check["id"]: check for check in effective["checks"]}
         anchor = max((event["sequence"] for event in snapshot.events
-                      if event["type"] in {"implementation-complete", "technical-correction-complete", "review-fix-complete"}), default=0)
+                      if event["type"] in {"implementation-complete", "technical-correction-complete", "review-fix-complete", "human-correction-complete"}), default=0)
         for item in matching:
             entry = snapshot.state["evidence"].get(item["evidence_path"])
             check = checks.get(item["check_id"])
@@ -472,7 +482,9 @@ class RunStore(PlanningMixin):
                     or item.get("passed") is not True or item["check_hash"] != hash_json(check)
                     or item["effective_contract_hash"] != effective["effective_contract_hash"]):
                 raise CogitoError("review evidence is not bound to this verification cycle")
-        self._validate_evidence(self.approved_package(), matching, snapshot=snapshot, phase="implementation")
+        self._validate_evidence(self.approved_package(), matching, snapshot=snapshot,
+                                phase="post-integration" if verified[-1]["type"] == "human-correction-verified" else "implementation",
+                                current_head=head if verified[-1]["type"] == "human-correction-verified" else None)
 
     @run_mutation
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
@@ -519,7 +531,7 @@ class RunStore(PlanningMixin):
     ) -> RunState:
         package = self.approved_package()
         state = self.load()
-        if state["state"] == "post-integration-verification":
+        if state["state"] in {"post-integration-verification", "human-correction-verifying"}:
             if supplied_worktree != self.root:
                 raise CogitoError("post-integration checks must run in the delivery checkout")
         elif state["state"] == "verifying":
@@ -557,6 +569,11 @@ class RunStore(PlanningMixin):
                 path = collision.path
         recorded = _load_json(path)
         validate_check_evidence(recorded)
+        if state['state'] == 'human-correction-verifying':
+            latest = self.load()
+            if (latest['state'] != state['state'] or latest['human'].get('escalated')
+                    or latest['human'].get('attempt') != state['human'].get('attempt')):
+                raise CogitoError('human correction stopped or changed while check ran; artifact cannot enter ledger')
         if (recorded["check_id"] != check_id
                 or recorded["run_id"] != package["run_id"]
                 or recorded["check_hash"] != execution["check_hash"]
@@ -743,8 +760,19 @@ class RunStore(PlanningMixin):
             return replay
         package = self.approved_package()
         state = self.load()
-        if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification"}:
+        if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification",
+                                  "human-feedback-triage", "human-correction-verifying", "human-correction-reviewing"}:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
+        if state["state"].startswith("human-"):
+            human = state.get("human", {})
+            if not human.get("triage") or human["triage"]["route"] != "local" or human.get("escalated"):
+                raise CogitoError("classify a local human correction before adding an amendment")
+            human_events = self._events.read()
+            last_feedback = max(e["sequence"] for e in human_events if e["type"] == "human-feedback-recorded")
+            consumed = {e["payload"]["amendment_id"] for e in human_events if e["type"] == "human-correction-started"}
+            if any(e["type"] == "technical-amendment-added" and e["sequence"] > last_feedback
+                   and e["payload"]["amendment"]["id"] not in consumed for e in human_events):
+                raise CogitoError("start the existing human amendment before adding another")
         prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
         digest = materialize_contract_with_limits(package, [*prior, amendment], self.workflow["limits"])["effective_contract_hash"]
         # Correction tasks must finish before verification/integration can resume.
@@ -903,7 +931,7 @@ class RunStore(PlanningMixin):
             phase="post-integration", current_head=current_head,
         )
         human = package["human_gate"]
-        human_required = bool(reviewer_escalation or human.get("high_risk_hotspots") or any(item["applicable"] for item in human["predicates"]))
+        human_required = bool(current.get("human_review_mandate") or reviewer_escalation or human.get("high_risk_hotspots") or any(item["applicable"] for item in human["predicates"]))
         event = "human-review-required" if human_required else "auto-accept-ready"
         payload = {"passed": True, "human_required": human_required, "evidence": [item["evidence_path"] for item in passed_evidence], "reviewer_escalation": bool(reviewer_escalation), "delivery_head": current_head}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
@@ -925,6 +953,8 @@ class RunStore(PlanningMixin):
             raise CogitoError("only a blocked run with a recorded origin may resume")
         if not current.get("package_hash") and current.get("planning", {}).get("revision"):
             self.planning_recover()
+        if current.get("human", {}).get("escalated"):
+            raise CogitoError("human feedback requires replanning; ordinary resume cannot clear it")
         target = current["blocked_from"]
         if target not in self.workflow["resume_targets"]:
             raise CogitoError("blocked origin is not a legal resume target")
@@ -966,6 +996,11 @@ class RunStore(PlanningMixin):
             return replay
         current = self.load()
         payload = {"approved": True}
+        if current.get("human"):
+            if current['human'].get('pending_feedback'):
+                raise CogitoError('process pending human feedback before accepting the delivery')
+            binding = self._human_current_evidence()
+            payload.update(binding=binding, feedback_hash=current["human"]["feedback_hash"])
         validate_transition(self.workflow, current["state"], "human-approved", payload, current["counters"])
         return self.record("human-approved", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
@@ -1078,6 +1113,7 @@ class RunStore(PlanningMixin):
         self, package: Mapping[str, Any], evidence: Sequence[Mapping[str, Any]], *,
         snapshot: EventSnapshot, phase: Literal["implementation", "post-integration"],
         current_head: str | None = None,
+        validate_supplied: bool = False,
     ) -> None:
         """Collect immutable files for pure rules using the operation's snapshot.
 
@@ -1090,6 +1126,11 @@ class RunStore(PlanningMixin):
         effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
         required = {check["id"] for check in effective["checks"] if check.get("required", True)}
         supplied = {item["check_id"]: item for item in evidence}
+        if validate_supplied:
+            known = {check['id'] for check in effective['checks']}
+            if not supplied or len(supplied) != len(evidence) or supplied.keys() - known:
+                raise CogitoError('human evidence must name distinct known checks and cannot be empty')
+            required.update(supplied)
         if required - supplied.keys():
             raise CogitoError("required verification evidence is missing")
         evidence_root = (self.run_dir / "evidence").resolve()
@@ -1111,6 +1152,7 @@ class RunStore(PlanningMixin):
         validate_gate_evidence(
             package, evidence, snapshot.events, ledger, recorded_evidence,
             effective_contract=effective, phase=phase, current_head=current_head,
+            validate_supplied=validate_supplied,
         )
 
     def next_action(self) -> dict[str, Any]:

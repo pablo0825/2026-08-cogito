@@ -138,6 +138,7 @@ def validate_evidence(
     effective_contract: Mapping[str, Any],
     phase: Literal["implementation", "post-integration"],
     current_head: str | None = None,
+    validate_supplied: bool = False,
 ) -> None:
     """Validate loaded evidence against one contract, ledger, and event snapshot.
 
@@ -163,8 +164,13 @@ def validate_evidence(
         if item.get("required", True)
     }
     supplied = {item.get("check_id"): item for item in evidence}
+    if validate_supplied:
+        known = {item['id']: item for item in effective_contract['checks']}
+        if not supplied or len(supplied) != len(evidence) or supplied.keys() - known.keys():
+            raise CogitoError('human evidence must name distinct known checks and cannot be empty')
+        required.update({key: known[key] for key in supplied})
     anchors = (
-        {"integration-complete", "post-integration-correction-complete"}
+        {"integration-complete", "post-integration-correction-complete", "human-correction-complete"}
         if post_integration
         else {"implementation-complete", "technical-correction-complete", "review-fix-complete"}
     )

@@ -133,7 +133,7 @@ def _validate_commit_history(context: FinalizationContext, final_commit: str, gi
             raise CogitoError("Result references an amendment commit without its trailer")
 
     post_events = [
-        item for item in events if item["type"] in {"human-review-required", "auto-accept-ready"}
+        item for item in events if item["type"] in {"human-review-required", "auto-accept-ready", "human-correction-reviewed", "human-correction-accepted"}
     ]
     if package["kind"] != "maintenance" and git(
         "rev-parse", f"{final_commit}^"

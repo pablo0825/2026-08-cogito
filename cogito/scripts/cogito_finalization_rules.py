@@ -124,6 +124,7 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
         in {
             "technical-correction-complete",
             "post-integration-correction-complete",
+            "human-correction-complete",
             "review-fix-complete",
         }
     }
@@ -162,7 +163,7 @@ def _validate_verification_summary(context: FinalizationContext) -> set[str]:
     if result["integration_commits"] != integration_commits:
         raise CogitoError("Result integration commits do not exactly match Gate history")
     post_events = [
-        item for item in events if item["type"] in {"human-review-required", "auto-accept-ready"}
+        item for item in events if item["type"] in {"human-review-required", "auto-accept-ready", "human-correction-reviewed", "human-correction-accepted"}
     ]
     expected_evidence = set(post_events[-1]["payload"]["evidence"])
     result_evidence = {item.get("evidence") for item in result["checks"]}
@@ -174,10 +175,20 @@ def _validate_verification_summary(context: FinalizationContext) -> set[str]:
 def _validate_acceptance_history(context: FinalizationContext) -> None:
     package, state, result, events = context.package, context.state, context.result, context.events
     human_was_required = any(item["type"] == "human-review-required" for item in events)
-    if human_was_required and not any(item["type"] == "human-approved" for item in events):
+    approvals = [item for item in events if item["type"] in {"human-approved", "human-correction-accepted"}]
+    if human_was_required and not approvals:
         raise CogitoError(
             "Result cannot claim Human Gate approval without a recorded approval event"
         )
+    if state.get("human"):
+        human = state["human"]
+        decisions = [item for item in events if item["type"] in {
+            "human-correction-reviewed", "human-correction-accepted"}]
+        if (not approvals or not decisions or human.get("escalated")
+                or approvals[-1]["payload"].get("feedback_hash") != human["feedback_hash"]
+                or approvals[-1]["payload"].get("binding") != decisions[-1]["payload"]["binding"]
+                or approvals[-1]["sequence"] < decisions[-1]["sequence"]):
+            raise CogitoError("Human Gate approval does not cover the latest corrected feedback and delivery")
     expected_human = {
         "required": human_was_required,
         "outcome": "approved" if human_was_required else "not-required",

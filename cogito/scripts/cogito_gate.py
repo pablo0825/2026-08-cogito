@@ -46,6 +46,12 @@ def parser() -> argparse.ArgumentParser:
     commands = top.add_subparsers(dest="command", required=True)
     replan = commands.add_parser("replan", help="independent replanning lifecycle")
     replan.add_argument("replan_args", nargs=argparse.REMAINDER)
+    feedback = commands.add_parser("human", help="same-run human acceptance feedback")
+    feedback.add_argument("operation", choices=["feedback", "triage", "start", "complete", "verify", "review", "escalate"])
+    feedback.add_argument("--run-id", required=True)
+    feedback.add_argument("--action-id", required=True)
+    feedback.add_argument("--input")
+    feedback.add_argument("--evidence", action="append")
     planning = commands.add_parser("planning", help="versioned preparation in the same run")
     planning.add_argument("operation", choices=["begin", "review", "withdraw", "history", "compare", "recover"])
     planning.add_argument("--run-id", required=True)
@@ -157,7 +163,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     repo = Path(args.repo).resolve()
     try:
-        if args.command == "planning":
+        if args.command == "human":
+            store = RunStore(repo, args.run_id)
+            if args.operation == "review":
+                output = store.human_review(args.action_id)
+            elif args.operation == "verify":
+                if not args.evidence:
+                    raise CogitoError("human verify requires --evidence")
+                output = store.human_verify([_read_object(p) for p in args.evidence], args.action_id)
+            else:
+                if not args.input:
+                    raise CogitoError("human mutation requires --input")
+                operation = {"feedback": store.human_feedback, "triage": store.human_triage,
+                             "start": store.human_correction_start, "complete": store.human_correction_complete,
+                             "escalate": store.human_escalate}[args.operation]
+                output = operation(_read_object(args.input), args.action_id)
+        elif args.command == "planning":
             store = RunStore(repo, args.run_id)
             if args.operation == "history":
                 output = store.planning_history()

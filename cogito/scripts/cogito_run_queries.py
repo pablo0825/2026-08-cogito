@@ -24,12 +24,31 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
         "review-fix": "dispatch-review-fix", "integrating": "integrate-serially",
         "post-integration-verification": "run-post-integration-checks", "awaiting-human": "request-human-review",
         "post-integration-correction": "dispatch-post-integration-correction",
+        "human-feedback-triage": "classify-human-feedback",
+        "human-correction": "dispatch-human-correction",
+        "human-correction-verifying": "verify-human-correction",
+        "human-correction-reviewing": "review-human-correction",
         "finalizing": "write-result-and-finalize", "blocked": "resolve-and-run-resume-gate",
         "accepted": "report-completion", "cancelled": "report-cancellation", "superseded": "continue-successor",
     }
     if state not in actions:
         raise CogitoError(f"no action is defined for state {state!r}")
     output: dict[str, Any] = {"state": state, "next_action": actions[state]}
+    human = projection.get("human")
+    if human:
+        output.update(feedback_id=human["feedback"]["id"],
+                      human_corrections=projection["counters"].get("human_corrections", 0),
+                      human_correction_limit=min(3, projection["limits"].get("human_corrections", 3)))
+        if human.get("escalated") and state not in {'accepted', 'cancelled', 'superseded'}:
+            output["next_action"] = "prepare-human-feedback-replan"
+        elif state == "human-feedback-triage" and human.get("triage"):
+            output["next_action"] = {"change": "prepare-human-feedback-replan", "clarify": "clarify-human-feedback", "local": "prepare-human-correction"}[human["triage"]["route"]]
+        if human.get("exhausted") and state == "blocked":
+            output["next_action"] = "request-human-correction-budget-decision"
+        if human.get('pending_feedback'):
+            output['pending_feedback'] = human['pending_feedback']
+            if state == 'awaiting-human':
+                output['next_action'] = 'record-pending-human-feedback'
     planning = projection.get("planning")
     if planning and not projection.get("package_hash"):
         output["planning_round"] = planning["round"]

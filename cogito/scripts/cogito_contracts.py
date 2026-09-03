@@ -128,6 +128,9 @@ def validate_package_with_limits(
     require_object(limits, "limits", *retry_names)
     for key in retry_names:
         require_integer(limits[key], f"limits.{key}", 0, workflow_limits[key])
+    if 'human_corrections' in limits:
+        require_integer(limits['human_corrections'], 'limits.human_corrections', 1,
+                        min(3, workflow_limits.get('human_corrections', 3)))
     _validate_policy_snapshot(package)
     registry = package["source_registry"]
     dispositions = {"read-only-source", "adopted", "updated", "superseded", "not-touched"}

@@ -7,7 +7,8 @@
     "transient_retries": 2,
     "verification_corrections": 3,
     "review_fix_cycles": 3,
-    "format_repairs": 2
+    "format_repairs": 2,
+    "human_corrections": 3
   },
   "transitions": [
     {"from": "preparing", "event": "shared-understanding-ready", "to": "awaiting-shared-confirmation", "guard": "shared_understanding_frozen"},
@@ -35,11 +36,31 @@
     {"from": "post-integration-verification", "event": "human-review-required", "to": "awaiting-human", "guard": "post_checks_passed_and_human_required"},
     {"from": "post-integration-verification", "event": "auto-accept-ready", "to": "finalizing", "guard": "post_checks_passed_and_no_human"},
     {"from": "awaiting-human", "event": "human-approved", "to": "finalizing", "guard": "human_approved"},
-    {"from": "finalizing", "event": "finalization-complete", "to": "accepted", "guard": "final_recorded"}
+    {"from": "finalizing", "event": "finalization-complete", "to": "accepted", "guard": "final_recorded"},
+    {"from": "awaiting-human", "event": "human-feedback-recorded", "to": "human-feedback-triage", "guard": "human_action_valid"},
+    {"from": "human-feedback-triage", "event": "human-feedback-queued", "to": "human-feedback-triage", "guard": "human_action_valid"},
+    {"from": "human-correction", "event": "human-feedback-queued", "to": "human-correction", "guard": "human_action_valid"},
+    {"from": "human-correction-verifying", "event": "human-feedback-queued", "to": "human-correction-verifying", "guard": "human_action_valid"},
+    {"from": "human-correction-reviewing", "event": "human-feedback-queued", "to": "human-correction-reviewing", "guard": "human_action_valid"},
+    {"from": "human-feedback-triage", "event": "human-feedback-classified", "to": "human-feedback-triage", "guard": "human_action_valid"},
+    {"from": "human-feedback-triage", "event": "human-correction-started", "to": "human-correction", "guard": "human_retry_available", "counter": "human_corrections"},
+    {"from": "human-feedback-triage", "event": "human-correction-exhausted", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction-verifying", "event": "human-correction-started", "to": "human-correction", "guard": "human_retry_available", "counter": "human_corrections"},
+    {"from": "human-correction-verifying", "event": "human-correction-exhausted", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction-reviewing", "event": "human-correction-started", "to": "human-correction", "guard": "human_retry_available", "counter": "human_corrections"},
+    {"from": "human-correction-reviewing", "event": "human-correction-exhausted", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-feedback-triage", "event": "human-feedback-escalated", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction", "event": "human-feedback-escalated", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction-verifying", "event": "human-feedback-escalated", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction-reviewing", "event": "human-feedback-escalated", "to": "blocked", "guard": "block_reason_present"},
+    {"from": "human-correction", "event": "human-correction-complete", "to": "human-correction-verifying", "guard": "human_action_valid"},
+    {"from": "human-correction-verifying", "event": "human-correction-verified", "to": "human-correction-reviewing", "guard": "human_action_valid"},
+    {"from": "human-correction-reviewing", "event": "human-correction-reviewed", "to": "awaiting-human", "guard": "human_action_valid"},
+    {"from": "human-correction-reviewing", "event": "human-correction-accepted", "to": "finalizing", "guard": "human_action_valid"}
   ],
   "global_events": [
     {"event": "block", "to": "blocked", "guard": "block_reason_present"},
     {"event": "cancel", "to": "cancelled", "guard": "cancellation_authorized"}
   ],
-  "resume_targets": ["preparing", "awaiting-shared-confirmation", "boundary-analysis", "package-preparing", "awaiting-package-approval", "start-gate", "executing", "verifying", "technical-correction", "reviewing", "review-fix", "integrating", "post-integration-verification", "post-integration-correction", "awaiting-human", "finalizing"]
+  "resume_targets": ["preparing", "awaiting-shared-confirmation", "boundary-analysis", "package-preparing", "awaiting-package-approval", "start-gate", "executing", "verifying", "technical-correction", "reviewing", "review-fix", "integrating", "post-integration-verification", "post-integration-correction", "awaiting-human", "finalizing", "human-feedback-triage", "human-correction", "human-correction-verifying", "human-correction-reviewing"]
 }

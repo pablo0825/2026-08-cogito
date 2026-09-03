@@ -386,6 +386,13 @@ class ReplanStore:
             if actual!=expected: raise CogitoError('transferred worktree changed before activation')
         self._assert_source(proposal,activated=True)
         source=self.source()
+        source_state = source.load()
+        if source_state.get('human') or source_state.get('human_review_mandate') or state['source_state'] == 'awaiting-human':
+            mandate = {'replan_id': self.replan_id, 'source_run_id': source.run_id,
+                       'source_feedback_hash': source_state.get('human', {}).get('feedback_hash')}
+            new.record('human-review-mandated', mandate,
+                       'replan-human-mandate:' + self.replan_id, new._GATE_AUTHORITY,
+                       request_hash=hash_json(mandate))
         if source.load()['state'] not in {'accepted','superseded'}:
             source.record('run-superseded',{'replan_id':self.replan_id,'successor_run_id':new.run_id},
                 'replan-close:'+self.replan_id,source._GATE_AUTHORITY)

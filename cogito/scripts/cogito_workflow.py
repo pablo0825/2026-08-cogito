@@ -52,6 +52,8 @@ def _required(payload: Mapping[str, Any], *keys: str) -> bool:
 
 def _guard_ok(name: str, payload: Mapping[str, Any], counters: Mapping[str, int], workflow: Mapping[str, Any]) -> bool:
     checks = {
+        "human_action_valid": lambda: payload.get("human_action_valid") is True,
+        "human_retry_available": lambda: payload.get("human_action_valid") is True and counters.get("human_corrections", 0) < min(3, int(workflow["limits"].get("human_corrections", 3))),
         "shared_understanding_frozen": lambda: _required(payload, "shared_understanding_hash"),
         "shared_confirmed": lambda: payload.get("confirmed") is True,
         "mini_package_valid": lambda: payload.get("package_valid") is True,

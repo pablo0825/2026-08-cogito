@@ -145,7 +145,8 @@ def can_close_after_fixes(human: Mapping[str, Any]) -> bool:
             or feedback.get("close_after_fixes") is not True
             or triage.get("route") != "local"
             or triage.get("feedback_id") != feedback.get("id")
-            or human.get("escalated") or human.get("unresolved_item_ids")):
+            or human.get("escalated") or human.get("unresolved_item_ids")
+            or human.get("pending_feedback") or human.get("grant_revoked")):
         return False
     if triage.get("deferred_item_ids") and (
         triage.get("split_authorized") is not True or not triage.get("split_reason")

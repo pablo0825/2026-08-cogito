@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, cast
 
+from cogito_human_projection import HUMAN_EVENTS, project_human_metadata
 from cogito_state_types import EvidenceLedgerEntry, RunState, TaskState
 from cogito_event_types import (
     AgentResultRecordedPayload, CheckEvidenceRecordedPayload,
@@ -52,6 +53,13 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
         guard_preparation(projection, event_type, payload)
         if project_planning(projection, event_type, payload):
             pass
+        elif event_type in HUMAN_EVENTS:
+            _apply_transition(projection, workflow, event_type, payload)
+            project_human_metadata(projection, event_type, payload)
+        elif event_type == "human-review-mandated":
+            if not payload.get("replan_id") or not payload.get("source_run_id"):
+                raise CogitoError("human review mandate requires RP lineage")
+            projection["human_review_mandate"] = dict(payload)
         elif event_type == "run-superseded":
             if projection['state'] != 'blocked' or not _required(payload, 'replan_id', 'successor_run_id'):
                 raise CogitoError('supersession requires a blocked source and explicit successor')
