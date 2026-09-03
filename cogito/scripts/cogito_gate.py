@@ -9,6 +9,40 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# RP tool adoption must bind the code actually loaded by a fresh Gate process.
+# Reading source directly avoids timestamp-valid bytecode from an older install.
+if __name__ == '__main__' and 'replan' in sys.argv[1:]:
+    import hashlib
+    import importlib.abc
+    import importlib.machinery
+    import importlib.util
+
+    _rp_scripts = Path(__file__).resolve().parent
+    COGITO_SOURCE_BINDING = {}
+    for _rp_base in (_rp_scripts, _rp_scripts.parent / 'workflows'):
+        for _rp_path in sorted(_rp_base.rglob('*')):
+            if _rp_path.is_file() and '__pycache__' not in _rp_path.parts:
+                COGITO_SOURCE_BINDING[str(_rp_path)] = hashlib.sha256(_rp_path.read_bytes()).hexdigest()
+    _rp_version = _rp_scripts.parent / 'VERSION'
+    COGITO_SOURCE_BINDING[str(_rp_version)] = hashlib.sha256(_rp_version.read_bytes()).hexdigest()
+
+    class _CogitoSourceLoader(importlib.machinery.SourceFileLoader):
+        def get_code(self, fullname):
+            source = self.get_data(self.path)
+            self.cogito_source_hash = hashlib.sha256(source).hexdigest()
+            return self.source_to_code(source, self.path)
+
+    class _CogitoSourceFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname.startswith('cogito_') and '.' not in fullname:
+                source = _rp_scripts / (fullname + '.py')
+                if source.is_file():
+                    return importlib.util.spec_from_file_location(
+                        fullname, source, loader=_CogitoSourceLoader(fullname, str(source)))
+            return None
+
+    sys.meta_path.insert(0, _CogitoSourceFinder())
+
 from cogito_runtime import CogitoError, RunStore, effective_contract_hash, package_hash, render_project_graph_mermaid, render_workflow_mermaid, validate_agent_result, validate_package
 
 

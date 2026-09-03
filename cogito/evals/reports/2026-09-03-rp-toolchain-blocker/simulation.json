@@ -1,0 +1,89 @@
+{
+  "current_revision": "537b40629ab95017cc3ab991171244a66e25a273",
+  "historical_store_revision": "9c28b1de9f15acb4a3d182bbd4a7d6afa53c8b3c",
+  "passed": 9,
+  "method": "Temporary real Git fixtures and Store calls; historical guard uses current dependency modules; approvals in source fixture are synthetic.",
+  "scenarios": [
+    {
+      "snapshot": "legacy",
+      "change": "runtime-only",
+      "guard": "pre-fix",
+      "result": "PASS",
+      "observed_error": "delivery content drifted outside new control documents",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "current",
+      "change": "runtime-only",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": null,
+      "state": "reviewing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "current",
+      "change": "tool",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery content drifted outside new control documents: .codex/skills/cogito/scripts/cogito_gate.py",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "current",
+      "change": "committed-tool",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery baseline drifted since stop checkpoint",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "current",
+      "change": "product",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery content drifted outside new control documents: src/a.txt",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "legacy",
+      "change": "runtime-only",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": null,
+      "state": "reviewing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "legacy",
+      "change": "tool",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery content drifted outside new control documents: .codex/skills/cogito/scripts/cogito_gate.py",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "legacy",
+      "change": "committed-tool",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery baseline drifted since stop checkpoint",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    },
+    {
+      "snapshot": "legacy",
+      "change": "product",
+      "guard": "current",
+      "result": "PASS",
+      "observed_error": "delivery content drifted outside new control documents: src/a.txt",
+      "state": "analyzing",
+      "snapshot_and_source_and_candidate_preserved": true
+    }
+  ]
+}

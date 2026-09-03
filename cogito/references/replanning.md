@@ -26,6 +26,8 @@ Controlled check 的 subprocess 由 runner 登錄；啟動與 replan fence 使�
 
 停止快照將產品內容、原 Worker 與執行紀錄分開驗證。主目錄未忽略 `.cogito/` 時，正常事件與草稿更新仍可繼續；舊快照不改寫歷史即可套用相容比較。分類邊界、恢復步驟與限制見 [RP Snapshots](replan-snapshots.md)。
 
+若停止後更新專案內 Cogito，使用 [RP 工具接軌](replan-toolchain.md) 的獨立提案、覆核及核准；不能把工具差異默默納入產品 Package，也不能直接忽略工具目錄或 Git 基線變動。
+
 ## 重新釐清與提案
 
 功能、操作方式、Acceptance 或未決定的產品行為改變時，先向使用者釐清。原需求不變時，可先分析新 API／Boundary／Spec／Plan，再提出完整方案。語意判斷屬 Coordinator 與獨立 Reviewer 的責任，Gate 不解析任意自然語言就宣稱 API 相容。

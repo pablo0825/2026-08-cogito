@@ -7,6 +7,7 @@ RP 的停止快照同時保存產品、原 Worker 與執行證據，但不使用
 | 內容 | 驗證方式 |
 |---|---|
 | delivery 產品與未列入例外的檔案 | 比較停止時與目前的 index／content trees；仍只放行既有規則允許的新控制文件 |
+| 專案內 Cogito 工具 | 新快照另存工具 HEAD／index／content manifests；更新需獨立工具接軌核准，沒有目錄層級豁免 |
 | 原 Spec／Plan、Shared Understanding 與 source registry 文件 | 凍結文件路徑優先於 runtime 分類，不能利用草稿目錄放寬保護 |
 | 原 Worker | 完整 HEAD、branch、index tree、content tree 不變；delivery 中若有其 gitlink，也必須符合原 HEAD |
 | 原 run 事件 | hash chain 與停止時 event hash；唯一既有例外是本 RP 的 `run-superseded` 接續 |
@@ -38,8 +39,8 @@ runtime 檔案不得透過 symlink 或 gitlink 冒充事件、快取、鎖或草
 
 ## 已卡住的 RP 如何續接
 
-1. 更新專案實際使用的 Gate 程式後，先執行 `replan status`，確認原 RP 的狀態與下一步。
-2. 若停在 `analyzing`，保留現有 successor 候選，重新執行原本失敗的 `propose`。原 action 沒有成功落盤時，可沿用相同 action ID 與輸入。
+1. 更新專案實際使用的 Gate 程式後，先執行 `replan status`，確認原 RP 的狀態與下一步。若更新改變專案內 `.codex/skills/cogito/` 或其提交造成 HEAD 變化，先完成 [RP 工具接軌](replan-toolchain.md)，不能直接重試或放寬基線檢查。
+2. 若停在 `analyzing` 且只有合法 runtime 更新，可保留現有 successor 候選，重新執行原本失敗的 `propose`。原 action 沒有成功落盤時，可沿用相同 action ID 與輸入。經工具接軌而有效 HEAD 改變時，舊候選仍保留，但須正常建立新 planning 輪次更新 baseline、覆核候選，再提出新 RP proposal。
 3. 通過後仍須正常 `review`、精確 proposal hash 的使用者 `approve`，最後執行 `handoff`。恢復比較不是新的核准。
 4. 若使用者選擇暫停或恢復來源，依既有 `abandon keep-paused`／`resume-source` 流程處理；相容驗證同樣保留來源保護。
 

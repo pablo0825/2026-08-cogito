@@ -11,14 +11,16 @@ from cogito_run_store import RunStore
 def run(root, argv):
     parser=argparse.ArgumentParser(prog='cogito_gate.py replan')
     sub=parser.add_subparsers(dest='operation',required=True)
-    for name in ('status','begin','stop','propose','review','approve','reject','handoff','abandon'):
+    for name in ('status','begin','stop','propose','review','approve','reject','handoff','abandon',
+                 'toolchain-propose','toolchain-review','toolchain-approve','toolchain-reject'):
         p=sub.add_parser(name);p.add_argument('--replan-id',required=True)
         if name!='status':p.add_argument('--action-id',required=True)
         if name=='begin':
             p.add_argument('--source-run',required=True);p.add_argument('--successor-run',required=True);p.add_argument('--reason',required=True)
-        if name in {'propose','review'}:p.add_argument('--input',required=True)
-        if name in {'approve','reject'}:p.add_argument('--proposal-hash',required=True)
-        if name in {'reject','abandon'}:p.add_argument('--reason',required=True)
+        if name in {'propose','review','toolchain-propose','toolchain-review'}:p.add_argument('--input',required=True)
+        if name in {'approve','reject','toolchain-approve','toolchain-reject'}:p.add_argument('--proposal-hash',required=True)
+        if name=='toolchain-approve':p.add_argument('--approver-id',required=True)
+        if name in {'reject','abandon','toolchain-reject'}:p.add_argument('--reason',required=True)
         if name=='abandon':p.add_argument('--disposition',required=True,choices=['keep-paused','resume-source','cancel-source'])
     register=sub.add_parser('register-executor');register.add_argument('--run-id',required=True);register.add_argument('--agent-id',required=True)
     group=register.add_mutually_exclusive_group(required=True);group.add_argument('--pid',type=int);group.add_argument('--handle')
@@ -44,6 +46,10 @@ def run(root, argv):
     if op=='status':return store.load()
     if op=='begin':return store.begin(args.source_run,args.successor_run,args.reason,args.action_id)
     if op=='stop':return store.stop(args.action_id)
+    if op=='toolchain-propose':return store.toolchain_propose(load_json(Path(args.input)),args.action_id)
+    if op=='toolchain-review':return store.toolchain_review(load_json(Path(args.input)),args.action_id)
+    if op=='toolchain-approve':return store.toolchain_approve(args.proposal_hash,args.approver_id,args.action_id)
+    if op=='toolchain-reject':return store.toolchain_reject(args.proposal_hash,args.reason,args.action_id)
     if op=='propose':return store.propose(load_json(Path(args.input)),args.action_id)
     if op=='review':return store.review(load_json(Path(args.input)),args.action_id)
     if op=='approve':return store.approve(args.proposal_hash,args.action_id)

@@ -142,6 +142,9 @@ class ReplanStore:
                 head=source._git('rev-parse','HEAD'),branch=source._git('branch','--show-current')),
             graph=load_json(self.root/'docs/cogito/project-graph.json'))
         saved['runtime'] = self._runtime().capture(saved['delivery'], worktrees)
+        if (self.root / '.codex/skills/cogito').exists():
+            from cogito_replan_toolchain import snapshot_binding
+            saved['toolchain'] = snapshot_binding(self.root, saved['delivery'])
         return saved
 
     def _runtime(self, state=None):
@@ -219,12 +222,17 @@ class ReplanStore:
             raise CogitoError('source changed while preserving work; retry after all writers stop')
         return self._emit('replan-stopped',{'snapshot':saved},action_id,'stop',{})
 
-    def _assert_source(self, proposal=None, activated=False):
+    def _assert_source(self, proposal=None, activated=False, *, toolchain_binding=None):
         state = self.load()
         successor = RunStore(self.root, state['successor_run_id'])
         if successor.events_path.exists():
             successor.load()
         saved = state['snapshot']
+        if proposal is None and (state.get('toolchain_proposal') or toolchain_binding):
+            from cogito_replan_toolchain import _candidate
+            candidate = _candidate(self)
+            if candidate:
+                proposal = {'package': candidate}
         actual = self._capture()
         events = self.source()._events.read()
         closed_by_us = (events[-1]['type']=='run-superseded' and events[-1]['payload'].get('replan_id')==self.replan_id and events[-1]['previous_event_hash']==saved['source_event_hash'])
@@ -234,7 +242,12 @@ class ReplanStore:
         for path, binding in saved['worktrees'].items():
             if Path(path) != self.root and actual['worktrees'].get(path) != binding:
                 raise CogitoError('saved source worktree drifted')
-        if any(actual['delivery'][k] != saved['delivery'][k] for k in ('head','branch')):
+        from cogito_replan_toolchain import assert_binding
+        tool_paths, effective_delivery = assert_binding(
+            self, state, actual['delivery'], toolchain_binding, proposal.get('package') if proposal else None)
+        if tool_paths and actual['tasks'] != saved['tasks']:
+            raise CogitoError('toolchain changes the frozen source task projection')
+        if any(actual['delivery'][k] != effective_delivery[k] for k in ('head','branch')):
             raise CogitoError('delivery baseline drifted since stop checkpoint')
         runtime = self._runtime(state)
         frozen_runtime = runtime.assert_snapshot(saved)
@@ -258,11 +271,31 @@ class ReplanStore:
             after = runtime.product_tree(actual['delivery'][field], worker_links=source_links | successor_links,
                                          immutable_files=frozen_runtime)
             changed = set(filter(None, self.source()._git('diff','--name-only','--no-renames','-z',before,after,'--').split('\0')))
-            if changed - allowed:
+            if changed - allowed - tool_paths:
                 raise CogitoError('delivery content drifted outside new control documents: '
-                                  + ', '.join(sorted(changed - allowed)))
+                                  + ', '.join(sorted(changed - allowed - tool_paths)))
         expected = state['approval']['graph'] if activated else saved['graph']
         if actual['graph'] != expected: raise CogitoError('Project Graph drifted; preserve state and reconcile')
+
+    @mutation
+    def toolchain_propose(self, proposal, action_id):
+        from cogito_replan_toolchain import propose
+        return propose(self, proposal, action_id)
+
+    @mutation
+    def toolchain_review(self, review, action_id):
+        from cogito_replan_toolchain import review as review_toolchain
+        return review_toolchain(self, review, action_id)
+
+    @mutation
+    def toolchain_approve(self, proposal_hash, approver_id, action_id):
+        from cogito_replan_toolchain import approve
+        return approve(self, proposal_hash, approver_id, action_id)
+
+    @mutation
+    def toolchain_reject(self, proposal_hash, reason, action_id):
+        from cogito_replan_toolchain import reject
+        return reject(self, proposal_hash, reason, action_id)
 
     @mutation
     def propose(self, proposal, action_id):
@@ -288,8 +321,9 @@ class ReplanStore:
             raise CogitoError('successor Package must pass normal preparation Gates before proposal')
         new._planning_approval_binding(current)
         self._assert_source(proposal)
-        if package['baseline_commit'] != state['snapshot']['delivery']['head']:
-            raise CogitoError('successor baseline must match saved delivery HEAD')
+        from cogito_replan_toolchain import effective_head
+        if package['baseline_commit'] != effective_head(state):
+            raise CogitoError('successor baseline must match saved or adopted delivery HEAD; prepare a new planning round')
         oldids = set(state['snapshot']['graph']['slices'])
         for sl in package['slices']:
             if sl['id'] in oldids: raise CogitoError('successor must use new Slice IDs')
@@ -305,6 +339,8 @@ class ReplanStore:
             if row.get('disposition') not in {'retain','adapt','omit'}: raise CogitoError('invalid work disposition')
             text_field(row.get('reason'),'work reason')
             if row.get('validation') not in {'reuse','rerun'}: raise CogitoError('work validation must be reuse or rerun')
+            if state.get('toolchain') and row['validation'] == 'reuse':
+                raise CogitoError('toolchain adoption requires fresh successor verification; use rerun')
             if row['disposition'] == 'omit':
                 if row.get('target_task_id') is not None or row['validation']=='reuse': raise CogitoError('omitted work cannot have a target or reused evidence')
                 continue
@@ -345,6 +381,8 @@ class ReplanStore:
             if row['validation']=='reuse': self._adoption(proposal,row,target_tree=after)
         proposal['transfer_trees']=transfer_trees
         proposal['source_snapshot_hash'] = hash_json(state['snapshot'])
+        if state.get('toolchain'):
+            proposal['toolchain_proposal_hash'] = state['toolchain']['proposal_hash']
         digest = hash_json(proposal)
         return self._emit('proposal-prepared',{'proposal':proposal,'proposal_hash':digest},action_id,'propose',request)
 
@@ -397,6 +435,8 @@ class ReplanStore:
             from cogito_disposition_scope import check_package
             check_package(self.root, proposal['package'], state['successor_run_id'])
             self._assert_source(proposal)
+            from cogito_replan_toolchain import require_committed
+            require_committed(state)
             new=self.successor()
             if new.load()['candidate_package_hash']!=package_hash(proposal['package']):
                 raise CogitoError('prepared successor changed after review')

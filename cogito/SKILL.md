@@ -60,6 +60,7 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 | 人工驗收回饋、修正、條件式結案與升級 | [human-acceptance.md](references/human-acceptance.md) |
 | 取消、成果移除／保留、撤回核准與恢復原方案 | [dispositions.md](references/dispositions.md) |
 | 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
+| RP 途中更新專案內 Cogito、工具版本接軌 | [replan-toolchain.md](references/replan-toolchain.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
 | 階段文件提交與登記 | [stage-commits.md](references/stage-commits.md) |

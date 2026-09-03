@@ -1,0 +1,11 @@
+cogito/scripts/cogito_projection.py:83: error: TypedDict "RunState" has no key "withdrawn_human_feedback"  [typeddict-item]
+cogito/scripts/cogito_projection.py:107: error: Unexpected keyword argument "status" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:107: error: Unexpected keyword argument "adoption" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:107: error: Unexpected keyword argument "worktree" for "update" of "TypedDict"  [call-arg]
+cogito/scripts/cogito_projection.py:111: error: No overload variant of "get" of "dict" matches argument type "str"  [call-overload]
+cogito/scripts/cogito_projection.py:111: note: Possible overload variants:
+cogito/scripts/cogito_projection.py:111: note:     def get(self, Never, None = ..., /) -> None
+cogito/scripts/cogito_projection.py:111: note:     def get(self, Never, Never, /) -> Never
+cogito/scripts/cogito_projection.py:111: note:     def [_T] get(self, Never, _T, /) -> _T
+cogito/scripts/cogito_projection.py:123: error: Incompatible types in assignment (expression has type "TaskState | None", variable has type "TaskState")  [assignment]
+Found 6 errors in 1 file (checked 19 source files)

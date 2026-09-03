@@ -38,6 +38,17 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {'state': None, 'transfers': {}, 'transfer_plans': {}}
     for event in events:
         kind, payload = event.get('type'), event.get('payload')
+        if kind in {'toolchain-proposed', 'toolchain-reviewed', 'toolchain-approved', 'toolchain-rejected'}:
+            from cogito_replan_toolchain_rules import project_toolchain
+            if not isinstance(payload, dict):
+                raise CogitoError('invalid toolchain event payload')
+            project_toolchain(result, kind, payload)
+            result.update(sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))
+            continue
+        if (result.get('toolchain_status') in {'reviewing', 'awaiting-approval'} and kind in {
+                'proposal-prepared', 'proposal-reviewed', 'successor-approved', 'handoff-started',
+                'work-transfer-planned', 'work-transferred', 'handoff-completed', 'replan-abandon-started'}):
+            raise CogitoError('finish or reject the pending toolchain proposal before advancing the RP')
         if kind not in TRANSITIONS or not isinstance(payload, dict):
             raise CogitoError('invalid replan event')
         allowed, target = TRANSITIONS[kind]
@@ -84,4 +95,8 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if result['state'] is None:
         raise CogitoError('replan event history is empty')
     result['next_action'] = NEXT[result['state']]
+    if result['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'} and result.get('toolchain_status') == 'reviewing':
+        result['next_action'] = 'independently review the exact toolchain proposal; product RP remains paused'
+    elif result['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'} and result.get('toolchain_status') == 'awaiting-approval':
+        result['next_action'] = 'obtain human approval of the exact toolchain proposal hash'
     return result
