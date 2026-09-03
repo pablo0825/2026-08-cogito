@@ -1,8 +1,0 @@
-repo: /tmp/cogito-feature-multitask-cs_7y950
-Synthetic test approval only; no real human approval asserted.
-check passed: True
-state after verification: reviewing
-T-1 review using original task head REJECTED: Agent Result commits are not bound to the leased worktree events unchanged: True
-T-1 review using latest Slice head REJECTED: Agent Result exceeds its task path responsibility events unchanged: True
-review closure REJECTED: every completed implementation task requires a Gate-recorded independent Reviewer Result
-final state: reviewing

@@ -1,8 +1,0 @@
-test_a_new_block_cycle_records_the_new_origin_after_resume (test_block_recovery.BlockRecoveryTests.test_a_new_block_cycle_records_the_new_origin_after_resume) ... ok
-test_additional_blocks_preserve_tasks_and_counters_but_terminal_runs_reject_them (test_block_recovery.BlockRecoveryTests.test_additional_blocks_preserve_tasks_and_counters_but_terminal_runs_reject_them) ... ok
-test_replaying_existing_double_blocks_preserves_origin_and_allows_resume (test_block_recovery.BlockRecoveryTests.test_replaying_existing_double_blocks_preserves_origin_and_allows_resume) ... ok
-
-----------------------------------------------------------------------
-Ran 3 tests in 0.001s
-
-OK

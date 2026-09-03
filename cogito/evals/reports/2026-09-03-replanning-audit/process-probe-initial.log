@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/evals/reports/2026-09-03-replanning-audit/process-probe.py", line 75, in <module>
-    cli(repo,run,'prepare-package','--package',path);cli(repo,run,'approve','--package',path);cli(repo,run,'start')
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/evals/reports/2026-09-03-replanning-audit/process-probe.py", line 14, in cli
-    assert cp.returncode==expect,(command,cp.stderr)
-           ^^^^^^^^^^^^^^^^^^^^^
-AssertionError: ('prepare-package', 'usage: cogito_gate.py prepare-package [-h] --run-id RUN_ID --package PACKAGE\n                                      --action-id ACTION_ID\ncogito_gate.py prepare-package: error: the following arguments are required: --action-id\n')

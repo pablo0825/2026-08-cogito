@@ -1,3 +1,0 @@
-{"task": "T-2", "changed_paths": ["second.txt"], "error": "Agent Result changed_paths do not match its commit range", "state": "executing"}
-{"task": "T-2", "changed_paths": ["first.txt", "second.txt"], "error": "Agent Result exceeds its task path responsibility", "state": "executing"}
-{"start_head_unchanged": true, "task_states": {"T-1": "complete", "T-2": "running"}}

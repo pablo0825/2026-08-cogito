@@ -1,8 +1,0 @@
-{
-  "tests": 33,
-  "failures": 0,
-  "errors": 0,
-  "skipped": 0,
-  "seconds": 13.798284083000908,
-  "purpose": "Revalidate index timestamp regression and repeat formerly flaky maintenance review-fix 30 times"
-}
