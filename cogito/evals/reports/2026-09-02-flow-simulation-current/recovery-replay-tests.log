@@ -1,0 +1,22 @@
+test_amendment_and_correction_replay_bind_their_original_arguments (test_action_replay.ActionReplayTests.test_amendment_and_correction_replay_bind_their_original_arguments) ... ok
+test_check_and_remaining_delivery_commands_bind_every_input (test_action_replay.ActionReplayTests.test_check_and_remaining_delivery_commands_bind_every_input) ... ok
+test_completed_commands_replay_after_state_has_advanced (test_action_replay.ActionReplayTests.test_completed_commands_replay_after_state_has_advanced) ... ok
+test_correction_without_tasks_still_requires_trailer_and_current_head (test_action_replay.ActionReplayTests.test_correction_without_tasks_still_requires_trailer_and_current_head) ... ok
+test_event_append_failure_recovers_published_evidence_without_running_again (test_action_replay.ActionReplayTests.test_event_append_failure_recovers_published_evidence_without_running_again) ... ok
+test_failure_after_event_append_replays_without_executing_again (test_action_replay.ActionReplayTests.test_failure_after_event_append_replays_without_executing_again) ... ok
+test_invalid_amendment_dependencies_do_not_append_events (test_action_replay.ActionReplayTests.test_invalid_amendment_dependencies_do_not_append_events) ... ok
+test_json_boolean_and_number_are_different_requests (test_action_replay.ActionReplayTests.test_json_boolean_and_number_are_different_requests) ... ok
+test_legacy_history_remains_readable_but_is_not_guessed_on_replay (test_action_replay.ActionReplayTests.test_legacy_history_remains_readable_but_is_not_guessed_on_replay) ... ok
+test_other_commands_cannot_reuse_a_completed_action_id (test_action_replay.ActionReplayTests.test_other_commands_cannot_reuse_a_completed_action_id) ... ok
+test_retry_and_resume_do_not_repeat_their_events (test_action_replay.ActionReplayTests.test_retry_and_resume_do_not_repeat_their_events) ... ok
+test_review_event_uses_gate_decision_and_preserves_the_original_request (test_action_replay.ActionReplayTests.test_review_event_uses_gate_decision_and_preserves_the_original_request) ... ok
+test_review_fix_replay_binds_amendment_and_commit (test_action_replay.ActionReplayTests.test_review_fix_replay_binds_amendment_and_commit) ... ok
+test_simultaneous_retries_execute_a_check_only_once (test_action_replay.ActionReplayTests.test_simultaneous_retries_execute_a_check_only_once) ... ok
+test_uninitialized_check_does_not_prevent_initializing_the_run (test_action_replay.ActionReplayTests.test_uninitialized_check_does_not_prevent_initializing_the_run) ... ok
+test_unknown_process_outcome_is_not_automatically_reexecuted (test_action_replay.ActionReplayTests.test_unknown_process_outcome_is_not_automatically_reexecuted) ... ok
+test_append_deduplicates_exact_request_even_with_stale_cas (test_action_replay.EventReplayTests.test_append_deduplicates_exact_request_even_with_stale_cas) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 4.381s
+
+OK

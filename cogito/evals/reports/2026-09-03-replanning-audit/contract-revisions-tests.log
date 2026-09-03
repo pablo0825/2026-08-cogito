@@ -1,0 +1,8 @@
+test_candidate_revisions_require_latest_approval_and_freeze_after_approval (test_package_revisions.PackageRevisionTests.test_candidate_revisions_require_latest_approval_and_freeze_after_approval) ... ok
+test_revision_cannot_change_run_kind (test_package_revisions.PackageRevisionTests.test_revision_cannot_change_run_kind) ... ok
+test_revision_during_approval_rolls_back_stale_publication (test_package_revisions.PackageRevisionTests.test_revision_during_approval_rolls_back_stale_publication) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 2.680s
+
+OK

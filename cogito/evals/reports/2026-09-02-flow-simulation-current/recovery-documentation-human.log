@@ -1,0 +1,29 @@
+{"command": "init", "state": "preparing", "ok": true}
+{"command": "prepare-package", "state": "awaiting-package-approval", "ok": true}
+{"command": "approve", "state": "start-gate", "ok": true}
+{"command": "start", "state": "executing", "ok": true}
+{"command": "retry", "state": "executing", "ok": true}
+{"command": "transition", "state": "blocked", "ok": true}
+{"command": "transition", "state": "blocked", "ok": true}
+{"command": "status", "state": "blocked", "ok": true}
+{"command": "resume", "state": "executing", "ok": true}
+{"command": "task", "state": "executing", "ok": true}
+{"command": "task", "state": "executing", "ok": true}
+{"command": "agent-result", "state": "executing", "ok": true}
+{"command": "task", "state": "executing", "ok": true}
+{"command": "transition", "state": "verifying", "ok": true}
+{"command": "run-check", "state": "verifying", "ok": true}
+{"command": "verify", "state": "reviewing", "ok": true}
+{"command": "transition", "ok": false, "error": "{\"ok\": false, \"error\": \"independent-review exemption is only valid for objectively low-risk Maintenance\"}\n"}
+{"command": "agent-result", "state": "reviewing", "ok": true}
+{"command": "transition", "state": "integrating", "ok": true}
+{"command": "integrate", "state": "post-integration-verification", "ok": true}
+{"command": "run-check", "state": "post-integration-verification", "ok": true}
+{"command": "post-verify", "state": "awaiting-human", "ok": true}
+{"command": "finalize", "ok": false, "error": "{\"ok\": false, \"error\": \"finalization is not legal in the current state\"}\n"}
+{"command": "human-approve", "state": "finalizing", "ok": true}
+{"command": "status", "state": "finalizing", "ok": true}
+{"command": "finalize", "state": "accepted", "ok": true}
+{"command": "report", "state": null, "ok": true}
+{"completion_report": {"amendments": [], "checks": [{"evidence": "/private/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/cogito-doc-human-8r1cad2r/.cogito/runs/MNT-doc-human/evidence/C-doc-63c257c3c7ca317e.json", "id": "C-doc", "status": "passed"}], "final_commit": "d5760d47dcbbca277f74c64912e8c5a769049e1d", "human_gate": {"outcome": "approved", "required": true}, "remaining_risks": [], "reviews": [{"outcome": "approved", "reviewer": "reviewer"}], "run_id": "MNT-doc-human", "status": "accepted"}}
+{"events": 22, "human_required_events": 1, "human_approved_events": 1, "final_state": "accepted"}

@@ -1,0 +1,9 @@
+test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted (test_feature_e2e.FeatureMultiSliceEndToEndTests.test_cross_slice_dag_is_reviewed_integrated_and_auto_accepted) ... ok
+test_explicit_workflow_limits_reach_runner_verification_and_finalization (test_feature_e2e.FeatureMultiSliceEndToEndTests.test_explicit_workflow_limits_reach_runner_verification_and_finalization) ... ok
+test_final_commit_cannot_include_unverified_product_changes (test_feature_e2e.FeatureMultiSliceEndToEndTests.test_final_commit_cannot_include_unverified_product_changes) ... ok
+test_incorrect_slice_content_fails_checks_and_cannot_pass_verification (test_feature_e2e.FeatureMultiSliceEndToEndTests.test_incorrect_slice_content_fails_checks_and_cannot_pass_verification) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 4.037s
+
+OK

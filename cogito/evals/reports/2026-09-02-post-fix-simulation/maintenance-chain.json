@@ -1,0 +1,56 @@
+{
+  "status": "accepted",
+  "base": "924b8e3b575e0aec8f19f2d7584218d042166f57",
+  "final": "7e5420c179b353b074575015dc3c659c1f4bcc0a",
+  "new_commits": 1,
+  "integration_count": 1,
+  "counters": {
+    "review_fix_cycles": 1,
+    "verification_corrections": 2
+  },
+  "checks": [
+    {
+      "name": "pre-failed",
+      "passed": false,
+      "evidence": "/tmp/cogito-resimulation-20260902/corrections/chain-repo/.cogito/runs/DEV-resimulation-chain/evidence/C-1-c32a194a8a0c4e40.json"
+    },
+    {
+      "name": "pre-fixed",
+      "passed": true,
+      "evidence": "/tmp/cogito-resimulation-20260902/corrections/chain-repo/.cogito/runs/DEV-resimulation-chain/evidence/C-1-130a9d6a66b4493b.json"
+    },
+    {
+      "name": "review-fixed",
+      "passed": true,
+      "evidence": "/tmp/cogito-resimulation-20260902/corrections/chain-repo/.cogito/runs/DEV-resimulation-chain/evidence/C-1-728a734d56af9170.json"
+    },
+    {
+      "name": "post-failed",
+      "passed": false,
+      "evidence": "/tmp/cogito-resimulation-20260902/corrections/chain-repo/.cogito/runs/DEV-resimulation-chain/evidence/C-1-e375ebc9a1ea84f3.json"
+    },
+    {
+      "name": "post-fixed",
+      "passed": true,
+      "evidence": "/tmp/cogito-resimulation-20260902/corrections/chain-repo/.cogito/runs/DEV-resimulation-chain/evidence/C-1-f46702c385a585e6.json"
+    }
+  ],
+  "amendments": [
+    {
+      "id": "TA-pre",
+      "base_commit": "924b8e3b575e0aec8f19f2d7584218d042166f57",
+      "content_tree": "caa56fed62878fcaf19ce4966b62ea5d898b64f3"
+    },
+    {
+      "id": "TA-review",
+      "base_commit": "924b8e3b575e0aec8f19f2d7584218d042166f57",
+      "content_tree": "c7c091f13f8fa5a552e5f5e1cf91ecc29709a15a"
+    },
+    {
+      "id": "TA-post",
+      "base_commit": "924b8e3b575e0aec8f19f2d7584218d042166f57",
+      "content_tree": "c7c091f13f8fa5a552e5f5e1cf91ecc29709a15a"
+    }
+  ],
+  "finished_at": "2026-09-02T14:57:46.655088+00:00"
+}

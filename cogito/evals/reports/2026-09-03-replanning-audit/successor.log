@@ -1,0 +1,22 @@
+{"case": "same", "probe": "cancel_preserves_graph_leases_work", "state": "cancelled", "graph_unchanged": true, "active_run_id": "DEV-feature-e2e-001", "task_statuses": {"T-A": "integrated", "T-B": "running"}, "lease_unchanged": true, "uncommitted_content": "valuable incomplete export\n"}
+{"case": "same", "probe": "new_run_same_slice_approve_before_manual_cleanup", "ok": false, "error": "another Cogito run is active in Project Graph"}
+{"case": "same", "probe": "manual_graph_clear", "note": "explicit audit manual file edit; no dedicated successor gate"}
+{"case": "same", "probe": "same_active_slice_approve_after_graph_clear", "ok": true, "state": "start-gate"}
+{"case": "same", "probe": "same_slice_metadata_overwrite", "before_slice": {"dependencies": [], "disposition": "active", "introduced_by": "DEV-feature-e2e-001", "kind": "feature", "lineage": [], "plan": {"hash": "95f958d3658fa1b8da6ba4519dd11d779b69694ccdb64e71fb1ec121d1cdf3a5", "path": "docs/a-plan.md"}, "spec": {"hash": "b635736f644ae0d03e1629ea69b6c23413288b235229b66fb65b22b0350294c9", "path": "docs/a-spec.md"}}, "after_slice": {"dependencies": [], "disposition": "active", "introduced_by": "DEV-successor-same", "kind": "change", "lineage": [], "plan": {"hash": "95f958d3658fa1b8da6ba4519dd11d779b69694ccdb64e71fb1ec121d1cdf3a5", "path": "docs/a-plan.md"}, "spec": {"hash": "b635736f644ae0d03e1629ea69b6c23413288b235229b66fb65b22b0350294c9", "path": "docs/a-spec.md"}}, "introduced_by": "DEV-successor-same", "old_history_unchanged": true, "new_tasks": {"T-A": "pending", "T-B": "pending"}}
+{"case": "same", "probe": "same_worker_paths_start", "ok": false, "error": "guard 'start_ready' rejected event 'start-gate-passed'"}
+{"case": "new", "probe": "cancel_preserves_graph_leases_work", "state": "cancelled", "graph_unchanged": true, "active_run_id": "DEV-feature-e2e-001", "task_statuses": {"T-A": "integrated", "T-B": "running"}, "lease_unchanged": true, "uncommitted_content": "valuable incomplete export\n"}
+{"case": "new", "probe": "new_run_same_slice_approve_before_manual_cleanup", "ok": false, "error": "another Cogito run is active in Project Graph"}
+{"case": "new", "probe": "manual_graph_clear", "note": "explicit audit manual file edit; no dedicated successor gate"}
+{"case": "new", "probe": "new_ids_lineage_approve_start", "state": "executing", "old_history_unchanged": true, "old_worktrees_preserved": true, "new_tasks": {"T-A": "pending", "T-B": "pending"}, "new_evidence_count": 0, "graph_nodes": ["FS-A", "FS-A-V2", "FS-B", "FS-B-V2"]}
+{"case": "new", "probe": "new_worker_preserves_integrated_product", "product": "a1\n"}
+{"case": "new", "probe": "old_agent_result_submission", "ok": false, "error": "agent result run_id does not match package"}
+{"case": "new", "probe": "old_check_evidence_reuse", "ok": false, "error": "evidence path is outside this run for C-1"}
+{"case": "accepted", "probe": "accepted_resume", "ok": false, "error": "only a blocked run with a recorded origin may resume"}
+{"case": "accepted", "probe": "accepted_block", "ok": false, "error": "terminal state 'accepted' cannot transition"}
+{"case": "accepted", "probe": "new_run_same_slice_approve_before_manual_cleanup", "ok": false, "error": "Slice id is already finalized: FS-A"}
+{"case": "accepted", "probe": "accepted_successor_unstaged_graph_start", "ok": false, "error": "Start Gate requires a clean delivery checkout"}
+{"case": "accepted", "probe": "stage_control_graph", "note": "stage only formalized graph, no commit"}
+{"case": "accepted", "probe": "new_ids_lineage_approve_start", "state": "executing", "old_history_unchanged": true, "old_worktrees_preserved": true, "new_tasks": {"T-A": "pending", "T-B": "pending"}, "new_evidence_count": 0, "graph_nodes": ["FS-A", "FS-A-V2", "FS-B", "FS-B-V2"]}
+{"case": "accepted", "probe": "new_worker_preserves_integrated_product", "product": "a1\n"}
+{"case": "accepted", "probe": "old_agent_result_submission", "ok": false, "error": "agent result run_id does not match package"}
+{"case": "accepted", "probe": "old_check_evidence_reuse", "ok": false, "error": "evidence path is outside this run for C-1"}

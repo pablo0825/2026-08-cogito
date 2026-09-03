@@ -1,0 +1,79 @@
+[
+  {
+    "scenario": "happy-path",
+    "kind": "feature",
+    "state": "accepted",
+    "cli_calls": 107,
+    "next_calls": 70,
+    "integration_count": 2,
+    "events": 30,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "human-gate",
+    "kind": "feature",
+    "state": "accepted",
+    "cli_calls": 110,
+    "next_calls": 72,
+    "integration_count": 2,
+    "events": 31,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "failed-product",
+    "kind": "feature",
+    "state": "verifying",
+    "cli_calls": 49,
+    "next_calls": 31,
+    "integration_count": 0,
+    "events": 13,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "unverified-final",
+    "kind": "feature",
+    "state": "finalizing",
+    "cli_calls": 106,
+    "next_calls": 69,
+    "integration_count": 2,
+    "events": 29,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "change-happy-path",
+    "kind": "change",
+    "state": "accepted",
+    "cli_calls": 107,
+    "next_calls": 70,
+    "integration_count": 2,
+    "events": 30,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "correction-happy-path",
+    "kind": "correction",
+    "state": "accepted",
+    "cli_calls": 107,
+    "next_calls": 70,
+    "integration_count": 2,
+    "events": 30,
+    "expected_outcome": true,
+    "assertions_passed": true
+  },
+  {
+    "scenario": "integration-outside",
+    "kind": "feature",
+    "state": "accepted",
+    "cli_calls": 107,
+    "next_calls": 70,
+    "integration_count": 2,
+    "events": 30,
+    "expected_outcome": false,
+    "assertions_passed": true
+  }
+]

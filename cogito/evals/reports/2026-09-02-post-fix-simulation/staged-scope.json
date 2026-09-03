@@ -1,0 +1,17 @@
+{
+  "state": "accepted",
+  "approved_paths": [
+    "note.txt"
+  ],
+  "declared_changed_paths": [
+    "note.txt"
+  ],
+  "actual_final_diff": [
+    "docs/cogito/project-graph.json",
+    "docs/cogito/results/MNT-staged-scope.json",
+    "note.txt",
+    "unrelated.txt"
+  ],
+  "unrelated_content": "unexpected staged modification",
+  "final_commit": "bcb0062570a40e65c2f643291d8bf039b71fb554"
+}

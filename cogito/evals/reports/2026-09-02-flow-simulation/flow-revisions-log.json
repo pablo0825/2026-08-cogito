@@ -1,0 +1,400 @@
+[
+  {
+    "args": [
+      "init",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--kind",
+      "feature"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": null,
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "d9099ebd3a94a5677746ab162ca2b6840ecd6106957c0206382b3ead2f812e10",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 1,
+        "shared_understanding_hash": null,
+        "state": "preparing",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "shared-understanding-ready",
+      "--payload-json",
+      "{\"shared_understanding_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+      "--action-id",
+      "shared-v1"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": null,
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "f51dfb900455457b23f3871e06f4ba4f2562083760cc7a739c032a5752cc9269",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 2,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "awaiting-shared-confirmation",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "shared-understanding-ready",
+      "--payload-json",
+      "{\"shared_understanding_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+      "--action-id",
+      "shared-v2"
+    ],
+    "code": 2,
+    "output": {
+      "ok": false,
+      "error": "event 'shared-understanding-ready' is not legal from state 'awaiting-shared-confirmation'"
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "block",
+      "--payload-json",
+      "{\"reason\": \"user revised summary\"}",
+      "--action-id",
+      "block"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": "awaiting-shared-confirmation",
+        "boundary": null,
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "1e650d67fecd665f39ec88b5e35ce34d3b783065e3e9e503865669cf417881ac",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 3,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "blocked",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "resume",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--action-id",
+      "resume"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": null,
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "362c476a4ff40925b5e52f825539860556c25c10fe72ca7dd805ddd3510f81a6",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 4,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "awaiting-shared-confirmation",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "shared-understanding-ready",
+      "--payload-json",
+      "{\"shared_understanding_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+      "--action-id",
+      "shared-v2-after-resume"
+    ],
+    "code": 2,
+    "output": {
+      "ok": false,
+      "error": "event 'shared-understanding-ready' is not legal from state 'awaiting-shared-confirmation'"
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "shared-understanding-confirmed",
+      "--payload-json",
+      "{\"confirmed\": true}",
+      "--action-id",
+      "confirm"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": null,
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "9ef7b43d2d2af0aaf77713be1d4c500ddad7a3f3a54442f365e37676ac7b14f4",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 5,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "boundary-analysis",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "transition",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--event",
+      "boundary-complete",
+      "--payload-json",
+      "{\"decision\": \"single-slice\", \"evidence\": [\"small surface\"]}",
+      "--action-id",
+      "boundary"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": {
+          "decision": "single-slice",
+          "evidence": [
+            "small surface"
+          ]
+        },
+        "candidate_package_hash": null,
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "9bd78a7d5958d9e23aea38a9d576bec4e6a817a67716bc8d491f115fe0dba373",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 6,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "package-preparing",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "prepare-package",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--package",
+      "/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/cogito-flow-audit-86vug0ka/draft.json",
+      "--action-id",
+      "prepare-v1"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "agent_results": [],
+        "blocked_from": null,
+        "boundary": {
+          "decision": "single-slice",
+          "evidence": [
+            "small surface"
+          ]
+        },
+        "candidate_package_hash": "ef6cf84acf4b392b0daad67e741e3299a7b4df90e094e6d63fd6ba845e71a84c",
+        "counters": {},
+        "effective_contract_hash": null,
+        "evidence": {},
+        "kind": "feature",
+        "last_event_hash": "b162a847480359aef6329f8e4e8d3c0d05238484800ff818caf60d6d0cd2ae49",
+        "limits": {
+          "format_repairs": 2,
+          "max_workers": 3,
+          "review_fix_cycles": 3,
+          "transient_retries": 2,
+          "verification_corrections": 3
+        },
+        "max_workers": 3,
+        "package_hash": null,
+        "package_path": null,
+        "project_graph_hash": null,
+        "run_id": "DEV-flow-revisions",
+        "schema_version": "3.0",
+        "sequence": 7,
+        "shared_understanding_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "awaiting-package-approval",
+        "tasks": {}
+      },
+      "ok": true
+    }
+  },
+  {
+    "args": [
+      "prepare-package",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--package",
+      "/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/cogito-flow-audit-86vug0ka/draft.json",
+      "--action-id",
+      "prepare-v2"
+    ],
+    "code": 2,
+    "output": {
+      "ok": false,
+      "error": "Package preparation is not legal in the current state"
+    }
+  },
+  {
+    "args": [
+      "approve",
+      "--run-id",
+      "DEV-flow-revisions",
+      "--package",
+      "/var/folders/g7/62bfj3k96pd7g850dntkrvx00000gn/T/cogito-flow-audit-86vug0ka/draft.json",
+      "--action-id",
+      "approve-v2"
+    ],
+    "code": 2,
+    "output": {
+      "ok": false,
+      "error": "approved Package differs from the Gate-validated candidate"
+    }
+  },
+  {
+    "args": [
+      "next",
+      "--run-id",
+      "DEV-flow-revisions"
+    ],
+    "code": 0,
+    "output": {
+      "data": {
+        "next_action": "request-package-approval",
+        "state": "awaiting-package-approval"
+      },
+      "ok": true
+    }
+  }
+]

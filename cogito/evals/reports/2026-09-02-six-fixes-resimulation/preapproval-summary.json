@@ -1,0 +1,46 @@
+{
+  "source_head": "a056941551c68f380078491809ff5ede5f48ea48",
+  "started_at": "2026-09-02T15:15:55+00:00",
+  "completed_at": "2026-09-02T15:19:42.763908+00:00",
+  "elapsed_seconds": 227.8,
+  "source_modified": false,
+  "commit_created": false,
+  "targeted_tests": {
+    "passed": 33,
+    "failed": 0,
+    "seconds": 9.017
+  },
+  "cli_invocations": 123,
+  "normal_cli_scenario_groups": {
+    "passed": 7,
+    "failed": 0
+  },
+  "new_findings": [
+    {
+      "id": "P2-event-json-nonobject",
+      "severity": "P2",
+      "title": "事件JSONL非object行造成未捕捉AttributeError",
+      "variants": [
+        "[]",
+        "null"
+      ],
+      "actual_exit": 1,
+      "expected_exit": 2,
+      "traceback": true,
+      "events_unchanged": true,
+      "cache_unchanged": true,
+      "source": "cogito/scripts/cogito_events.py:31",
+      "evidence": "event-shape/results.json"
+    }
+  ],
+  "harness_notes": [
+    "初次損壞Package探針被canonical檔案0444唯讀模式阻擋，屬現場注入方式問題；在encoding-recovery新repo明確chmod後重跑全部通過，保留原始logs。"
+  ],
+  "final_evidence": [
+    "results.json (前6组)",
+    "encoding-recovery/results.json",
+    "event-shape/results.json",
+    "targeted-tests.log"
+  ],
+  "pending_processes": []
+}

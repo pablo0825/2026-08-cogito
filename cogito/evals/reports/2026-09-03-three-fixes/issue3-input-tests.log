@@ -1,0 +1,14 @@
+Command: python3 -m unittest discover -s cogito/tests -p test_preparation_inputs.py -v
+
+test_direct_record_cannot_bypass_boundary_validation (test_preparation_inputs.PreparationInputTests.test_direct_record_cannot_bypass_boundary_validation) ... ok
+test_direct_record_cannot_bypass_hash_validation (test_preparation_inputs.PreparationInputTests.test_direct_record_cannot_bypass_hash_validation) ... ok
+test_invalid_boundary_decisions_return_structured_errors (test_preparation_inputs.PreparationInputTests.test_invalid_boundary_decisions_return_structured_errors) ... ok
+test_invalid_boundary_evidence_leaves_no_write_and_action_id_can_be_corrected (test_preparation_inputs.PreparationInputTests.test_invalid_boundary_evidence_leaves_no_write_and_action_id_can_be_corrected) ... ok
+test_invalid_hashes_leave_no_write_and_action_id_can_be_corrected (test_preparation_inputs.PreparationInputTests.test_invalid_hashes_leave_no_write_and_action_id_can_be_corrected) ... ok
+test_legacy_invalid_hash_replays_but_must_be_revised_before_confirmation (test_preparation_inputs.PreparationInputTests.test_legacy_invalid_hash_replays_but_must_be_revised_before_confirmation) ... ok
+test_valid_unicode_and_extensions_survive_preparation_and_approval (test_preparation_inputs.PreparationInputTests.test_valid_unicode_and_extensions_survive_preparation_and_approval) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.187s
+
+OK
