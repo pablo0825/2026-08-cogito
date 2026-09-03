@@ -10,6 +10,7 @@ from cogito_common import CogitoError, hash_json
 from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import package_hash
 from cogito_evidence_contract import validate_check_evidence
+from cogito_delivery_summary import validate_delivery_summary_records
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ def validate_finalization_records(context: FinalizationContext) -> set[str]:
     _validate_amendment_history(context)
     evidence_paths = _validate_verification_summary(context)
     _validate_acceptance_history(context)
+    validate_delivery_summary_records(state, context.events, result)
     return evidence_paths
 
 

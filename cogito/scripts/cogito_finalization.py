@@ -119,6 +119,12 @@ def _validate_delivery_scope(
 def _validate_commit_history(context: FinalizationContext, final_commit: str, git: GitCommand) -> None:
     """Check repository facts that cannot be established from records alone."""
     package, result, events = context.package, context.result, context.events
+    if context.state.get("stage_commits"):
+        checkpoints = [item["payload"]["commit_id"] for item in events if item["type"] == "stage-committed"]
+        corrections = [item["commit_id"] for item in result["amendments"] if "commit_id" in item]
+        for commit in dict.fromkeys(checkpoints + corrections):
+            git("cat-file", "-e", f"{commit}^{{commit}}")
+            git("merge-base", "--is-ancestor", commit, final_commit)
     for commit in result["integration_commits"]:
         git("cat-file", "-e", f"{commit}^{{commit}}")
         git("merge-base", "--is-ancestor", commit, final_commit)

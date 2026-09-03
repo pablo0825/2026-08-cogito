@@ -40,6 +40,7 @@ from cogito_contracts import (
 )
 from cogito_correction_rules import validate_correction_completion, validate_review_fix_completion
 from cogito_delivery_scope import validate_committed_scope
+from cogito_delivery_summary import build_delivery_summary
 from cogito_event_repository import EventRepository, EventSnapshot
 from cogito_evidence_contract import validate_check_evidence
 from cogito_evidence_binding import capture_index_and_worktree_trees, working_tree_changed_paths
@@ -1055,6 +1056,15 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         )
         validate_transition(self.workflow, current["state"], "finalization-complete", payload, current["counters"])
         return self.record("finalization-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+
+    def delivery_summary(self) -> dict[str, Any]:
+        """Produce the ledger-derived Result section after all acceptance Gates."""
+        snapshot = self._events.snapshot()
+        current = snapshot.state
+        if current["state"] != "finalizing":
+            raise CogitoError("delivery summary is only available in finalizing")
+        self._approved_package_from_state(current)
+        return build_delivery_summary(current, snapshot.events)
 
     def completion_report(self) -> dict[str, Any]:
         return self._load_completion_report(self.load())

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from cogito_common import CogitoError
+from cogito_delivery_summary import validate_delivery_summary
 from cogito_contract_fields import (
     CONTENT_HASH_RE, GIT_OBJECT_RE, RUN_ID_RE,
     require_array, require_boolean, require_choice, require_id, require_object,
@@ -64,3 +65,5 @@ def validate_result(result: Any) -> None:
     require_boolean(human["required"], "Result.human_gate.required")
     require_choice(human["outcome"], "Result.human_gate.outcome", {"approved", "not-required"})
     require_strings(result["remaining_risks"], "Result.remaining_risks")
+    if "delivery_summary" in result:
+        validate_delivery_summary(result["delivery_summary"])

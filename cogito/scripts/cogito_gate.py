@@ -63,7 +63,7 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--stage-commits", action=argparse.BooleanOptionalAction, default=None, help="require stage checkpoints (default on, except frozen RP successors)")
     init.add_argument("--run-id", required=True)
     init.add_argument("--kind", required=True, choices=["feature", "change", "correction", "maintenance", "documentation"])
-    for name in ("status", "next"):
+    for name in ("status", "next", "delivery-summary"):
         item = commands.add_parser(name)
         item.add_argument("--run-id", required=True)
     checkpoint = commands.add_parser("checkpoint", help="prepare or verify a confirmed stage commit")
@@ -207,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
             from cogito_checkpoints import is_frozen_successor
             stage_commits = args.stage_commits if args.stage_commits is not None else not is_frozen_successor(repo, args.run_id)
             output = RunStore(repo, args.run_id).create(args.kind, stage_commits=stage_commits)
+        elif args.command == "delivery-summary":
+            output = RunStore(repo, args.run_id).delivery_summary()
         elif args.command == "checkpoint":
             store = RunStore(repo, args.run_id)
             if args.operation == "prepare":
