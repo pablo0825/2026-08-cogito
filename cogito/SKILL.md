@@ -11,7 +11,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 
 - 使用中文撰寫專案文件；ID、路徑、API、指令與狀態值使用英文。
 - 每次操作先讀適用的 `AGENTS.md`、專案政策與 Git 狀態，再執行 Gate 回傳的 `next_action`。不得自行跳步、猜測狀態或繞過 guard；資料缺漏、矛盾或 Gate 失敗時 fail closed。
-- 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 只確認理解正確；Boundary Gate pass 只確認邊界，兩者都不授權實作。
+- 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 確認理解正確並授權提交該摘要；Boundary Gate pass 後提交邊界判斷，兩者都不授權實作。
 - Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
 - Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
 - Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免一般開發審查；人工驗收退回修正仍須獨立審查。
@@ -25,10 +25,10 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 
 ## 執行協定
 
-1. 執行 `cogito/scripts/cogito_gate.py` 查詢或建立 run；run 草稿保存在 `.cogito/runs/DEV-*/drafts/`。
+1. 執行 `cogito/scripts/cogito_gate.py` 查詢或建立 run；一般 run 的 `init` 預設啟用階段提交，不關閉此檢查；有效 RP successor 依既有凍結交接流程初始化。未確認草稿保存在 `.cogito/runs/DEV-*/drafts/`。
 2. 完整讀取 Gate `next_action` 指定的 reference 與輸入，只執行該 action。
 3. 以結構化 payload 回報 action 結果；格式錯誤最多修復兩次，修復不得改 code、evidence 或 risk。
-4. 每次轉移後再次查詢 Gate。計數器跨 resume 與 Agent 更換保留；不得用對話記憶代替 event history。
+4. 每次轉移後再次查詢 Gate。`commit-stage-artifacts` 時依 [Stage Commits](references/stage-commits.md) 提交並登記該階段的精確文件，完成後才前進。計數器跨 resume 與 Agent 更換保留；不得用對話記憶代替 event history。
 5. 一般 `blocked` 經 Resume Gate 回到合法狀態；核准前修訂可依 planning Gate 的合法來源檢查開啟規劃輪次；`cancelled`、`accepted` 與 `superseded` 是終態。
 
 狀態主路徑為：
@@ -59,6 +59,7 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 | 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
+| 階段文件提交與登記 | [stage-commits.md](references/stage-commits.md) |
 | Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
 | 首次在舊專案處理能力 | [project-bootstrap.md](references/project-bootstrap.md) |
 
@@ -71,6 +72,7 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 - `.cogito/runs/<run-id>/events.jsonl`：append-only 規劃輪次、候選文件快照與執行歷史；`state.json` 是可重建 projection/cache。
 - controlled runner evidence：以不覆寫的內容尋址檔案綁定 HEAD/tree、check definition 與 effective contract hash。Gate 先將 base Package 與有序 amendments materialize 為 effective contract 快照，runner 不接受 Agent 自行組合的契約。
 - `docs/cogito/results/DEV-*.json`：結案結果。
+- `docs/cogito/shared-understanding/`：供確認及提交的摘要；`docs/cogito/checkpoints/<run-id>/`：已完成階段的事件、文件 hash 與 Git 基線紀錄。
 - Spec／Plan Markdown：產品語意與實作方法；Git：提交歷史。
 
 `Blueprint`、`Slice Brief`、Verification Markdown、Commit Plan 與文件內 approval/status metadata 不再使用。

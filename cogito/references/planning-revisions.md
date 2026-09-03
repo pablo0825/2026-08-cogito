@@ -106,3 +106,7 @@ recover 從同一 journal 還原目前輪次及下一步，檢查已綁定文件
 ## 舊資料限制
 
 歷史初版可能只有 candidate hash，或文件當時不在磁碟而未形成完整快照。begin 需提供 `source_package`，其 hash 必須符合記錄，並提供所有對應 hash 的原文件，才能補存來源候選快照，供 history／compare 查閱。找不到原文件時停止，不能以現在的新內容倒填舊版。歷史共識若只有 hash 而沒有文件路徑，只能如實保留 hash；不假造原文。新的 requirements 輪次則必須提供可驗證的摘要文件。
+
+## 各輪階段提交
+
+啟用階段提交的 run，每輪重新確認摘要、通過 Boundary 後都各自 commit；尚有 checkpoint 未完成時不能開始下一輪或撤回。只有 Gate 登記的 checkpoint commits 可推進 planning 的 delivery HEAD；其他 HEAD 變動仍視為漂移。撤回保留已建立的 commits，不 reset 或 amend 歷史；恢復的正式文件隨後續核准的 Package checkpoint 保存。流程見 [Stage Commits](stage-commits.md)。

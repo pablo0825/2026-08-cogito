@@ -80,3 +80,7 @@ python3 cogito/scripts/cogito_gate.py --repo <repo> replan status --replan-id RP
 ```
 
 本輪主要驗收對象是具專用 Slice worktree 的 Feature／Change／Correction 承接。Mini Package 如有未提交的 delivery 修改，不能略過新 Start Gate 的乾淨 checkout 規則；無法完成隔離與保存時維持阻塞，不自動清理使用者工作目錄。
+
+## 階段提交相容性
+
+RP successor 保留 frozen delivery 與既有 handoff 協定；在有效 RP 內初始化 successor 時，不啟用一般 run 的階段提交。這項相容性保留撤回後恢復 source 的能力，不移動停止時的 delivery HEAD。一般 run 與同一 run 的規劃修訂依 [Stage Commits](stage-commits.md) 保存各階段。

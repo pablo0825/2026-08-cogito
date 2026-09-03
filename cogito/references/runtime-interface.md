@@ -73,3 +73,7 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 修正仍使用 `amend`、task lease、Agent Results 與 controlled `run-check`；每輪 start 消耗人工專用額度，verify 核對最新 delivery 及 effective contract 的 post-integration evidence，review 核對驗證後登錄的本輪獨立 Reviewer Results。Maintenance 同樣需人工退回審查，completion JSON 的 commit_id 使用不變的 Start Gate HEAD 及工作樹快照。未明確完成驗收時回 awaiting-human；有效的本批條件式授權才能進 finalizing，最後仍由 finalize 驗證結案。
 
 `human escalate` 登錄阻塞與升級，不會直接終止外部執行者；Coordinator 必須停止實際程序並依 RP 留存停止回報。已升級或額度耗盡不能透過普通 resume 取得修正或自動結案權限。人工來源 RP 的 successor 保留重新人工驗收要求。
+
+## 階段提交
+
+一般 run 的 `init` 預設啟用 `stage_commits`，有效 RP successor 保留既有 frozen-delivery 協定。Shared Understanding confirmation、Boundary complete 與 Package approval 後，`next` 先回傳 `commit-stage-artifacts`；未登記對應 commit 前拒絕推進。`checkpoint prepare` 產生精確路徑清單與不可變階段紀錄，Coordinator 建立本地 commit，再以 `checkpoint record --commit-id ... --action-id ...` 交給 Gate 驗證。操作與相容性詳見 [Stage Commits](stage-commits.md)。

@@ -4,7 +4,7 @@
 
 AI 以 Shared Understanding 與專案證據提出結構化判斷：`single-slice`、`split-required` 或 `blocked`。Gate 驗證必要欄位、證據、DAG 無環與路徑邊界；AI 不得自行宣告 guard 通過。
 
-Boundary 階段只建立 provisional Slice IDs。Package 核准時才正式寫入 Project Graph。拆分依可獨立驗收的垂直結果；依賴必須說明輸出、消費者與整合順序。Worker 上限為三個，不代表一定要平行。
+`boundary-complete` 通過後，立即依 [Stage Commits](stage-commits.md) 提交 Boundary 判斷、證據與階段紀錄，再開始 Package 草擬。Boundary 階段只建立 provisional Slice IDs。Package 核准時才正式寫入 Project Graph。拆分依可獨立驗收的垂直結果；依賴必須說明輸出、消費者與整合順序。Worker 上限為三個，不代表一定要平行。
 
 ## Development Package
 
@@ -33,6 +33,8 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 新版的 Shared Understanding、Boundary、Spec／Plan、DAG 與 Package 必須對應同一輪，經另一位 Agent 覆核一致性與沿用理由後，才呈現新舊差異請使用者核准。完整 payload、版本比較、撤回與恢復見 [Planning Revisions](planning-revisions.md)。Mini 本版只允許範圍不變的 `plan` 修訂，不支援 same-run 改 kind 升級為 Feature。
 
 ## Package 核准後
+
+Package approval 後先依 [Stage Commits](stage-commits.md) 獨立提交 Package、Spec／Plan、採納來源與 Project Graph；Gate 登記成功後才執行 Start Gate。候選尚未核准時不提交 Spec／Plan 或候選 Package。
 
 Start Gate 在最新的授權本地主線重新驗證 baseline、hashes、working tree、Project Graph、DAG、政策與 worktree 可建立性。Start Gate 只驗證本地 Git 狀態，不會執行 fetch。`fetch_allowed` 是凍結的授權政策，Gate 檢查其不超過 Project Policy；Coordinator 另行確認授權並執行需要的 fetch。此旗標不提供網路隔離，也不攔截 checks 的網路存取。驗證失敗時停止推進，依 Runtime Interface 登錄阻塞，不得沿用過期推論。
 
