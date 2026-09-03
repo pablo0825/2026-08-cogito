@@ -26,6 +26,12 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 `stop_conditions` 是隨 Package hash 凍結的停止政策。每筆可為非空文字，或包含 `id`、`condition`、`outcome` 的物件；`outcome` 可為 `blocked`、`awaiting-human`、`cancelled`。應寫明可觀察的情況、所需證據與預期處理方式，供 Coordinator 判讀。`cogito_contracts._validate_stop_conditions()` 只驗證格式，runtime 不解析條件文字、不持續監看，也不因 `outcome` 自動跳轉或取得取消授權。執行方式見 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。
 
+## Package 核准前修訂
+
+已發布候選後，任何不同候選均先經 `planning begin` 建立同一 run 的新輪次，不直接覆蓋草稿後再次 `prepare-package`。舊候選立即停用核准，原文件 bytes 與修改原因保留在事件中。只調整實作安排使用 `plan`；重分 Slice／邊界使用 `boundary`；需求、範圍、Acceptance 改變使用 `requirements` 並重新確認摘要。每項沿用／重做都說明依據，不能以舊共識核准語意已改變的方案。
+
+新版的 Shared Understanding、Boundary、Spec／Plan、DAG 與 Package 必須對應同一輪，經另一位 Agent 覆核一致性與沿用理由後，才呈現新舊差異請使用者核准。完整 payload、版本比較、撤回與恢復見 [Planning Revisions](planning-revisions.md)。Mini 本版只允許範圍不變的 `plan` 修訂，不支援 same-run 改 kind 升級為 Feature。
+
 ## Package 核准後
 
 Start Gate 在最新的授權本地主線重新驗證 baseline、hashes、working tree、Project Graph、DAG、政策與 worktree 可建立性。Start Gate 只驗證本地 Git 狀態，不會執行 fetch。`fetch_allowed` 是凍結的授權政策，Gate 檢查其不超過 Project Policy；Coordinator 另行確認授權並執行需要的 fetch。此旗標不提供網路隔離，也不攔截 checks 的網路存取。驗證失敗時停止推進，依 Runtime Interface 登錄阻塞，不得沿用過期推論。

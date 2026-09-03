@@ -1,6 +1,8 @@
 # 重新規劃與承接
 
-本流程處理公開 API、資料模型、Acceptance、Boundary 或核准範圍需要變更，且已超出 Technical Amendment 的情況。不可改寫原 Package，也不可只因使用者說「同意改 API」就按新契約實作。
+本流程處理 Package 已核准後，公開 API、資料模型、Acceptance、Boundary 或核准範圍需要變更，且已超出 Technical Amendment 的情況。不可改寫原 Package，也不可只因使用者說「同意改 API」就按新契約實作。
+
+Package 尚未核准的修訂使用 [Planning Revisions](planning-revisions.md)：在同一 run 保留多輪規劃，不需建立 RP 或 successor。若已存在 RP，其 successor 在核准前仍可使用 planning 修訂；完成 planning 獨立覆核後，必須將最新候選重新送入 RP propose／review／approve。RP status 的 `proposal_stale` 表示舊提案已不對應目前候選，舊 RP 提案不能核准；普通 approve 也不能繞過 RP。
 
 ## 核准與流程單位
 

@@ -29,7 +29,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 2. 完整讀取 Gate `next_action` 指定的 reference 與輸入，只執行該 action。
 3. 以結構化 payload 回報 action 結果；格式錯誤最多修復兩次，修復不得改 code、evidence 或 risk。
 4. 每次轉移後再次查詢 Gate。計數器跨 resume 與 Agent 更換保留；不得用對話記憶代替 event history。
-5. `blocked` 只能經 Resume Gate 回到合法狀態；`cancelled`、`accepted` 與 `superseded` 是終態。
+5. 一般 `blocked` 經 Resume Gate 回到合法狀態；核准前修訂可依 planning Gate 的合法來源檢查開啟規劃輪次；`cancelled`、`accepted` 與 `superseded` 是終態。
 
 狀態主路徑為：
 
@@ -44,13 +44,16 @@ preparing -> awaiting-shared-confirmation -> boundary-analysis
 
 Package 的 `stop_conditions` 是供 Coordinator 依證據判讀的凍結政策，Gate 只驗證欄位格式，不解析任意條件文字。宣告的 `outcome` 不會取代合法狀態轉移、Human Gate 判定或取消授權。
 
+Package 核准前候選需變更時，先讀 [Planning Revisions](references/planning-revisions.md)，以 `planning begin` 在同一 run 建立新輪次，保存舊方案並暫停其核准。依影響重新確認需求／Boundary／文件；不同候選都需新輪次，經獨立覆核後才呈現新版供使用者核准。語意影響與沿用理由由 Agent 判斷，不能把 hash 一致當作內容正確。
+
 核准契約需要變更時，使用獨立 `RP-*` 重新規劃單管理全體停止、影響分析、獨立覆核、明確核准與 successor 交接；先讀 [Replanning](references/replanning.md)。不得用普通 resume、改寫 Package 或人工清 Project Graph 代替交接。新流程核准不等於已完成交接。
 
 ## 操作路由
 
 | Gate action | 必須完整讀取 |
 |---|---|
-| 契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
+| 核准前候選修訂、規劃輪次、比較、撤回與恢復 | [planning-revisions.md](references/planning-revisions.md) |
+| 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
 | Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
@@ -62,7 +65,7 @@ Package 的 `stop_conditions` 是供 Coordinator 依證據判讀的凍結政策�
 
 - `docs/cogito/project-graph.json`：Slice 結構、依賴、lineage、disposition、`active_run_id`。
 - `docs/cogito/packages/DEV-*.json`：不可變 Development Package；Technical Amendments 是 append-only overlay。
-- `.cogito/runs/<run-id>/events.jsonl`：append-only 執行歷史；`state.json` 是可重建 projection/cache。
+- `.cogito/runs/<run-id>/events.jsonl`：append-only 規劃輪次、候選文件快照與執行歷史；`state.json` 是可重建 projection/cache。
 - controlled runner evidence：以不覆寫的內容尋址檔案綁定 HEAD/tree、check definition 與 effective contract hash。Gate 先將 base Package 與有序 amendments materialize 為 effective contract 快照，runner 不接受 Agent 自行組合的契約。
 - `docs/cogito/results/DEV-*.json`：結案結果。
 - Spec／Plan Markdown：產品語意與實作方法；Git：提交歷史。

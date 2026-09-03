@@ -16,9 +16,9 @@ Gate 與 Runner 的 JSON 檔案輸入使用 UTF-8；非 UTF-8 或損壞編碼與
 
 Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 Markdown。Package 核准前，從已通過 `prepare-package` 的相同草稿呈現範圍、Spec／Plan 路徑、checks 與風險；核准與執行須綁定同一 candidate hash。顯示層不得補預設值或改寫契約；草稿有變動時重新驗證並確認核准。Python contract 不轉型、不修改輸入；格式錯誤不可透過改寫已凍結資料來掩蓋。
 
-`shared-understanding-ready` 與 `boundary-complete` 在寫入前使用與 Package 相同的驗證：摘要 hash 為 64 位小寫十六進位字串；Boundary decision 是 `single-slice`／`split-required`，evidence 是非空字串陣列。錯型輸入不追加事件、不推進狀態，修正資料後可沿用尚未成功寫入的 action ID。歷史事件不自動改寫；舊 run 的錯誤摘要若仍未確認，可重新發布合法摘要後確認，新 confirmation 不會接受已存的非法 hash。若錯誤 Boundary 已在舊版本完成，需依既有停止／取消與重建決策處理，不手改權威事件。
+`shared-understanding-ready` 與 `boundary-complete` 在寫入前使用與 Package 相同的驗證：摘要 hash 為 64 位小寫十六進位字串；Boundary decision 是 `single-slice`／`split-required`，evidence 是非空字串陣列。錯型輸入不追加事件、不推進狀態，修正資料後可沿用尚未成功寫入的 action ID。歷史事件不自動改寫；舊 run 的錯誤摘要若仍未確認，可重新發布合法摘要後確認，新 confirmation 不會接受已存的非法 hash。若錯誤 Boundary 已在舊版本完成，尚未核准且已有候選時依規劃輪次重做；其他情況依合法停止／取消與重建決策處理，不手改權威事件。
 
-在 `awaiting-package-approval` 修改尚未核准的草稿後，以新的 `action_id` 再呼叫 `prepare-package`。Gate 重新驗證完整草稿，追加新的 candidate hash 並繼續等待核准；舊候選不能再核准。相同操作重送沿用原 ID，不能用舊 ID 提交新內容。候選修訂與核准都比對事件版本，若期間有其他操作則拒絕，重新查詢後重試。正式核准後不再接受此類修訂，須依 Technical Amendment 或既有停止流程處理。
+在 `awaiting-package-approval` 需要不同候選時，先以 `planning begin` 保存來源並停用舊候選核准，再依 `plan`／`boundary`／`requirements` 層級建立同一 run 的新一輪規劃。新版使用目前 `planning_round`，以 `prepare-package` 保存完整候選與文件快照，經獨立 planning review 後才可取得使用者核准。直接替換不同候選會被拒絕；相同操作重送沿用原 ID，不能用舊 ID 提交新內容。候選、覆核與核准都比對輪次及事件版本。操作格式與恢復規則見 [Planning Revisions](planning-revisions.md)。正式核准後改依 Technical Amendment 或 [Replanning](replanning.md) 處理。
 
 ## 停止條件與狀態操作
 
@@ -62,3 +62,6 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 ## 重新規劃 Gate
 
 `replan` 子命令管理獨立 `RP-*` 單，提供 begin、stop、propose、review、approve、reject、handoff、abandon、status，以及 executor 登錄／停止回報與 advance-adoptions。執行規則與 payload 見 [Replanning](replanning.md)。`next` 在原或新 run 被限制時會回傳 replan ID 與下一階段，不再建議普通 resume。
+
+
+`planning` 子命令處理同一 run 核准前的 begin、review、withdraw、history、compare、recover；與核准後的 `replan` 分開。`history` 可讀取各輪保存的文件內容，`compare --from-round N --to-round M` 輸出前後欄位與文件差異。`recover` 檢查目前綁定資料後回報下一步，發現漂移時拒絕繼續，不默默選用某一版。有效 RP 的未核准 successor 可建立 planning 輪次，但最後仍須以最新候選重新提出 RP proposal、獨立覆核及 RP approval，不能用普通 approve 越過承接流程。

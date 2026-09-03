@@ -29,3 +29,6 @@ Readiness: ready | blocked
 等待確認時明說：「確認只表示摘要內容正確；確認後會自動準備 Boundary Gate、Slice／Spec／Plan 與 Development Package，但 Package Approval 前不會實作或 commit。」使用者修正摘要不等於核准；更新後繼續等待確認。
 
 等待確認期間修訂摘要後，重新計算 hash，以新的 `action_id` 提交 `shared-understanding-ready`。Gate 追加候選版本並維持 `awaiting-shared-confirmation`，`next` 回傳目前的 `shared_understanding_hash`。再次向使用者呈現此版本；收到確認後，以 `shared-understanding-confirmed` 提交 `{"confirmed":true,"shared_understanding_hash":"<目前摘要hash>"}`。曾修訂摘要的 run 必須明確帶最新 hash，缺少或沿用舊 hash 都會被拒絕；未曾修訂的歷史操作仍相容原本僅有 `confirmed` 的 payload。摘要確認後不接受此自循環，不以修訂摘要偷偷改動後續契約。
+
+
+Package 尚未核准而需求已改變時，使用 [Planning Revisions](planning-revisions.md) 的 `requirements` 輪次重新進入摘要準備，不在已確認摘要上偷做自循環。`shared-understanding-ready` 需帶目前 `planning_round`、新的 `shared_understanding_hash` 與 `document: {"path": "...", "hash": "..."}`，讓 Gate 保存確認對象的精確內容；confirmation 同時指定本輪及最新 hash。未改需求的 `plan`／`boundary` 輪次沿用已確認共識；影響不明時先 Grilling，不能以較低層級略過必要確認。歷史只有 hash 的摘要不假造原文，但新 requirements 輪次必須提供可驗證文件。

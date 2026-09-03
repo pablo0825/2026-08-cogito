@@ -69,4 +69,6 @@ Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快�
 
 ## 契約變更與重新規劃
 
+Package 核准前使用同一 run 的規劃輪次：先保存舊方案並暫停核准，按影響回到需求確認、Boundary 或文件準備，保留每輪文件快照與比較，再經獨立覆核及使用者核准。不同候選不能直接替換；撤回需要明確授權與原方案有效性檢查，中斷可由同一事件歷史恢復。CLI 與限制見 [核准前規劃修訂](references/planning-revisions.md)。
+
 超出 Technical Amendment 的變更使用獨立 `RP-*` 單：全體停止並保存、分析差異、獨立覆核、使用者核准新 Package，再由新 run 承接成果。核准與正式啟用分離，交接各步可對帳恢復；accepted 原紀錄保持不變。使用方法與第一版證據沿用限制見 [重新規劃](references/replanning.md)。
