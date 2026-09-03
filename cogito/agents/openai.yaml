@@ -1,7 +1,7 @@
 interface:
   display_name: "Cogito"
-  short_description: "Adopt, clarify, and execute software work"
-  default_prompt: "Use $cogito to start one Cogito stage; direct answers can continue that stage without repeating $cogito."
+  short_description: "Gate-controlled multi-agent software delivery"
+  default_prompt: "Use $cogito to clarify this work, prepare one Development Package for approval, and then follow the Gate through implementation, verification, independent review, integration, and finalization."
 
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false
