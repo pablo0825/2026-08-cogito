@@ -239,6 +239,24 @@ class ReplanStore:
         reuse_slices = {targets[t].get('slice_id') for t in reuse_targets}
         if any(t.get('slice_id') in reuse_slices and t['id'] not in reuse_targets for t in targets.values()):
             raise CogitoError('a reused worktree cannot also contain changed or new tasks; split Slice or rerun')
+        # Prove deterministic imports before review/approval, while a proposal
+        # can still be revised. Never discover an intrinsic merge conflict only
+        # after the user has approved and Graph activation has begun.
+        simulated = {}
+        transfer_trees = {}
+        for row in manifest:
+            if row['disposition']=='omit': continue
+            target=targets[row['target_task_id']]
+            slice_id=target.get('slice_id')
+            before=simulated.get(slice_id, self.source()._git('rev-parse', package['baseline_commit']+'^{tree}'))
+            source_task=source_tasks[row['source_task_id']]
+            saved=state['snapshot']['worktrees'].get(source_task.get('worktree'))
+            source_tree=saved['content_tree'] if saved else state['snapshot']['delivery']['content_tree']
+            after=self._merge_tree(before, source_task.get('base_commit',package['baseline_commit']), source_tree, source_task['paths'])
+            simulated[slice_id]=after
+            transfer_trees[row['source_task_id']]=after
+            if row['validation']=='reuse': self._adoption(proposal,row,target_tree=after)
+        proposal['transfer_trees']=transfer_trees
         proposal['source_snapshot_hash'] = hash_json(state['snapshot'])
         digest = hash_json(proposal)
         return self._emit('proposal-prepared',{'proposal':proposal,'proposal_hash':digest},action_id,'propose',request)
@@ -377,8 +395,21 @@ class ReplanStore:
             if row.get('worktree'): result[row['worktree']]=row['binding']
         return result
 
-    def _transfer(self,row):
+    def _merge_tree(self, before, source_base, source_tree, paths):
         import os, subprocess, tempfile
+        def git_call(*args, env=None, content=None):
+            result=subprocess.run(['git','-C',str(self.root),*args],env=env,input=content,capture_output=True)
+            if result.returncode:
+                raise CogitoError('carryover cannot apply cleanly; revise the proposal before approval')
+            return result.stdout
+        patch=git_call('diff','--binary','--full-index',source_base,source_tree,'--',*paths)
+        with tempfile.TemporaryDirectory(prefix='cogito-transfer-') as directory:
+            env={**os.environ,'GIT_INDEX_FILE':str(Path(directory)/'index')}
+            git_call('read-tree',before,env=env)
+            if patch: git_call('apply','--cached','--3way',env=env,content=patch)
+            return git_call('write-tree',env=env).decode().strip()
+
+    def _transfer(self,row):
         state=self.load(); source=self.source(); new=self.successor(); package=state['proposal']['package']
         task_id=row['source_task_id']; savedtask=state['snapshot']['tasks'][task_id]
         if row['disposition']=='omit':
@@ -406,14 +437,9 @@ class ReplanStore:
             saved=state['snapshot']['worktrees'].get(savedtask.get('worktree'))
             tree=saved['content_tree'] if saved else state['snapshot']['delivery']['content_tree']
             sourcebase=savedtask.get('base_commit',base)
-            patch=subprocess.run(['git','-C',str(self.root),'diff','--binary','--full-index',sourcebase,tree,'--',*savedtask['paths']],capture_output=True,check=True).stdout
-            with tempfile.TemporaryDirectory(prefix='cogito-transfer-') as directory:
-                env={**os.environ,'GIT_INDEX_FILE':str(Path(directory)/'index')}
-                subprocess.run(['git','-C',str(self.root),'read-tree',before['content_tree']],env=env,check=True,capture_output=True)
-                if patch:
-                    applied=subprocess.run(['git','-C',str(self.root),'apply','--cached','--3way'],env=env,input=patch,capture_output=True)
-                    if applied.returncode: raise CogitoError('approved carryover conflicts; preserve source and revise proposal')
-                aftertree=subprocess.run(['git','-C',str(self.root),'write-tree'],env=env,capture_output=True,text=True,check=True).stdout.strip()
+            aftertree=self._merge_tree(before['content_tree'],sourcebase,tree,savedtask['paths'])
+            if aftertree!=state['proposal']['transfer_trees'][task_id]:
+                raise CogitoError('transfer content differs from reviewed proposal')
             if aftertree==before['content_tree']:
                 aftercommit=before['head']
             else:
