@@ -35,7 +35,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> transition \
 
 相同操作重送沿用同一 action ID 與相同原因；不同發現使用新 ID。已在 `blocked` 時可用新 `block` 事件補記新原因，但 `blocked_from` 保留本次阻塞前的狀態。問題排除後使用 `resume` Gate；恢復會清除本次來源，下一次阻塞再記錄新的來源。舊版連續 `block` 造成的錯誤快取可從既有事件重新還原，不改寫事件歷史。`block` 不會終止已啟動的 subprocess 或 Worker，Coordinator 仍須依其執行介面停止或收尾。
 
-`outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `transition --event cancel` 提交授權結果；不能只因 Package 寫了 `cancelled` 就自行宣告授權。首次 `awaiting-human` 經合法的 `post-verify` Human Gate 判定進入，人工退回修正也可經專用 review 回到該狀態；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
+`outcome` 不會放寬 workflow：`cancelled` 需先有取消授權，再以 `disposition begin/stop` 完成停止保存；既有 `transition --event cancel` 也會轉交獨立 DP 並安全釋放執行佔用，操作及待處置範圍見 [成果處置](dispositions.md)；不能只因 Package 寫了 `cancelled` 就自行宣告授權。首次 `awaiting-human` 經合法的 `post-verify` Human Gate 判定進入，人工退回修正也可經專用 review 回到該狀態；若在較早階段需要使用者決策，先 `block` 並說明問題，不直接寫入 `human-review-required` 或修改狀態。`accepted` 與 `cancelled` 均不能再轉移。
 
 ## 儲存與復原
 
