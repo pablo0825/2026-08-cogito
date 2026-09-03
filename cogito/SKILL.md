@@ -10,7 +10,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 ## 不變量
 
 - 使用中文撰寫專案文件；ID、路徑、API、指令與狀態值使用英文。
-- 每次操作先讀適用的 `AGENTS.md`、專案政策與 Git 狀態，再執行 Gate 回傳的 `next_action`。不得自行跳步、猜測狀態或繞過 guard；資料缺漏、矛盾或 Gate 失敗時 fail closed。
+- 初始化、恢復執行、執行 Gate action、修改專案或提交前，先讀適用的 `AGENTS.md`、專案政策與 Git 狀態，依 Gate 回傳的 `next_action` 操作。同一 Grilling action 內的連續純需求問答可沿用本輪已讀取的資訊，不因單題回答而重讀政策、重查 Git 或重新查詢 Gate；發現新事實缺口或資訊可能已變動時，補做相關查證。問答與保存時機依 [Grilling Workflow](references/grilling-workflow.md)。不得自行跳步、猜測狀態或繞過 guard；資料缺漏、矛盾或 Gate 失敗時 fail closed。
 - 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 確認理解正確並授權提交該摘要；Boundary Gate pass 後提交邊界判斷，兩者都不授權實作。
 - Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
 - Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
