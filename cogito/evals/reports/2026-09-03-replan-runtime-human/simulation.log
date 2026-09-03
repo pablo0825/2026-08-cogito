@@ -1,0 +1,9 @@
+Command: python3 -B -m unittest discover -s cogito/tests -p test_replan_runtime_human_e2e.py -v
+Core commit: cdce97c
+
+test_unignored_runtime_handoff_requires_fresh_human_acceptance (test_replan_runtime_human_e2e.ReplanRuntimeHumanEndToEndTests.test_unignored_runtime_handoff_requires_fresh_human_acceptance) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 6.728s
+
+OK
