@@ -50,12 +50,15 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 
 核准契約需要變更時，使用獨立 `RP-*` 重新規劃單管理全體停止、影響分析、獨立覆核、明確核准與 successor 交接；先讀 [Replanning](references/replanning.md)。不得用普通 resume、改寫 Package 或人工清 Project Graph 代替交接。新流程核准不等於已完成交接。
 
+取消、放棄或撤回已核准方案使用獨立 `DP-*` 成果處置，先讀 [Dispositions](references/dispositions.md)。停止與保存後，原任務取消和成果處置分別追蹤；Agent 提案、獨立覆核、使用者審核後才執行移除／保留／恢復。受影響任務暫停，其他任務可繼續；DP follow-up 必須人工驗收。
+
 ## 操作路由
 
 | Gate action | 必須完整讀取 |
 |---|---|
 | 核准前候選修訂、規劃輪次、比較、撤回與恢復 | [planning-revisions.md](references/planning-revisions.md) |
 | 人工驗收回饋、修正、條件式結案與升級 | [human-acceptance.md](references/human-acceptance.md) |
+| 取消、成果移除／保留、撤回核准與恢復原方案 | [dispositions.md](references/dispositions.md) |
 | 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |

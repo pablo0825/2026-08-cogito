@@ -53,7 +53,9 @@ successor 使用新的 Slice ID，`lineage` 明確指向原 Slice。不得直接
 
 核准前向使用者呈現：原與新 API、資料格式、Boundary、Acceptance、額外成本、每項保留／修改／不採用決策，以及需要重跑和打算沿用的測試／審查與依據。使用者核准的是這份精確提案，`approve --proposal-hash` 將 hash 綁定新 Package 與交接清單。提案修訂會使前版覆核失效；來源快照或候選 Package 漂移也不能沿用原核准。
 
-不核准使用 `reject`，保持暫停並詢問下一步。使用者明確選擇後才使用 `abandon` 的 keep-paused、resume-source 或 cancel-source。resume-source 先保存舊 executor generation、釋放停止的 active lease 再恢復；cancel-source 同時以可恢復步驟釋放 Graph，保留程式與歷史。
+不核准使用 `reject`，保持暫停並詢問下一步。使用者明確選擇後才使用 `abandon` 的 keep-paused、resume-source 或 cancel-source。resume-source 先保存舊 executor generation、釋放停止的 active lease 再恢復；cancel-source 轉交獨立 DP，以可恢復步驟保存成果、取消及釋放 Graph；後續移除／保留由使用者另審方案。
+
+核准後撤回、部分 handoff 後恢復原方案，以及原變更要求撤回後的人工來源恢復，依 [成果處置](dispositions.md) 建立關聯 DP。它保存 source／successor 與已轉移成果，原 RP 轉為 `disposition`，不能繼續舊 handoff。普通 resume-source 在記錄决定前先檢查可行性；否決提案不會自行撤回人工回饋。
 
 ## 承接與中斷恢復
 

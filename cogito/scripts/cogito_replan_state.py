@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 from cogito_common import CogitoError
 
-TERMINAL = {'completed', 'abandoned'}
+TERMINAL = {'completed', 'abandoned', 'disposition'}
 TRANSITIONS = {
     'replan-created': ({None}, 'stopping'),
     'replan-stopped': ({'stopping'}, 'analyzing'),
@@ -17,6 +17,8 @@ TRANSITIONS = {
     'handoff-completed': ({'handing-off'}, 'completed'),
     'replan-abandon-started': ({'stopping', 'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'}, 'resolving-decision'),
     'replan-abandoned': ({'resolving-decision'}, 'abandoned'),
+    'replan-disposition-started': ({'stopping', 'analyzing', 'reviewing', 'awaiting-approval',
+        'awaiting-decision', 'ready-for-handoff', 'handing-off', 'resolving-decision'}, 'disposition'),
 }
 NEXT = {
     'stopping': 'stop executors, collect executor receipts and capture stable snapshots',
@@ -29,6 +31,7 @@ NEXT = {
     'completed': 'continue the successor run through its regular Gates',
     'resolving-decision': 'reconcile the authorized source disposition before releasing the fence',
     'abandoned': 'follow the explicitly selected original-run disposition',
+    'disposition': 'follow the linked disposition; this replan cannot resume handoff',
 }
 
 def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -72,6 +75,11 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             result['decision'] = payload
         elif kind == 'replan-abandoned':
             result['disposition'] = payload['disposition']
+        elif kind == 'replan-disposition-started':
+            disposition_id = payload.get('disposition_id')
+            if not isinstance(disposition_id, str) or not disposition_id.startswith('DP-'):
+                raise CogitoError('replan disposition requires a DP-* identifier')
+            result['disposition_id'] = disposition_id
         result.update(state=target, sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))
     if result['state'] is None:
         raise CogitoError('replan event history is empty')

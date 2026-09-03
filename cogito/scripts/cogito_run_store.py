@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from cogito_checkpoints import CheckpointMixin, guard_checkpoint
+from cogito_disposition_run import DispositionRunMixin
 from cogito_human import HumanMixin
 from cogito_human_projection import HUMAN_EVENTS
 from cogito_state_types import AgentResult, RunState, TaskStatus
@@ -62,10 +63,10 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
+class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
-        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed",
+        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
@@ -167,6 +168,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
 
     @run_mutation
     def record(self, event_type: str, payload: Mapping[str, Any], action_id: str | None = None, _authority: object | None = None, *, request_hash: str | None = None, expected_previous_hash: str | None = None) -> RunState:
+        if event_type == "cancel":
+            from cogito_disposition_lock import current_authority
+            if current_authority() is None:
+                raise CogitoError("cancel requires the dedicated disposition Gate")
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
         request_hash = request_hash or request_fingerprint("record", event=event_type, payload=payload)
@@ -199,6 +204,16 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
 
     @run_mutation
     def transition(self, event: str, payload: Mapping[str, Any], action_id: str | None = None) -> RunState:
+        from cogito_disposition_lock import current_authority
+        if event == "cancel" and current_authority() is None:
+            if payload.get("authorized") is not True:
+                raise CogitoError("cancellation requires explicit user authorization")
+            from cogito_disposition_store import DispositionStore
+            key = hash_json({"run": self.run_id, "action_id": action_id})[:20]
+            disposition = DispositionStore(self.root, "DP-cancel-" + key)
+            disposition.begin(self.run_id, payload.get("reason", "User authorized cancellation"), "cancel-begin:" + key)
+            disposition.stop("cancel-stop:" + key)
+            return self.load()
         request_hash = request_fingerprint("transition", event=event, payload=payload)
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
@@ -209,6 +224,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         if event in self._PROTECTED_TRANSITION_EVENTS:
             raise CogitoError(f"{event} requires its dedicated Gate operation")
         payload = dict(payload)
+        if event == "cancel":
+            payload["disposition_id"] = current_authority()
         if event == "implementation-complete":
             completed = {task_id for task_id, item in current["tasks"].items() if item.get("status") == "complete"}
             implemented = {item.get("task_id") for item in current["agent_results"] if item.get("role") == "implementer" and item.get("status") == "complete" and item.get("requested_transition") == "verifying"}
@@ -533,6 +550,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         if not action_id:
             raise CogitoError("controlled check requires a stable action_id")
         with project_lock(self.root):
+            from cogito_disposition_lock import check_disposition_fence
+            check_disposition_fence(self, "run_controlled_check")
             check_run_fence(self.root, self.run_id, "run_controlled_check")
         supplied_worktree = Path(worktree).resolve()
         request_hash = request_fingerprint("run-check", check_id=check_id, worktree=str(supplied_worktree))
@@ -850,6 +869,15 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         event_payload = {"approved": True, "package_path": relative.as_posix(), "package_hash": digest, "tasks": tasks, "max_workers": package["policy_snapshot"]["max_workers"], "project_graph_hash": hash_json(graph), "project_graph_snapshot": graph, "limits": package["limits"]}
         if planning_approval:
             event_payload["planning_approval"] = planning_approval
+        from cogito_disposition_scope import dispositions
+        for decision in dispositions(self.root):
+            proposal = decision.get('proposal') or {}
+            if decision['state'] == 'executing' and proposal.get('followup_run_id') == self.run_id:
+                if proposal.get('followup_package_hash') != digest:
+                    raise CogitoError('follow-up differs from its approved disposition')
+                event_payload['human_review_mandate'] = {
+                    'disposition_id': decision['disposition_id'], 'source_run_id': decision['source_run_id']}
+
         return publish_approval(
             ApprovalArtifacts(target, package, graph_path, graph, graph_before),
             prior_state=current,
@@ -976,11 +1004,20 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         replay = self._replay(action_id, "resume", request_hash)
         if replay is not None:
             return replay
+        payload = self.validate_resume()
+        return self.record("resume", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+
+    def validate_resume(self):
+        """Preflight recovery without persisting a decision or changing the run."""
         current = self.load()
         if current["state"] != "blocked" or not current.get("blocked_from"):
             raise CogitoError("only a blocked run with a recorded origin may resume")
         if not current.get("package_hash") and current.get("planning", {}).get("revision"):
-            self.planning_recover()
+            self._planning_environment(current)
+            candidate = current["planning"].get("candidate")
+            if candidate:
+                assert_files(self.root, candidate, strict=True)
+                self._validate_policy(candidate["package"])
         if current.get("human", {}).get("escalated"):
             raise CogitoError("human feedback requires replanning; ordinary resume cannot clear it")
         target = current["blocked_from"]
@@ -1014,7 +1051,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
                 if hash_json(evidence) != ledger.get("evidence_hash"):
                     raise CogitoError("Resume Gate found tampered evidence")
         reconciliation = hash_json({"target": target, "head": self._git("rev-parse", "HEAD"), "event_hash": current["last_event_hash"]})
-        return self.record("resume", {"target": target, "validated": True, "reconciliation_hash": reconciliation}, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return {"target": target, "validated": True, "reconciliation_hash": reconciliation}
 
     @run_mutation
     def approve_human_gate(self, action_id: str | None = None) -> RunState:
@@ -1193,9 +1230,22 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin):
         )
 
     def next_action(self) -> dict[str, Any]:
+        from cogito_disposition_scope import dispositions
+        for disposition in dispositions(self.root):
+            if self.run_id in {disposition["source_run_id"], disposition.get("successor_run_id"), (disposition.get("proposal") or {}).get("followup_run_id")} and disposition["state"] != "completed":
+                metadata = {"disposition_id": disposition["disposition_id"], "disposition_state": disposition["state"],
+                            "disposition_next_action": disposition["next_action"]}
+                projection = self.load()
+                if disposition['state'] == 'executing' and (disposition.get('proposal') or {}).get('followup_run_id') == self.run_id:
+                    output = derive_next_action(projection)
+                    if projection['state'] == 'accepted':
+                        output['next_action'] = 'complete-disposition'
+                        output['report'] = self._load_completion_report(projection)
+                    return {**output, **metadata}
+                return {"state": projection["state"], "next_action": "continue-disposition", **metadata}
         from cogito_replan_lock import replans
         for replan in replans(self.root):
-            if self.run_id in {replan["source_run_id"], replan["successor_run_id"]} and replan["state"] not in {"completed", "abandoned"}:
+            if self.run_id in {replan["source_run_id"], replan["successor_run_id"]} and replan["state"] not in {"completed", "abandoned", "disposition"}:
                 from cogito_replan_store import ReplanStore
                 replan = ReplanStore(self.root, replan["replan_id"]).load()
                 projection = self.load()

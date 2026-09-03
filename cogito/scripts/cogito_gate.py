@@ -46,6 +46,8 @@ def parser() -> argparse.ArgumentParser:
     commands = top.add_subparsers(dest="command", required=True)
     replan = commands.add_parser("replan", help="independent replanning lifecycle")
     replan.add_argument("replan_args", nargs=argparse.REMAINDER)
+    disposition = commands.add_parser("disposition", help="cancel and resolve preserved outcomes")
+    disposition.add_argument("disposition_args", nargs=argparse.REMAINDER)
     feedback = commands.add_parser("human", help="same-run human acceptance feedback")
     feedback.add_argument("operation", choices=["feedback", "triage", "start", "complete", "verify", "review", "escalate"])
     feedback.add_argument("--run-id", required=True)
@@ -169,7 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     repo = Path(args.repo).resolve()
     try:
-        if args.command == "human":
+        if args.command == "disposition":
+            from cogito_disposition_cli import run as run_disposition
+            output = run_disposition(repo, args.disposition_args)
+        elif args.command == "human":
             store = RunStore(repo, args.run_id)
             if args.operation == "review":
                 output = store.human_review(args.action_id)
