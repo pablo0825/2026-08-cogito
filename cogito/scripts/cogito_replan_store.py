@@ -570,10 +570,8 @@ class ReplanStore:
         state=self.load()
         if state['state'] not in {'ready-for-handoff','handing-off'}:
             raise CogitoError('handoff requires approved proposal')
-        if not state['proposal'].get('start_artifact_hash'):
-            raise CogitoError('legacy RP proposal cannot hand off; withdraw it and prepare a new proposal')
         if state['proposal']['package']['kind'] in {'maintenance', 'documentation'}:
-            raise CogitoError('RP isolated Start Gate requires dedicated successor worktrees')
+            raise CogitoError('RP handoff requires dedicated successor worktrees')
         if state['state']=='ready-for-handoff': self._publish_successor()
         else: self._assert_published_successor()
         state=self.load(); proposal=state['proposal']; graphpath=self.root/'docs/cogito/project-graph.json'

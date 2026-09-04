@@ -891,15 +891,15 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         )
 
     def _validate_start_checkout(
-        self, checkout: Path, current: RunState, package: Mapping[str, Any], *,
-        require_delivery_branch: bool, replan_start: Mapping[str, Any] | None = None,
+        self, current: RunState, package: Mapping[str, Any],
     ) -> dict[str, Any]:
-        """Validate a delivery view without changing its index or authoritative run state."""
+        """Validate the ordinary delivery checkout without changing authoritative state."""
         self.validate_stage_commits()
         self._validate_policy(package)
+        checkout = self.root
         head = self._git_at(checkout, "rev-parse", "HEAD")
         self._git_at(checkout, "cat-file", "-e", f"{package['baseline_commit']}^{{commit}}")
-        if require_delivery_branch and self._git_at(checkout, "branch", "--show-current") != package["delivery_branch"]:
+        if self._git_at(checkout, "branch", "--show-current") != package["delivery_branch"]:
             raise CogitoError("Start Gate is not on the Package delivery branch")
         self._git_at(checkout, "merge-base", "--is-ancestor", package["baseline_commit"], head)
         allowed_control = {current["package_path"], "docs/cogito/project-graph.json"}
@@ -917,15 +917,13 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         if current.get("stage_commits") and current.get("shared_document"):
             document = current["shared_document"]
             validate_content(document["path"], document["hash"])
-            if replan_start is not None:
-                allowed_control.add(document["path"])
         for item in package["slices"]:
             for document in (item["spec"], item["plan"]):
                 validate_content(document["path"], document["hash"])
                 allowed_control.add(document["path"])
         for source in package["source_registry"]:
             validate_content(source["path"], source["hash"])
-            if replan_start is not None or source["disposition"] in {"adopted", "updated"}:
+            if source["disposition"] in {"adopted", "updated"}:
                 allowed_control.add(source["path"])
         graph = _load_json(checkout / "docs" / "cogito" / "project-graph.json")
         validate_project_graph(graph)
@@ -945,14 +943,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             "worktrees_valid": self._worker_layout_valid(package),
             "delivery_head": head, "package_hash": package_hash(package),
         }
-        if replan_start is not None:
-            payload["replan_start"] = dict(replan_start)
         return payload
 
     @run_mutation
-    def start_gate(self, action_id: str | None = None, *, _replan_checkout: Path | None = None,
-                   _replan_start: Mapping[str, Any] | None = None,
-                   _authority: object | None = None) -> RunState:
+    def start_gate(self, action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("start")
         replay = self._replay(action_id, "start-gate-passed", request_hash)
         if replay is not None:
@@ -961,14 +955,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         if current["state"] != "start-gate":
             raise CogitoError("Start Gate is not legal in the current state")
         package = self.approved_package()
-        if _replan_checkout is not None and _authority is not self._GATE_AUTHORITY:
-            raise CogitoError("isolated Start Gate requires RP Gate authority")
-        checkout = _replan_checkout or self.root
-        payload = self._validate_start_checkout(
-            checkout, current, package,
-            require_delivery_branch=_replan_checkout is None,
-            replan_start=_replan_start,
-        )
+        payload = self._validate_start_checkout(current, package)
         validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
         return self.record("start-gate-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
