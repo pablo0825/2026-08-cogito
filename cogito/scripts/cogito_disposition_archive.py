@@ -66,22 +66,7 @@ def _matches(path, patterns):
         or path == pattern.rstrip('/') or path.startswith(pattern.rstrip('/')+'/') for pattern in patterns)
 
 
-def pin_snapshot(root, disposition_id, snapshot):
-    """Keep source trees reachable through immutable refs before cancellation."""
-    root = Path(root).resolve()
-    directory = _directory(root, disposition_id)
-    binding = hash_json(snapshot)
-    archive_directory = directory/'archives'
-    if archive_directory.is_symlink(): raise CogitoError('archive directory cannot be a symlink')
-    manifest_path = archive_directory/(binding+'.json')
-    if manifest_path.exists():
-        manifest = load_json(manifest_path)
-        if manifest['snapshot_hash'] != binding or manifest['root'] != str(root):
-            raise CogitoError('archive snapshot binding changed')
-        for entry in manifest['refs']:
-            if _text(Path(entry['repository']), 'rev-parse', entry['ref']) != entry['commit']:
-                raise CogitoError('pinned archive ref changed')
-        return manifest
+def _locations(root, snapshot):
     common = _text(root, 'rev-parse', '--path-format=absolute', '--git-common-dir')
     locations = [('delivery', root, snapshot['delivery'])]
     for location, saved in sorted(snapshot.get('worktrees', {}).items()):
@@ -91,6 +76,61 @@ def pin_snapshot(root, disposition_id, snapshot):
         if _text(worker, 'rev-parse', '--path-format=absolute', '--git-common-dir') != common:
             raise CogitoError('archive worker is not in source repository')
         locations.append(('worker-'+hash_json(str(worker))[:16], worker, saved))
+    return locations
+
+
+def _validate_manifest(root, disposition_id, snapshot, binding, manifest, locations):
+    if (not isinstance(manifest, dict) or set(manifest) != {'root', 'snapshot_hash', 'refs'}
+            or manifest.get('snapshot_hash') != binding or manifest.get('root') != str(root)
+            or not isinstance(manifest.get('refs'), list)):
+        raise CogitoError('archive snapshot binding changed')
+    expected = {}
+    for label, location, saved in locations:
+        trees = {'head': _text(location, 'rev-parse', saved['head']+'^{tree}'),
+                 'index': saved['index_tree'], 'content': saved['content_tree']}
+        for kind, tree in trees.items():
+            ref = f'refs/cogito/dispositions/{disposition_id}/{binding}/{label}/{kind}'
+            expected[ref] = (str(location), saved['head'], tree)
+    actual = {}
+    for entry in manifest['refs']:
+        if (not isinstance(entry, dict)
+                or set(entry) != {'repository', 'ref', 'commit', 'tree'}
+                or any(not isinstance(entry.get(key), str)
+                       for key in ('repository', 'ref', 'commit', 'tree'))
+                or entry['ref'] in actual):
+            raise CogitoError('archive manifest contains invalid refs')
+        actual[entry['ref']] = entry
+    if set(actual) != set(expected):
+        raise CogitoError('archive manifest does not contain the exact snapshot refs')
+    for ref, (repository, parent, tree) in expected.items():
+        entry = actual[ref]
+        if entry['repository'] != repository or entry['tree'] != tree:
+            raise CogitoError('archive manifest ref binding changed')
+        location = Path(repository)
+        try:
+            resolved = _text(location, 'rev-parse', '--verify', ref+'^{commit}')
+            parents = _text(location, 'rev-list', '--parents', '-n', '1', entry['commit']).split()
+            actual_tree = _text(location, 'rev-parse', entry['commit']+'^{tree}')
+        except CogitoError as exc:
+            raise CogitoError('pinned archive ref changed') from exc
+        if (resolved != entry['commit'] or parents != [entry['commit'], parent]
+                or actual_tree != tree):
+            raise CogitoError('pinned archive ref changed')
+
+
+def pin_snapshot(root, disposition_id, snapshot):
+    """Keep source trees reachable through immutable refs before cancellation."""
+    root = Path(root).resolve()
+    directory = _directory(root, disposition_id)
+    binding = hash_json(snapshot)
+    archive_directory = directory/'archives'
+    if archive_directory.is_symlink(): raise CogitoError('archive directory cannot be a symlink')
+    manifest_path = archive_directory/(binding+'.json')
+    locations = _locations(root, snapshot)
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+        _validate_manifest(root, disposition_id, snapshot, binding, manifest, locations)
+        return manifest
     # Preflight every checkout before publishing any ref.
     for _, location, saved in locations:
         if _text(location, 'rev-parse', 'HEAD') != saved['head']:
@@ -118,6 +158,7 @@ def pin_snapshot(root, disposition_id, snapshot):
             refs.append(dict(repository=str(location),ref=ref,commit=commit,tree=tree))
     manifest = dict(root=str(root), snapshot_hash=binding, refs=refs)
     atomic_write_json(manifest_path, manifest)
+    _validate_manifest(root, disposition_id, snapshot, binding, manifest, locations)
     return manifest
 
 
@@ -162,6 +203,45 @@ def _restore_work(root, relative, entry):
         if temporary_path.exists() or temporary_path.is_symlink(): temporary_path.unlink()
 
 
+def _release_records(root, snapshot, before_index, before_work, target):
+    records = {}
+    for path in sorted(set(before_index)|set(before_work)|set(target)):
+        if (path == _GRAPH or path.startswith(('.cogito/','.git/'))
+                or not _matches(path,snapshot['scope']['paths'])):
+            continue
+        if before_index.get(path) == before_work.get(path) == target.get(path):
+            continue
+        _checkout_path(root,path)
+        for entry in (before_index.get(path),before_work.get(path),target.get(path)):
+            if entry and (entry[1] != 'blob' or entry[0] not in {'100644','100755','120000'}):
+                raise CogitoError('cannot release submodule path: '+path)
+        records[path] = dict(index_before=before_index.get(path),
+            work_before=before_work.get(path),after=target.get(path),status='pending')
+    return records
+
+
+def _validate_release_journal(journal, archive, saved, expected):
+    if (not isinstance(journal, dict)
+            or set(journal) != {'snapshot_hash', 'head', 'paths', 'completed'}
+            or journal.get('snapshot_hash') != archive['snapshot_hash']
+            or journal.get('head') != saved['head']
+            or type(journal.get('completed')) is not bool
+            or not isinstance(journal.get('paths'), dict)
+            or set(journal['paths']) != set(expected)):
+        raise CogitoError('release journal does not match the saved snapshot')
+    for path, derived in expected.items():
+        record = journal['paths'][path]
+        if (not isinstance(record, dict)
+                or set(record) != {'index_before', 'work_before', 'after', 'status'}
+                or record.get('status') not in {'pending', 'completed'}
+                or any(record.get(key) != derived[key]
+                       for key in ('index_before', 'work_before', 'after'))):
+            raise CogitoError('release journal path binding changed: '+path)
+    if journal['completed'] and any(
+            record['status'] != 'completed' for record in journal['paths'].values()):
+        raise CogitoError('completed release journal contains pending paths')
+
+
 def release_delivery(root, disposition_id, snapshot):
     """Restore saved scoped dirt to HEAD, retaining replayable before/after proof."""
     root = Path(root).resolve()
@@ -172,29 +252,21 @@ def release_delivery(root, disposition_id, snapshot):
             ('branch' in saved and _text(root,'branch','--show-current') != saved['branch'])):
         raise CogitoError('delivery HEAD or branch changed before release')
     journal_path = directory/'archives'/(archive['snapshot_hash']+'.release.json')
+    before_index = _entries(root,saved['index_tree'])
+    before_work = _entries(root,saved['content_tree'])
+    target = _entries(root,saved['head'])
+    expected_records = _release_records(root, snapshot, before_index, before_work, target)
     if journal_path.exists():
         journal = load_json(journal_path)
-        if journal['snapshot_hash'] != archive['snapshot_hash']:
-            raise CogitoError('release snapshot binding changed')
+        _validate_release_journal(journal, archive, saved, expected_records)
     else:
-        before_index = _entries(root,saved['index_tree'])
-        before_work = _entries(root,saved['content_tree'])
-        target = _entries(root,saved['head'])
         index, work = capture_index_and_worktree_trees(root)
         current_index, current_work = _entries(root,index), _entries(root,work)
         for expected, actual in [(before_index,current_index),(before_work,current_work)]:
             if {k:v for k,v in expected.items() if k != _GRAPH} != {k:v for k,v in actual.items() if k != _GRAPH}:
                 raise CogitoError('delivery changed after saved snapshot; release refused')
-        records = {}
-        for path in sorted(set(before_index)|set(before_work)|set(target)):
-            if path == _GRAPH or path.startswith(('.cogito/','.git/')) or not _matches(path,snapshot['scope']['paths']): continue
-            if before_index.get(path) == before_work.get(path) == target.get(path): continue
-            _checkout_path(root,path)
-            for entry in (before_index.get(path),before_work.get(path),target.get(path)):
-                if entry and (entry[1] != 'blob' or entry[0] not in {'100644','100755','120000'}):
-                    raise CogitoError('cannot release submodule path: '+path)
-            records[path] = dict(index_before=before_index.get(path),work_before=before_work.get(path),after=target.get(path),status='pending')
-        journal = dict(snapshot_hash=archive['snapshot_hash'],head=saved['head'],paths=records,completed=False)
+        journal = dict(snapshot_hash=archive['snapshot_hash'],head=saved['head'],
+                       paths=expected_records,completed=False)
         atomic_write_json(journal_path,journal)
     # Check every path before starting or resuming a partially applied release.
     current_index = _entries(root,_text(root,'write-tree'))

@@ -1,4 +1,6 @@
 """Releasing stopped delivery dirt preserves a complete recoverable archive."""
+import copy
+import json
 import os
 import subprocess
 import sys
@@ -7,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from cogito_common import CogitoError
+from cogito_common import CogitoError, hash_json
 from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_disposition_archive import pin_snapshot, release_delivery
 
@@ -44,6 +46,37 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(self.git('show',refs['content']+':product/file'),'working')
         self.assertEqual(self.git('show',refs['content']+':product/new'),'new')
         self.assertEqual(release_delivery(self.root,'DP-test',saved),receipt)
+
+    def test_existing_manifest_must_contain_every_exact_snapshot_ref(self):
+        worker = self.root/'workers/one'
+        self.git('worktree','add','-q','-b','worker-one',str(worker),'HEAD')
+        saved = self.saved()
+        worker_index, worker_tree = capture_index_and_worktree_trees(worker)
+        saved['worktrees'][str(worker.resolve())] = dict(
+            head=self.git('-C',str(worker),'rev-parse','HEAD'),
+            branch=self.git('-C',str(worker),'branch','--show-current'),
+            index_tree=worker_index,content_tree=worker_tree)
+        manifest = pin_snapshot(self.root,'DP-test',saved)
+        path = self.root/'.cogito/dispositions/DP-test/archives'/(
+            hash_json(saved)+'.json')
+        self.assertEqual(len(manifest['refs']),6)
+        invalid = copy.deepcopy(manifest); invalid['refs'] = []
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'exact snapshot refs'):
+            pin_snapshot(self.root,'DP-test',saved)
+        invalid = copy.deepcopy(manifest); invalid['refs'].pop()
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'exact snapshot refs'):
+            pin_snapshot(self.root,'DP-test',saved)
+        invalid = copy.deepcopy(manifest); invalid['refs'][0]['repository'] = str(worker)
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'binding changed'):
+            pin_snapshot(self.root,'DP-test',saved)
+        invalid = copy.deepcopy(manifest); invalid['refs'][0]['commit'] = saved['delivery']['head']
+        self.git('update-ref',invalid['refs'][0]['ref'],saved['delivery']['head'])
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'pinned archive ref changed'):
+            pin_snapshot(self.root,'DP-test',saved)
     def test_multiple_snapshot_versions_in_same_disposition(self):
         (self.root/'product/file').write_text('first'); first=self.saved()
         one=pin_snapshot(self.root,'DP-test',first)
@@ -93,5 +126,28 @@ class ArchiveTests(unittest.TestCase):
         (self.root/'product/file').write_text('new owner')
         with self.assertRaisesRegex(CogitoError,'changed'): release_delivery(self.root,'DP-test',saved)
         self.assertEqual((self.root/'product/file').read_text(),'new owner')
+
+    def test_existing_release_journal_cannot_expand_scope_or_replace_blobs(self):
+        (self.root/'product/file').write_text('saved')
+        saved=self.saved(); release_delivery(self.root,'DP-test',saved)
+        path = next((self.root/'.cogito/dispositions/DP-test/archives').glob('*.release.json'))
+        original = json.loads(path.read_text())
+        (self.root/'outside').write_text('precious')
+        invalid = copy.deepcopy(original)
+        invalid['paths']['outside'] = copy.deepcopy(next(iter(invalid['paths'].values())))
+        invalid['paths']['outside']['status'] = 'pending'
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'saved snapshot'):
+            release_delivery(self.root,'DP-test',saved)
+        self.assertEqual((self.root/'outside').read_text(),'precious')
+        invalid = copy.deepcopy(original)
+        attacker = self.root/'attacker'; attacker.write_text('attacker bytes')
+        oid = self.git('hash-object','-w',str(attacker))
+        record = next(iter(invalid['paths'].values()))
+        record['after'] = ['100644','blob',oid]
+        path.write_text(json.dumps(invalid))
+        with self.assertRaisesRegex(CogitoError,'path binding changed'):
+            release_delivery(self.root,'DP-test',saved)
+        self.assertEqual((self.root/'product/file').read_text(),'original')
 
 if __name__=='__main__': unittest.main()
