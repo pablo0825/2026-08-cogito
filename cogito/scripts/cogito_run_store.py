@@ -917,7 +917,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         if current.get("stage_commits") and current.get("shared_document"):
             document = current["shared_document"]
             validate_content(document["path"], document["hash"])
-            allowed_control.add(document["path"])
+            if replan_start is not None:
+                allowed_control.add(document["path"])
         for item in package["slices"]:
             for document in (item["spec"], item["plan"]):
                 validate_content(document["path"], document["hash"])

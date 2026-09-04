@@ -285,8 +285,6 @@ class ReplanStore:
         from cogito_replan_start import checkout, control_paths, manifest, validation_binding
         state = self.load(); new = self.successor(); current = new.load()
         package = proposal['package']
-        if package['kind'] in {'maintenance', 'documentation'}:
-            raise CogitoError('RP isolated Start Gate requires dedicated successor worktrees')
         paths = control_paths(package, current['package_path'])
         controls = manifest(self.root, paths)
         head = self._assert_source(proposal, activated=True)['head']
@@ -546,6 +544,8 @@ class ReplanStore:
         state=self.load()
         if state['state'] not in {'ready-for-handoff','handing-off'}:
             raise CogitoError('handoff requires approved proposal')
+        if state['proposal']['package']['kind'] in {'maintenance', 'documentation'}:
+            raise CogitoError('RP isolated Start Gate requires dedicated successor worktrees')
         if state['state']=='ready-for-handoff': self._publish_successor()
         else: self._assert_published_successor()
         state=self.load(); proposal=state['proposal']; graphpath=self.root/'docs/cogito/project-graph.json'
