@@ -154,10 +154,12 @@ class ReplanRuntime:
         runtime = saved.get('runtime')
         if (not isinstance(runtime, dict) or type(runtime.get('version')) is not int
                 or runtime.get('version') != self.VERSION
-                or not {'logs', 'source_files', 'product_trees'} <= runtime.keys()
+                or set(runtime) != {'version', 'logs', 'source_files', 'product_trees'}
                 or not isinstance(runtime.get('source_files'), dict)):
             raise CogitoError('unsupported RP runtime snapshot version')
         self.assert_logs(runtime['logs'])
+        if not {self.source + '/events.jsonl', self.replan + '/events.jsonl'} <= set(runtime['logs']):
+            raise CogitoError('unsupported RP runtime snapshot version')
         if self.source_files() != runtime['source_files']:
             raise CogitoError('source runtime evidence drifted since stop checkpoint')
         frozen = set(runtime['source_files'])

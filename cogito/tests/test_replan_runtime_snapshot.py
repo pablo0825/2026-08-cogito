@@ -87,11 +87,18 @@ class ReplanRuntimeSnapshotTests(GitTestCase):
         self.assertEqual(index_path.read_bytes(), index_bytes)
 
     def test_snapshot_without_current_runtime_version_is_rejected(self):
-        _, _, _, rp, _, _ = self.stopped()
-        saved = copy.deepcopy(rp.load()['snapshot'])
-        saved.pop('runtime')
-        with self.assertRaisesRegex(CogitoError, 'unsupported RP runtime snapshot version'):
-            rp._runtime().assert_snapshot(saved)
+        for corruption in ('missing', 'unknown-field', 'missing-journal'):
+            with self.subTest(corruption=corruption):
+                _, _, _, rp, _, _ = self.stopped()
+                saved = copy.deepcopy(rp.load()['snapshot'])
+                if corruption == 'missing':
+                    saved.pop('runtime')
+                elif corruption == 'unknown-field':
+                    saved['runtime']['unknown'] = True
+                else:
+                    saved['runtime']['logs'] = {}
+                with self.assertRaisesRegex(CogitoError, 'unsupported RP runtime snapshot version'):
+                    rp._runtime().assert_snapshot(saved)
 
     def test_unignored_runtime_completes_handoff_and_preserves_history(self):
         repo, worker, source, rp, index_path, index_bytes = self.stopped()
