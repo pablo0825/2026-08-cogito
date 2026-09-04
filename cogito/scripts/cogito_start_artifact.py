@@ -59,7 +59,8 @@ def _write_git(reader: HardenedObjectReader, index: Path, *args: str,
 
 
 def _candidate_files(package: Mapping[str, Any], package_path: str,
-                     graph: Mapping[str, Any], snapshot: Mapping[str, Any]) -> dict[str, bytes]:
+                     graph: Mapping[str, Any],
+                     snapshot: Mapping[str, Any]) -> dict[str, tuple[str, bytes]]:
     validate_snapshot(snapshot)
     if snapshot.get("unavailable"):
         raise CogitoError("Start artifact requires a complete successor candidate snapshot")
@@ -67,8 +68,8 @@ def _candidate_files(package: Mapping[str, Any], package_path: str,
         raise CogitoError("Start artifact candidate differs from the RP successor Package")
     published = copy.deepcopy(dict(package))
     published["package_hash"] = package_hash(package)
-    files = {package_path: json_bytes(published),
-             "docs/cogito/project-graph.json": json_bytes(dict(graph))}
+    files = {package_path: ("100644", json_bytes(published)),
+             "docs/cogito/project-graph.json": ("100644", json_bytes(dict(graph)))}
     for path, saved in snapshot.get("files", {}).items():
         try:
             content = base64.b64decode(saved["content_base64"], validate=True)
@@ -76,7 +77,12 @@ def _candidate_files(package: Mapping[str, Any], package_path: str,
             raise CogitoError("Start artifact contains an invalid candidate document") from exc
         if hashlib.sha256(content).hexdigest() != saved.get("hash"):
             raise CogitoError("Start artifact candidate document hash changed")
-        files[path] = content
+        # Historical candidate snapshots predate mode capture. They may enter a
+        # newly reviewed proposal with the conservative regular-file mode.
+        mode = saved.get("mode", "100644")
+        if mode not in {"100644", "100755"}:
+            raise CogitoError("Start artifact candidate snapshot contains an invalid document mode")
+        files[path] = (mode, content)
     required = set(control_paths(package, package_path))
     if set(files) != required:
         missing = sorted(required - set(files))
@@ -114,11 +120,10 @@ def publish_start_artifact(root: str | Path, *, replan_id: str, source_run_id: s
         _write_git(reader, index, "read-tree", baseline_tree)
         records = bytearray()
         controls: list[dict[str, Any]] = []
-        for path, content in sorted(files.items()):
+        for path, (mode, content) in sorted(files.items()):
             oid = _write_git(reader, index, "hash-object", "-w", "--no-filters", "--stdin",
                              data=content).decode("ascii").strip()
             reader.require_full_oid(oid, f"control blob {path}")
-            mode = "100644"
             records.extend(f"{mode} {oid}\t".encode("ascii") + path.encode("utf-8") + b"\0")
             controls.append({"path": path, "mode": mode, "type": "blob", "oid": oid,
                              "sha256": hashlib.sha256(content).hexdigest()})
@@ -232,8 +237,16 @@ def validate_live_publication(root: str | Path, manifest: Mapping[str, Any]) -> 
     root = Path(root).resolve()
     for field, digest in (("package_path", manifest["package_hash"]),
                           ("project_graph_path", manifest["project_graph_hash"])):
-        path = root / manifest[field]
+        relative = Path(manifest[field])
+        path = root / relative
         try:
+            cursor = root
+            for component in relative.parts:
+                cursor = cursor / component
+                if cursor.is_symlink():
+                    raise CogitoError("approved Start publication must not traverse symlinks")
+            if not path.is_file():
+                raise CogitoError("approved Start publication must be a regular file")
             value = json.loads(path.read_bytes())
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise CogitoError(f"cannot read approved Start publication {path}: {exc}") from exc

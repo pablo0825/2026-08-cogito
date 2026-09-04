@@ -95,6 +95,9 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         elif kind == 'replan-stopped':
             result['snapshot'] = payload['snapshot']
         elif kind == 'proposal-prepared':
+            if (payload.get('proposal', {}).get('start_artifact_hash') is not None
+                    and payload.get('proposal_hash') != hash_json(payload['proposal'])):
+                raise CogitoError('new RP proposal hash does not match its content')
             result.update(proposal=payload['proposal'], proposal_hash=payload['proposal_hash'], review=None)
         elif kind == 'proposal-reviewed':
             if payload['proposal_hash'] != result['proposal_hash']:
@@ -105,6 +108,9 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         elif kind == 'successor-approved':
             if payload['proposal_hash'] != result['proposal_hash']:
                 raise CogitoError('approval is not bound to current proposal')
+            artifact_hash = result['proposal'].get('start_artifact_hash')
+            if artifact_hash is not None and payload.get('start_artifact_hash') != artifact_hash:
+                raise CogitoError('approval is not bound to the current Start artifact')
             result['approval'] = payload
         elif kind == 'handoff-started':
             result['handoff'] = payload

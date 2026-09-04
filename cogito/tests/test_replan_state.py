@@ -1,7 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
-from cogito_common import CogitoError
+import cogito_test_support
+from cogito_common import CogitoError, hash_json
 from cogito_events import append_event, read_events
 from cogito_replan_state import project_replan
 from cogito_replan_lock import check_run_fence, project_lock
@@ -43,6 +44,37 @@ class ReplanStateTests(unittest.TestCase):
         self.assertEqual(state['state'],'reviewing')
         self.assertIsNone(state['review'])
         self.assertEqual(len(read_events(self.path)),5)
+
+    def test_legacy_approval_without_start_artifact_remains_readable(self):
+        self.add('replan-stopped', {'snapshot': {}})
+        self.add('proposal-prepared', {'proposal': {'version': 1}, 'proposal_hash': 'legacy'})
+        self.add('proposal-reviewed', {'proposal_hash': 'legacy', 'reviewer': 'R'})
+        self.add('successor-approved', {'proposal_hash': 'legacy', 'graph': {}})
+        state = project_replan(read_events(self.path))
+        self.assertEqual(state['state'], 'ready-for-handoff')
+        self.assertNotIn('start_artifact_hash', state['approval'])
+
+    def test_new_approval_must_bind_proposal_start_artifact(self):
+        self.add('replan-stopped', {'snapshot': {}})
+        proposal = {'start_artifact_hash': 'a' * 64}
+        self.add('proposal-prepared', {
+            'proposal': proposal, 'proposal_hash': hash_json(proposal)})
+        self.add('proposal-reviewed', {'proposal_hash': hash_json(proposal), 'reviewer': 'R'})
+        with self.assertRaisesRegex(CogitoError, 'Start artifact'):
+            project_replan([*read_events(self.path), {
+                'type': 'successor-approved',
+                'payload': {'proposal_hash': hash_json(proposal),
+                            'start_artifact_hash': 'b' * 64, 'graph': {}},
+            }])
+
+    def test_new_proposal_hash_must_match_content(self):
+        self.add('replan-stopped', {'snapshot': {}})
+        with self.assertRaisesRegex(CogitoError, 'proposal hash'):
+            project_replan([*read_events(self.path), {
+                'type': 'proposal-prepared',
+                'payload': {'proposal': {'start_artifact_hash': 'a' * 64},
+                            'proposal_hash': 'not-the-content-hash'},
+            }])
 
     def test_reentrant_project_lock(self):
         with project_lock(self.root):

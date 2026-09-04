@@ -74,8 +74,7 @@ class ReplanStoreTests(GitTestCase):
 
     def test_recover_after_graph_write_before_start(self):
         repo,_,_,new,rp,_=self.setup_replan();self.approve_replan(rp)
-        original=RunStore.start_gate
-        with mock.patch.object(RunStore,'start_gate',side_effect=CogitoError('injected crash')):
+        with mock.patch.object(RunStore,'start_gate_from_artifact',side_effect=CogitoError('injected crash')):
             with self.assertRaisesRegex(CogitoError,'injected'):rp.handoff('handoff')
         self.assertEqual(rp.load()['state'],'handing-off')
         with self.assertRaises(CogitoError):new.start_gate()

@@ -53,6 +53,19 @@ def _execution_files(directory):
             for p, (mode, data) in files.items()}
 
 
+def execution_digest():
+    """Bind the complete code and workflow surface executing the Gate."""
+    return hash_json(_execution_files(EXECUTING_ROOT))
+
+
+def effective_tool_digest(state):
+    """Choose the approved in-project tool binding, with external-tool compatibility."""
+    if state.get('toolchain'):
+        return hash_json(state['toolchain']['proposal']['after'])
+    saved = (state.get('snapshot') or {}).get('toolchain')
+    return hash_json(saved) if saved is not None else execution_digest()
+
+
 def _manifest(root, tree):
     return {path: dict(mode=mode, oid=oid) for path, (mode, oid) in entries(root, tree).items()
             if path.startswith(TOOL_ROOT + '/')}

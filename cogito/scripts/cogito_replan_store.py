@@ -435,6 +435,27 @@ class ReplanStore:
         proposal['source_snapshot_hash'] = hash_json(state['snapshot'])
         if state.get('toolchain'):
             proposal['toolchain_proposal_hash'] = state['toolchain']['proposal_hash']
+        from cogito_replan_toolchain import effective_tool_digest, execution_digest
+        from cogito_start_artifact import publish_start_artifact
+        verifier_digest = execution_digest()
+        tool_digest = effective_tool_digest(state)
+        graph = self._planned_graph(proposal)
+        candidate = (current.get('planning') or {}).get('candidate')
+        if not candidate:
+            raise CogitoError('new RP proposals require a frozen successor candidate snapshot')
+        package_path = f"docs/cogito/packages/{new.run_id}.json"
+        artifact = publish_start_artifact(
+            self.root, replan_id=self.replan_id, source_run_id=state['source_run_id'],
+            successor_run_id=state['successor_run_id'],
+            source_snapshot_hash=proposal['source_snapshot_hash'],
+            baseline_commit=package['baseline_commit'], package=package,
+            package_path=package_path, graph=graph, candidate_snapshot=candidate,
+            workflow_digest=hash_json(new.workflow), tool_digest=tool_digest,
+            verifier_digest=verifier_digest,
+        )
+        self._assert_source(proposal)
+        proposal['start_artifact'] = artifact.manifest
+        proposal['start_artifact_hash'] = artifact.artifact_hash
         digest = hash_json(proposal)
         return self._emit('proposal-prepared',{'proposal':proposal,'proposal_hash':digest},action_id,'propose',request)
 
@@ -495,7 +516,10 @@ class ReplanStore:
             new._validate_policy(proposal['package'])
             new._planning_approval_binding(new.load())
             # Durable authorization precedes publication, so recovery never invents approval.
-            self._emit('successor-approved',{'proposal_hash':proposal_hash,'graph':self._planned_graph(proposal)},action_id,'approve',request)
+            payload = {'proposal_hash': proposal_hash, 'graph': self._planned_graph(proposal)}
+            if proposal.get('start_artifact_hash'):
+                payload['start_artifact_hash'] = proposal['start_artifact_hash']
+            self._emit('successor-approved',payload,action_id,'approve',request)
         self._publish_successor()
         return self.load()
 
@@ -526,6 +550,38 @@ class ReplanStore:
         if (current.get('package_hash') != package_hash(package) or not path.is_file()
                 or package_hash(load_json(path)) != package_hash(package)):
             raise CogitoError('published successor changed during handoff recovery')
+
+    def _start_successor_from_artifact(self, proposal):
+        events = read_events(self.events_path)
+        state = project_replan(events)
+        approvals = [event for event in events if event['type'] == 'successor-approved'
+                     and event['payload'].get('proposal_hash') == state.get('proposal_hash')]
+        if len(approvals) != 1:
+            raise CogitoError('Start artifact requires one exact successor approval event')
+        manifest = proposal['start_artifact']
+        if (hash_json(proposal) != state['proposal_hash']
+                or hash_json(manifest) != proposal['start_artifact_hash']
+                or approvals[0]['payload'].get('start_artifact_hash') != proposal['start_artifact_hash']
+                or hash_json(approvals[0]['payload'].get('graph')) != manifest.get('project_graph_hash')):
+            raise CogitoError('Start artifact differs from the exact approved RP proposal')
+        from cogito_replan_toolchain import effective_tool_digest
+        expected_tool = effective_tool_digest(state)
+        if manifest.get('tool_digest') != expected_tool:
+            raise CogitoError('Start artifact tool binding differs from approved RP toolchain')
+        binding = {
+            'replan_id': self.replan_id,
+            'source_run_id': state['source_run_id'],
+            'successor_run_id': state['successor_run_id'],
+            'source_snapshot_hash': hash_json(state['snapshot']),
+            'snapshot_hash': hash_json(state['snapshot']),
+            'proposal_hash': state['proposal_hash'],
+            'approval_event_hash': approvals[0]['event_hash'],
+            'start_artifact_hash': proposal['start_artifact_hash'],
+        }
+        self.successor().start_gate_from_artifact(
+            manifest, binding, 'replan-start:' + self.replan_id,
+            self.successor()._GATE_AUTHORITY,
+        )
 
     def _adoption(self, proposal, row, source_tree_only=False, target_tree=None):
         from cogito_replan_adoption import validate_adoption
@@ -562,7 +618,10 @@ class ReplanStore:
             atomic_write_json(graphpath,targetgraph)
         new=self.successor()
         if new.load()['state']=='start-gate':
-            self._start_successor_isolated(proposal)
+            if proposal.get('start_artifact_hash'):
+                self._start_successor_from_artifact(proposal)
+            else:
+                self._start_successor_isolated(proposal)
         if new.load()['state']!='executing': raise CogitoError('successor drifted during handoff')
         for row in proposal['work']:
             if row['source_task_id'] in self.load()['transfers']: continue

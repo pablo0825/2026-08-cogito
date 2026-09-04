@@ -40,7 +40,10 @@ def document_snapshot(root, document):
     digest = hashlib.sha256(data).hexdigest()
     if digest != document["hash"]:
         raise CogitoError(f"planning document hash drifted: {document['path']}")
-    return {"hash": digest, "content_base64": base64.b64encode(data).decode("ascii")}
+    path = (root / document["path"]).resolve()
+    mode = "100755" if path.stat().st_mode & 0o111 else "100644"
+    return {"hash": digest, "content_base64": base64.b64encode(data).decode("ascii"),
+            "mode": mode}
 
 
 def capture_candidate(root, package, round_number, *, strict=False):
@@ -81,6 +84,8 @@ def validate_snapshot(snapshot):
             raise CogitoError("invalid planning document snapshot") from exc
         if hashlib.sha256(data).hexdigest() != saved["hash"]:
             raise CogitoError("planning snapshot content does not match hash")
+        if saved.get("mode") not in {None, "100644", "100755"}:
+            raise CogitoError("planning snapshot contains an invalid document mode")
 
 
 def assert_files(root, snapshot, *, strict=True):

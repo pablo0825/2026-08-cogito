@@ -108,6 +108,20 @@ class StartArtifactTests(GitTestCase):
         with self.assertRaisesRegex(CogitoError, "differs"):
             validate_live_publication(self.repo, artifact.manifest)
 
+    def test_live_publication_rejects_symlink_target(self) -> None:
+        artifact = self.publish()
+        package_path = self.repo / artifact.manifest["package_path"]
+        graph_path = self.repo / artifact.manifest["project_graph_path"]
+        reader = HardenedObjectReader(self.repo)
+        _, package_bytes = reader.blob_at(artifact.result_tree, artifact.manifest["package_path"])
+        _, graph_bytes = reader.blob_at(artifact.result_tree, artifact.manifest["project_graph_path"])
+        outside = self.repo / "outside-package.json"
+        outside.write_bytes(package_bytes)
+        package_path.symlink_to(outside)
+        graph_path.write_bytes(graph_bytes)
+        with self.assertRaisesRegex(CogitoError, "symlink"):
+            validate_live_publication(self.repo, artifact.manifest)
+
     def test_incomplete_candidate_snapshot_cannot_publish(self) -> None:
         snapshot = copy.deepcopy(self.snapshot)
         missing = next(iter(snapshot["files"]))
@@ -124,3 +138,22 @@ class StartArtifactTests(GitTestCase):
                 workflow_digest=hash_json(self.workflow), tool_digest="b" * 64,
                 verifier_digest="c" * 64,
             )
+
+    def test_legacy_candidate_without_modes_gets_a_reviewable_canonical_mode(self) -> None:
+        snapshot = copy.deepcopy(self.snapshot)
+        for saved in snapshot["files"].values():
+            saved.pop("mode")
+        body = {key: value for key, value in snapshot.items() if key != "hash"}
+        snapshot["hash"] = hash_json(body)
+        artifact = publish_start_artifact(
+            self.repo, replan_id="RP-start", source_run_id="DEV-source",
+            successor_run_id=self.package["run_id"], source_snapshot_hash="a" * 64,
+            baseline_commit=self.package["baseline_commit"], package=self.package,
+            package_path=f"docs/cogito/packages/{self.package['run_id']}.json",
+            graph=self.graph, candidate_snapshot=snapshot,
+            workflow_digest=hash_json(self.workflow), tool_digest="b" * 64,
+            verifier_digest="c" * 64,
+        )
+        document_modes = {item["path"]: item["mode"] for item in artifact.manifest["controls"]}
+        self.assertEqual(document_modes["docs/spec.md"], "100644")
+        self.assertEqual(document_modes["docs/plan.md"], "100644")

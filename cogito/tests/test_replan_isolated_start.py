@@ -1,4 +1,4 @@
-"""RP Start Gate isolates preserved untracked source controls from a successor."""
+"""RP Start Gate validates immutable controls without a disposable checkout."""
 from __future__ import annotations
 
 import copy
@@ -10,6 +10,7 @@ from cogito_test_support import GitTestCase, git
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_events import read_events
 from cogito_replan_store import ReplanStore
+from cogito_run_store import RunStore
 import test_feature_multitask as feature_support
 import test_replan_runtime_snapshot as runtime_support
 
@@ -57,7 +58,7 @@ class ReplanIsolatedStartTests(GitTestCase):
         return (repo, worker, source, successor, rp, proposal, frozen, checkpoint,
                 index_path, index_path.read_bytes())
 
-    def test_handoff_uses_bound_isolated_start_and_preserves_root(self):
+    def test_handoff_uses_bound_object_start_and_preserves_root(self):
         (repo, worker, source, successor, rp, proposal, frozen, checkpoint,
          index_path, index_bytes) = self.ready()
         root_bytes = {path: (repo / path).read_bytes() for path in frozen}
@@ -88,14 +89,23 @@ class ReplanIsolatedStartTests(GitTestCase):
         binding = starts[0]['payload']['replan_start']
         self.assertEqual(binding['replan_id'], rp.replan_id)
         self.assertEqual(binding['snapshot_hash'], hash_json(checkpoint))
-        self.assertEqual(binding['validation']['result'], 'passed')
-        self.assertTrue(binding['validation']['delivery_tree'])
+        self.assertEqual(binding['start_artifact_hash'], rp.load()['proposal']['start_artifact_hash'])
+        rp_types = [event['type'] for event in read_events(rp.events_path)]
+        self.assertEqual(rp_types.count('handoff-start-isolated'), 0)
+        self.assertEqual(rp_types.count('handoff-start-validated'), 0)
 
         rp_events = rp.events_path.read_bytes()
         successor_events = successor.events_path.read_bytes()
         self.assertEqual(rp.handoff('handoff')['state'], 'completed')
         self.assertEqual(rp.events_path.read_bytes(), rp_events)
         self.assertEqual(successor.events_path.read_bytes(), successor_events)
+        altered = copy.deepcopy(rp.load()['proposal']['start_artifact'])
+        altered['tool_digest'] = '0' * 64
+        with self.assertRaisesRegex(CogitoError, 'different content'):
+            successor.start_gate_from_artifact(
+                altered, binding, 'replan-start:' + rp.replan_id,
+                successor._GATE_AUTHORITY,
+            )
 
     def test_content_mode_stage_and_path_drift_are_rejected(self):
         for drift in ('content', 'mode', 'stage', 'path'):
@@ -121,28 +131,22 @@ class ReplanIsolatedStartTests(GitTestCase):
                 self.assertEqual((repo / 'docs/cogito/project-graph.json').read_bytes(), graph)
                 self.assertEqual(rp.load()['snapshot'], checkpoint)
 
-    def test_isolated_start_crash_retries_publish_each_event_once(self):
-        # Exact injection labels form a stable seam for persistence ordering:
-        # isolation is durable, validation is durable, then successor start is durable.
-        for point in ('after-isolation-created', 'after-isolation-validated',
-                      'after-start-event'):
-            with self.subTest(point=point):
-                (repo, worker, source, successor, rp, proposal, frozen, checkpoint,
-                 index_path, index_bytes) = self.ready()
-                with mock.patch.object(rp, '_isolated_start_fault', side_effect=lambda label: (
-                        (_ for _ in ()).throw(CogitoError('injected ' + point))
-                        if label == point else None)):
-                    with self.assertRaisesRegex(CogitoError, 'injected ' + point):
-                        rp.handoff('handoff')
-                self.assertEqual(rp.handoff('handoff')['state'], 'completed')
-                rp_types = [event['type'] for event in read_events(rp.events_path)]
-                new_types = [event['type'] for event in read_events(successor.events_path)]
-                self.assertEqual(rp_types.count('handoff-start-isolated'), 1)
-                self.assertEqual(rp_types.count('handoff-start-validated'), 1)
-                self.assertEqual(new_types.count('start-gate-passed'), 1)
-                self.assertEqual(rp_types.count('handoff-completed'), 1)
-                self.assertEqual(rp.load()['snapshot'], checkpoint)
-                self.assertEqual(index_path.read_bytes(), index_bytes)
+    def test_object_start_crash_retry_needs_no_validation_checkpoint(self):
+        (repo, worker, source, successor, rp, proposal, frozen, checkpoint,
+         index_path, index_bytes) = self.ready()
+        with mock.patch.object(
+                RunStore, 'start_gate_from_artifact', side_effect=CogitoError('injected validation crash')):
+            with self.assertRaisesRegex(CogitoError, 'injected validation crash'):
+                rp.handoff('handoff')
+        self.assertEqual(rp.handoff('handoff')['state'], 'completed')
+        rp_types = [event['type'] for event in read_events(rp.events_path)]
+        new_types = [event['type'] for event in read_events(successor.events_path)]
+        self.assertEqual(rp_types.count('handoff-start-isolated'), 0)
+        self.assertEqual(rp_types.count('handoff-start-validated'), 0)
+        self.assertEqual(new_types.count('start-gate-passed'), 1)
+        self.assertEqual(rp_types.count('handoff-completed'), 1)
+        self.assertEqual(rp.load()['snapshot'], checkpoint)
+        self.assertEqual(index_path.read_bytes(), index_bytes)
 
 
 if __name__ == '__main__':

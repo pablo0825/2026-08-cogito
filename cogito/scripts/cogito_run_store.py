@@ -972,6 +972,84 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
         return self.record("start-gate-passed", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
+    @run_mutation
+    def start_gate_from_artifact(self, manifest: Mapping[str, Any], binding: Mapping[str, Any],
+                                 action_id: str, _authority: object | None = None) -> RunState:
+        """Validate an approved RP Start tree without materializing it."""
+        if _authority is not self._GATE_AUTHORITY:
+            raise CogitoError("immutable Start Gate requires RP Gate authority")
+        from cogito_git_objects import HardenedObjectReader
+        from cogito_replan_toolchain import execution_digest
+        from cogito_start_artifact import validate_live_publication, validate_start_artifact
+        artifact_hash = hash_json(manifest)
+        request = {
+            "start_artifact_hash": artifact_hash,
+            "proposal_hash": binding.get("proposal_hash"),
+            "approval_event_hash": binding.get("approval_event_hash"),
+            "verifier_digest": manifest.get("verifier_digest"),
+        }
+        request_hash = request_fingerprint("start", **request)
+        matches = [event for event in self._events.read()
+                   if event.get("action_id") == action_id]
+        if matches:
+            if len(matches) != 1 or matches[0]["type"] != "start-gate-passed":
+                raise CogitoError(f"action_id {action_id!r} was already used for different content")
+            require_same_request(matches[0], request_hash, action_id)
+            return self._events.project()
+        snapshot = self._events.snapshot()
+        current = snapshot.state
+        if current["state"] != "start-gate":
+            raise CogitoError("Start Gate is not legal in the current state")
+        if (binding.get("successor_run_id") != self.run_id
+                or binding.get("start_artifact_hash") != artifact_hash
+                or binding.get("source_snapshot_hash") != manifest.get("source_snapshot_hash")):
+            raise CogitoError("Start artifact differs from its RP approval binding")
+        if manifest.get("workflow_digest") != hash_json(self.workflow):
+            raise CogitoError("Start artifact workflow differs from the executing Gate")
+        verifier_digest = execution_digest()
+        if manifest.get("verifier_digest") != verifier_digest:
+            raise CogitoError("Start artifact verifier differs from the executing Gate")
+        reader = HardenedObjectReader(self.root)
+        result = validate_start_artifact(
+            reader, manifest, workflow_limits=self.workflow["limits"],
+            expected_replan_id=binding.get("replan_id"),
+            expected_source_run_id=binding.get("source_run_id"),
+            expected_successor_run_id=self.run_id,
+        )
+        if (current.get("package_hash") != result["package_hash"]
+                or current.get("package_path") != manifest.get("package_path")
+                or current.get("project_graph_hash") != result["project_graph_hash"]):
+            raise CogitoError("successor Package or Graph event differs from approved Start artifact")
+        validate_live_publication(self.root, manifest)
+        _, package_bytes = reader.blob_at(manifest["result_start_tree"], manifest["package_path"])
+        try:
+            package = json.loads(package_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CogitoError("Start artifact Package is not valid JSON") from exc
+        if not self._worker_layout_contract_valid(package):
+            raise CogitoError("successor worker layout contract is invalid")
+        self._validate_policy(package)
+        payload = {
+            "baseline_valid": True,
+            "contract_valid": True,
+            "worktrees_valid": True,
+            "delivery_head": result["delivery_head"],
+            "package_hash": result["package_hash"],
+            "project_graph_hash": result["project_graph_hash"],
+            "start_artifact_hash": artifact_hash,
+            "result_start_tree": result["delivery_tree"],
+            "proposal_hash": binding["proposal_hash"],
+            "approval_event_hash": binding["approval_event_hash"],
+            "tool_digest": manifest["tool_digest"],
+            "verifier_digest": verifier_digest,
+            "replan_start": dict(binding),
+        }
+        validate_transition(self.workflow, current["state"], "start-gate-passed", payload, current["counters"])
+        return self.record(
+            "start-gate-passed", payload, action_id, self._GATE_AUTHORITY,
+            request_hash=request_hash, expected_previous_hash=current["last_event_hash"],
+        )
+
     def _validate_adopted_worktrees(self, current, slice_id=None):
         for task in current['tasks'].values():
             receipt=task.get('adoption')
@@ -1206,6 +1284,17 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             and package["delivery_branch"] not in branches
             and all(_safe_repo_path(path) and not (self.root / path).exists() for path in worktrees)
         )
+
+    @staticmethod
+    def _worker_layout_contract_valid(package: Mapping[str, Any]) -> bool:
+        if package["kind"] in {"maintenance", "documentation"}:
+            return True
+        branches = [item["worker"]["branch"] for item in package["slices"]]
+        worktrees = [item["worker"]["worktree"] for item in package["slices"]]
+        return (len(branches) == len(set(branches))
+                and len(worktrees) == len(set(worktrees))
+                and package["delivery_branch"] not in branches
+                and all(_safe_repo_path(path) for path in worktrees))
 
     def _formalize_project_graph(self, package: Mapping[str, Any], path: Path) -> dict[str, Any]:
         existing = _load_json(path) if path.exists() else None
