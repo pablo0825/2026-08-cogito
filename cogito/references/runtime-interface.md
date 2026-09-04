@@ -63,7 +63,7 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 
 `replan` 子命令管理獨立 `RP-*` 單，提供 begin、stop、propose、review、approve、reject、handoff、abandon、status，以及 executor 登錄／停止回報與 advance-adoptions。執行規則與 payload 見 [Replanning](replanning.md)。`next` 在原或新 run 被限制時會回傳 replan ID 與下一階段，不再建議普通 resume。
 
-RP 內的 `toolchain-propose`、`toolchain-review`、`toolchain-approve`、`toolchain-reject` 獨立承接 `.codex/skills/cogito` 的精確內容與 Git 基線，保留原 snapshot，成功後要求重做 RP 提案與覆核；格式、核准邊界與舊 RP 恢復見 [RP 工具接軌](replan-toolchain.md)。
+RP 內的 `toolchain-propose`、`toolchain-review`、`toolchain-approve`、`toolchain-reject` 獨立承接 `.codex/skills/cogito` 的精確內容與 Git 基線，保留原 snapshot，成功後要求重做 RP 提案與覆核；格式、核准邊界與中斷恢復見 [RP 工具接軌](replan-toolchain.md)。
 
 已在 `handing-off` 且尚未開始 successor／transfer 的 RP，使用 `handoff-tool-propose`、`handoff-tool-review`、`handoff-tool-approve`、`handoff-tool-reject` 接軌已提交的 tool-only 修復。這組操作不回退 RP 階段、不清除原產品核准；核准後以原 action ID 重送 `handoff`。
 

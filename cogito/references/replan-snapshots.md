@@ -21,7 +21,7 @@ RP 的停止快照同時保存產品、原 Worker 與執行證據，但不使用
 
 runtime 檔案不得透過 symlink 或 gitlink 冒充事件、快取、鎖或草稿。Git index 與工作內容分別驗證；只修復工作目錄、卻把變造事件或證據留在 index，仍不能通過。
 
-## 新快照與舊快照
+## 快照格式
 
 新 `replan-stopped.snapshot.runtime` 使用 `version: 1`，包含：
 
@@ -31,18 +31,16 @@ runtime 檔案不得透過 symlink 或 gitlink 冒充事件、快取、鎖或草
 
 原 `delivery.index_tree`、`delivery.content_tree` 與 Worker bindings 均保留，供移植及完整證據追溯。產品樹必須能由原始樹重新推導，不能以新欄位覆蓋或取代來源證據。後續 RP 事件另外保存 `runtime_logs`，使提案之後的 successor 歷史也有前綴錨定。
 
-缺少 `runtime` 的舊快照仍可使用：Gate 從既有 Git trees 讀取事件前綴與原 run artifact，逐一驗證後再比較產品。既有快照、proposal hash、核准與事件不重寫，也不需要人工編輯 `state.json`。
-
 若停止後才以 Git local exclude 忽略 runtime，已保存的原 run artifact 與 Worker gitlink 仍須通過各自驗證，不能因它們在新 Git tree 中消失就跳過保護。修改產品 `.gitignore` 本身仍是一般 delivery 差異，不能把它視為自動獲准的變更。
 
-舊快照沒有保存、又未被其他契約／事件綁定的歷史內容，無法事後補造證明；相容驗證只使用實際保留下來的證據。未知快照版本、缺少來源、內容不一致或不能建立完整性證明時拒絕推進。
+缺少 `runtime`、版本未知、缺少來源、內容不一致或不能建立完整性證明的快照一律拒絕推進。
 
 ## 已卡住的 RP 如何續接
 
 1. 更新專案實際使用的 Gate 程式後，先執行 `replan status`，確認原 RP 的狀態與下一步。若更新改變專案內 `.codex/skills/cogito/` 或其提交造成 HEAD 變化，先完成 [RP 工具接軌](replan-toolchain.md)，不能直接重試或放寬基線檢查。
 2. 若停在 `analyzing` 且只有合法 runtime 更新，可保留現有 successor 候選，重新執行原本失敗的 `propose`。原 action 沒有成功落盤時，可沿用相同 action ID 與輸入。經工具接軌而有效 HEAD 改變時，舊候選仍保留，但須正常建立新 planning 輪次更新 baseline、覆核候選，再提出新 RP proposal。
 3. 通過後仍須正常 `review`、精確 proposal hash 的使用者 `approve`，最後執行 `handoff`。恢復比較不是新的核准。
-4. 若使用者選擇暫停或恢復來源，依既有 `abandon keep-paused`／`resume-source` 流程處理；相容驗證同樣保留來源保護。
+4. 若使用者選擇暫停或恢復來源，依既有 `abandon keep-paused`／`resume-source` 流程處理；快照驗證同樣保留來源保護。
 
 不要重新保存舊基準、刪除事件、覆寫 snapshot、直接修改 state 或取消 `_assert_source`。錯誤若仍存在，保留證據並處理實際不相符的內容。
 
@@ -50,6 +48,6 @@ runtime 檔案不得透過 symlink 或 gitlink 冒充事件、快取、鎖或草
 
 此分類限定 RP 保存、比較與交接，不修改一般 controlled runner 的 evidence binding、Start Gate 或最終化規則。專案仍應配置 runtime 的 Git 忽略規則，避免意外提交執行紀錄；RP 正確性不再依賴保存前已完成這項設定。
 
-自動化回歸涵蓋未忽略 runtime 的新／舊快照、正常草稿與事件、補上 local exclude、真實產品／Worker／文件／證據漂移、事件篡改、index 保護及中斷重試。人工驗收旅程以隔離專案和合成使用者決策模擬；測試通過不是實際產品的使用者核准。由人工回饋啟動的 RP successor 仍須重新進入人工驗收。
+自動化回歸涵蓋未忽略 runtime 的目前快照、正常草稿與事件、補上 local exclude、真實產品／Worker／文件／證據漂移、事件篡改、index 保護及中斷重試。人工驗收旅程以隔離專案和合成使用者決策模擬；測試通過不是實際產品的使用者核准。由人工回饋啟動的 RP successor 仍須重新進入人工驗收。
 
 實際執行方式、觀察結果與一般 runner 的隔離條件見 [人工驗收模擬報告](../evals/reports/2026-09-03-replan-runtime-human/REPORT.md)。

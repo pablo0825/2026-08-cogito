@@ -24,7 +24,7 @@ Package 尚未核准的修訂使用 [Planning Revisions](planning-revisions.md)�
 
 Controlled check 的 subprocess 由 runner 登錄；啟動與 replan fence 使用同一專案鎖，避免「剛停止卻又啟動」。已在執行的 check 可以在保存期限內結束，但 fence 後不得再將它加入可用 evidence ledger。原始 artifact 仍保留，不會成為新契約的驗收證據。長時間執行的 runner 會在停止期限到達時終止自己的受管程序。
 
-停止快照將產品內容、原 Worker 與執行紀錄分開驗證。主目錄未忽略 `.cogito/` 時，正常事件與草稿更新仍可繼續；舊快照不改寫歷史即可套用相容比較。分類邊界、恢復步驟與限制見 [RP Snapshots](replan-snapshots.md)。
+停止快照將產品內容、原 Worker 與執行紀錄分開驗證。主目錄未忽略 `.cogito/` 時，正常事件與草稿更新仍可繼續；缺少目前 runtime metadata 或使用未知版本的快照會拒絕推進。分類邊界、恢復步驟與限制見 [RP Snapshots](replan-snapshots.md)。
 
 若停止後更新專案內 Cogito，使用 [RP 工具接軌](replan-toolchain.md) 的獨立提案、覆核及核准；不能把工具差異默默納入產品 Package，也不能直接忽略工具目錄或 Git 基線變動。
 

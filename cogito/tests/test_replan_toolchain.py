@@ -79,8 +79,6 @@ class ToolchainCli:
 class ReplanToolchainTests(GitTestCase):
     result = staticmethod(feature_support.FeatureMultitaskTests.result)
     stopped = runtime_support.ReplanRuntimeSnapshotTests.stopped
-    legacy_capture = staticmethod(runtime_support.ReplanRuntimeSnapshotTests.legacy_capture)
-    legacy_emit = staticmethod(runtime_support.ReplanRuntimeSnapshotTests.legacy_emit)
     prepare_successor = runtime_support.ReplanRuntimeSnapshotTests.prepare_successor
     TOOL_ROOT = '.codex/skills/cogito'
 
@@ -97,8 +95,8 @@ class ReplanToolchainTests(GitTestCase):
         git(repo, 'commit', '-qm', 'Install original project-local Cogito')
         return result
 
-    def upgraded(self, *, legacy=False, committed=False, staged=False):
-        repo, worker, source, rp, _, _ = self.stopped(legacy=legacy)
+    def upgraded(self, *, committed=False, staged=False):
+        repo, worker, source, rp, _, _ = self.stopped()
         snapshot = copy.deepcopy(rp.load()['snapshot'])
         (repo / self.TOOL_ROOT / 'VERSION').write_bytes((COGITO / 'VERSION').read_bytes())
         if staged or committed:
@@ -124,13 +122,11 @@ class ReplanToolchainTests(GitTestCase):
         rp.toolchain_approve(digest, 'synthetic-user', 'tool-approve')
         return digest
 
-    def test_new_and_legacy_snapshot_resume_after_exact_tool_approval(self):
-        for legacy, committed, staged in ((False, False, False), (True, False, False),
-                                          (False, False, True), (True, False, True),
-                                          (False, True, False), (True, True, False)):
-            with self.subTest(legacy=legacy, committed=committed, staged=staged):
+    def test_current_snapshot_resumes_after_exact_tool_approval(self):
+        for committed, staged in ((False, False), (False, True), (True, False)):
+            with self.subTest(committed=committed, staged=staged):
                 repo, worker, source, rp, _, proposal, snapshot = self.upgraded(
-                    legacy=legacy, committed=committed, staged=staged)
+                    committed=committed, staged=staged)
                 history = rp.events_path.read_bytes()
                 source_history = source.events_path.read_bytes()
                 package = source.approved_package()
@@ -149,28 +145,25 @@ class ReplanToolchainTests(GitTestCase):
                 self.assertEqual(git(worker, 'status', '--porcelain'), '')
 
     def test_committed_upgrade_completes_normal_rp_handoff(self):
-        for legacy in (False, True):
-            with self.subTest(legacy=legacy):
-                repo, worker, source, rp, successor, proposal, snapshot = self.upgraded(
-                    legacy=legacy, committed=True)
-                old_package = source.approved_package()
-                old_worker = git(worker, 'rev-parse', 'HEAD')
-                old_history = rp.events_path.read_bytes()
-                self.approve_tool(rp)
-                self.assertNotEqual(git(repo, 'rev-parse', 'HEAD'), snapshot['delivery']['head'])
-                state = rp.propose(proposal, 'product-propose')
-                digest = state['proposal_hash']
-                rp.review(dict(proposal_hash=digest, reviewer_id='independent-product-reviewer',
-                               findings=[], assessment={key: 'Validated upgraded RP and retained work' for key in (
-                                   'impact', 'reuse', 'revalidation', 'handoff')}), 'product-review')
-                self.assertEqual(rp.approve(digest, 'product-approve')['state'], 'ready-for-handoff')
-                self.assertEqual(rp.handoff('product-handoff')['state'], 'completed')
-                self.assertEqual(successor.load()['state'], 'executing')
-                self.assertEqual(source.load()['state'], 'superseded')
-                self.assertEqual(source.approved_package(), old_package)
-                self.assertEqual(git(worker, 'rev-parse', 'HEAD'), old_worker)
-                self.assertEqual(rp.load()['snapshot'], snapshot)
-                self.assertTrue(rp.events_path.read_bytes().startswith(old_history))
+        repo, worker, source, rp, successor, proposal, snapshot = self.upgraded(committed=True)
+        old_package = source.approved_package()
+        old_worker = git(worker, 'rev-parse', 'HEAD')
+        old_history = rp.events_path.read_bytes()
+        self.approve_tool(rp)
+        self.assertNotEqual(git(repo, 'rev-parse', 'HEAD'), snapshot['delivery']['head'])
+        state = rp.propose(proposal, 'product-propose')
+        digest = state['proposal_hash']
+        rp.review(dict(proposal_hash=digest, reviewer_id='independent-product-reviewer',
+                       findings=[], assessment={key: 'Validated upgraded RP and retained work' for key in (
+                           'impact', 'reuse', 'revalidation', 'handoff')}), 'product-review')
+        self.assertEqual(rp.approve(digest, 'product-approve')['state'], 'ready-for-handoff')
+        self.assertEqual(rp.handoff('product-handoff')['state'], 'completed')
+        self.assertEqual(successor.load()['state'], 'executing')
+        self.assertEqual(source.load()['state'], 'superseded')
+        self.assertEqual(source.approved_package(), old_package)
+        self.assertEqual(git(worker, 'rev-parse', 'HEAD'), old_worker)
+        self.assertEqual(rp.load()['snapshot'], snapshot)
+        self.assertTrue(rp.events_path.read_bytes().startswith(old_history))
 
     def test_product_change_cannot_be_laundered_through_tool_approval(self):
         for committed in (False, True):
@@ -289,7 +282,7 @@ class ReplanToolchainTests(GitTestCase):
 
     def test_existing_candidate_survives_committed_adoption_then_replans_baseline(self):
         # Match FS-043: the candidate already exists before the tool commit.
-        repo, worker, source, rp, successor, proposal, snapshot = self.upgraded(legacy=True)
+        repo, worker, source, rp, successor, proposal, snapshot = self.upgraded()
         candidate_hash = successor.load()['candidate_package_hash']
         candidate_history = successor.events_path.read_bytes()
         git(repo, 'add', self.TOOL_ROOT)

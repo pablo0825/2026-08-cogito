@@ -3,7 +3,7 @@
 Raw Git trees remain forensic evidence. Only explicitly owned journals, caches,
 drafts and empty synchronization files are removed from the product comparison.
 Worker trees and immutable source artifacts are never covered by a directory-wide
-runtime exception. The same classification applies to legacy raw snapshots.
+runtime exception.
 """
 from __future__ import annotations
 
@@ -154,54 +154,22 @@ class ReplanRuntime:
                                                            worker_links=self.worker_links(worktrees))
                                    for field in ('index_tree', 'content_tree')})
 
-    def assert_legacy_logs(self, tree: str) -> None:
-        """An old raw tree anchors exact bytes, even after runtime is ignored."""
-        saved_entries = entries(self.root, tree)
-        for relative in self.logs:
-            if relative not in saved_entries:
-                continue
-            mode, oid = saved_entries[relative]
-            if mode not in {'100644', '100755'}:
-                raise CogitoError('invalid legacy RP journal mode')
-            saved = _git(self.root, 'cat-file', 'blob', oid)
-            path = self.safe_path(relative)
-            read_events(path)
-            if (saved and not saved.endswith(b'\n')) or not path.is_file() or not path.read_bytes().startswith(saved):
-                raise CogitoError(f'RP runtime event history changed: {relative}')
-
     def assert_snapshot(self, saved: dict[str, Any]) -> set[str]:
         runtime = saved.get('runtime')
-        frozen = set()
-        if runtime is not None:
-            if (not isinstance(runtime, dict) or type(runtime.get('version')) is not int
-                    or runtime.get('version') != self.VERSION
-                    or not {'logs', 'source_files', 'product_trees'} <= runtime.keys()
-                    or not isinstance(runtime.get('source_files'), dict)):
-                raise CogitoError('unsupported RP runtime snapshot version')
-            self.assert_logs(runtime['logs'])
-            if self.source_files() != runtime['source_files']:
-                raise CogitoError('source runtime evidence drifted since stop checkpoint')
-            frozen.update(runtime['source_files'])
-            expected = {field: self.product_tree(saved['delivery'][field], immutable_files=frozen,
-                                                 worker_links=self.worker_links(saved['worktrees']))
-                        for field in ('index_tree', 'content_tree')}
-            if runtime['product_trees'] != expected:
-                raise CogitoError('RP product snapshot does not match preserved raw trees')
-        # Validate both old raw trees, including staged journal content. Keeping
-        # them untouched preserves prior snapshot/proposal hashes and approvals.
-        for field in ('index_tree', 'content_tree'):
-            self.assert_legacy_logs(saved['delivery'][field])
-            # Source artifacts omitted by a later ignore rule still have to
-            # match their old raw blob. This is verification, not an exemption.
-            for relative, (mode, oid) in entries(self.root, saved['delivery'][field]).items():
-                if not relative.startswith(self.source + '/') or self.role(relative):
-                    continue
-                path = self.safe_path(relative)
-                if (mode not in {'100644', '100755'} or not path.is_file()
-                        or path.read_bytes() != _git(self.root, 'cat-file', 'blob', oid)
-                        or bool(path.stat().st_mode & 0o111) != (mode == '100755')):
-                    raise CogitoError(f'source runtime evidence drifted: {relative}')
-                frozen.add(relative)
+        if (not isinstance(runtime, dict) or type(runtime.get('version')) is not int
+                or runtime.get('version') != self.VERSION
+                or not {'logs', 'source_files', 'product_trees'} <= runtime.keys()
+                or not isinstance(runtime.get('source_files'), dict)):
+            raise CogitoError('unsupported RP runtime snapshot version')
+        self.assert_logs(runtime['logs'])
+        if self.source_files() != runtime['source_files']:
+            raise CogitoError('source runtime evidence drifted since stop checkpoint')
+        frozen = set(runtime['source_files'])
+        expected = {field: self.product_tree(saved['delivery'][field], immutable_files=frozen,
+                                             worker_links=self.worker_links(saved['worktrees']))
+                    for field in ('index_tree', 'content_tree')}
+        if runtime['product_trees'] != expected:
+            raise CogitoError('RP product snapshot does not match preserved raw trees')
         return frozen
 
     def assert_frozen_tree(self, tree: str, frozen: set[str]) -> None:

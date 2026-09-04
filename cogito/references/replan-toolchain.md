@@ -88,4 +88,4 @@ python3 .codex/skills/cogito/scripts/cogito_gate.py --repo . replan toolchain-re
 
 Gate 實際重播來源／successor／RP 事件、驗證來源及候選契約、比對有效契約、載入 workflow 並驗證原快照、產品與 Worker。這些檢查證明保存資料可由新版工具讀取與驗證；不能自動證明任意 validator 語義修改安全，仍須獨立覆核與使用者核准。
 
-工具接軌包含新增的 RP 事件型別。尚未實作此協定的舊版 Gate 不支援讀取這些事件；不能在接軌後直接退回舊 Gate。新工具仍可讀取尚未接軌的舊 RP。中斷後先查看 replan status，再以原 action ID 與相同輸入重試；不得刪除事件、手改 state 或覆寫原 snapshot。
+工具接軌包含新增的 RP 事件型別。尚未實作此協定的舊版 Gate 不支援讀取這些事件；不能在接軌後直接退回舊 Gate。中斷後先查看 replan status，再以原 action ID 與相同輸入重試；不得刪除事件、手改 state 或覆寫原 snapshot。
