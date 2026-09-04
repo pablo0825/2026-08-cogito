@@ -63,7 +63,9 @@ successor 使用新的 Slice ID，`lineage` 明確指向原 Slice。不得直接
 
 `handoff` 將核准的來源 task 路徑內容移入專用的新 branch/worktree，以新 commit 保留來自原 run 的來源說明。未提交內容來自已保存的 Git content tree，原 index、檔案與 commits 不改寫；omit 也不刪原成果。已整合內容自然包含在新 baseline，仍按影響分析決定是否重驗。
 
-Successor 的 Start Gate 在 repository 外建立 detached 暫存 worktree，從核准的 delivery HEAD 寫入精確綁定的 Package、Project Graph、Spec／Plan、Shared Understanding 與 source registry 後驗證。停止快照內既有且未變的 dirty 檔案不會進入這個 view，也不會因此成為 successor 交付範圍。Gate 在建立暫存 view 前後都重驗原 delivery、source events、Worker、Graph 與 runtime；Start event 保存 snapshot、proposal、control manifest 與暫存 content tree 的 binding。一般 Start Gate 仍要求原 checkout 乾淨。
+新的 RP proposal 在獨立審查前建立 `StartArtifactManifest`：以保存的 delivery commit/tree 為 baseline，將 successor candidate snapshot 內的 Package、Project Graph、Spec／Plan、Shared Understanding 與 source registry 位元組形成精確的 Git tree，並以 content-addressed create-only ref 保持 objects 可達。proposal 綁 manifest hash，review 綁 proposal hash，approval 再綁同一個 manifest。handoff 的 successor Start Gate 只讀取並重算這些 commit/tree/blob、核對已發布的 live Package／Graph、Policy、Workflow、tool 與 verifier binding，再以 event-tip CAS 追加既有 `start-gate-passed`；不建立 worktree、不複製或 chmod 控制文件，也不寫 validation checkpoint。停止快照內既有且未變的 dirty 檔案不會進入 artifact tree。一般 Start Gate 仍使用原 checkout 規則。
+
+舊 proposal 沒有 `start_artifact_hash` 時維持原 detached 暫存 worktree 與 `handoff-start-isolated`／`handoff-start-validated` recovery。Gate 不替舊 proposal 或 approval 補 hash，也不改寫 journal；新舊路徑只由已核准 proposal 的欄位分流。
 
 每個移植先記錄 before／after tree 與 commit，再寫入新 worktree，最後追加完成 receipt。重試只接受明確的未執行／已執行狀態；衝突或未知內容保持 handing-off 並回報，不覆寫外部改動。Project Graph 也比對原始／目標內容，不能以直接清 active_run_id 來修復。
 
@@ -89,7 +91,7 @@ python3 cogito/scripts/cogito_gate.py --repo <repo> replan handoff --replan-id R
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan status --replan-id RP-001
 ```
 
-本輪主要驗收對象是具專用 Slice worktree 的 Feature／Change／Correction 承接。Mini Package 如有未提交的 delivery 修改，不能略過新 Start Gate 的乾淨 checkout 規則；無法完成隔離與保存時維持阻塞，不自動清理使用者工作目錄。
+本輪主要驗收對象是具專用 Slice worktree 的 Feature／Change／Correction 承接。Mini Package 如有未提交的 delivery 修改，不能略過 Start Gate 的原 checkout 規則；無法建立可核准的精確 artifact 或保存既有 legacy 隔離證據時維持阻塞，不自動清理使用者工作目錄。
 
 ## 階段提交相容性
 
