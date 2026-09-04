@@ -7,39 +7,29 @@ runtime exception. The same classification applies to legacy raw snapshots.
 """
 from __future__ import annotations
 
-import hashlib
-import os
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from cogito_common import CogitoError
 from cogito_events import read_events
+from cogito_product_snapshot import (
+    git_bytes,
+    sha256_digest,
+    tree_entries,
+    tree_without_paths,
+)
 
 
 def _git(root: Path, *args: str, env=None, data=None) -> bytes:
-    try:
-        return subprocess.run(
-            ['git', '-C', str(root), *args], input=data, env=env,
-            check=True, capture_output=True, timeout=30,
-        ).stdout
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise CogitoError(f'cannot compare RP snapshot: {exc}') from exc
+    """Compatibility wrapper for RP callers while mechanics stay neutral."""
+    return git_bytes(
+        root, *args, env=env, data=data, error_context='compare RP snapshot',
+    )
 
 
 def entries(root: Path, tree: str) -> dict[str, tuple[str, str]]:
-    result = {}
-    for record in _git(root, 'ls-tree', '-r', '-z', tree).split(b'\0'):
-        if record:
-            metadata, name = record.split(b'\t', 1)
-            mode, _, oid = metadata.decode('ascii').split()
-            result[name.decode('utf-8', errors='surrogateescape')] = (mode, oid)
-    return result
-
-
-def _digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+    """Compatibility wrapper for existing RP and toolchain imports."""
+    return tree_entries(root, tree, error_context='compare RP snapshot')
 
 
 class ReplanRuntime:
@@ -86,7 +76,7 @@ class ReplanRuntime:
             events = read_events(path)
             if events:
                 content = path.read_bytes()
-                bindings[relative] = dict(size=len(content), sha256=_digest(content),
+                bindings[relative] = dict(size=len(content), sha256=sha256_digest(content),
                                           sequence=len(events), event_hash=events[-1]['event_hash'])
         return bindings
 
@@ -101,7 +91,7 @@ class ReplanRuntime:
             if type(size) is not int or size < 0 or type(count) is not int or count < 1:
                 raise CogitoError('invalid RP runtime journal binding')
             content = self.safe_path(relative).read_bytes() if events else b''
-            if (len(content) < size or _digest(content[:size]) != binding.get('sha256')
+            if (len(content) < size or sha256_digest(content[:size]) != binding.get('sha256')
                     or len(events) < count or events[count - 1]['event_hash'] != binding.get('event_hash')):
                 raise CogitoError(f'RP runtime event history changed: {relative}')
 
@@ -113,7 +103,7 @@ class ReplanRuntime:
             relative = path.relative_to(self.root).as_posix()
             self.safe_path(relative)
             if path.is_file() and self.role(relative) is None:
-                result[relative] = dict(sha256=_digest(path.read_bytes()), mode=path.stat().st_mode & 0o777)
+                result[relative] = dict(sha256=sha256_digest(path.read_bytes()), mode=path.stat().st_mode & 0o777)
         return result
 
     def product_tree(self, tree: str, *, worker_links=(), immutable_files=()) -> str:
@@ -143,12 +133,13 @@ class ReplanRuntime:
                 removed.append(relative)
         if not removed:
             return tree
-        with tempfile.TemporaryDirectory(prefix='cogito-rp-product-') as directory:
-            env = {**os.environ, 'GIT_INDEX_FILE': str(Path(directory) / 'index')}
-            _git(self.root, 'read-tree', tree, env=env)
-            names = b''.join(path.encode('utf-8', errors='surrogateescape') + b'\0' for path in removed)
-            _git(self.root, 'update-index', '--force-remove', '-z', '--stdin', env=env, data=names)
-            return _git(self.root, 'write-tree', env=env).decode().strip()
+        return tree_without_paths(
+            self.root,
+            tree,
+            removed,
+            temporary_prefix='cogito-rp-product-',
+            error_context='compare RP snapshot',
+        )
 
     def worker_links(self, worktrees) -> dict[str, str]:
         return {Path(path).relative_to(self.root).as_posix(): worktrees[path]['head']
