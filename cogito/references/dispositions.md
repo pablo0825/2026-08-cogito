@@ -25,6 +25,8 @@ executing -> pausing -> analyzing -> reviewing ...
 
 從 RP 建立 DP 時，預設保留原 run 暫停；快照涵蓋 source、successor、尚未完成登錄的 transfer worktrees。RP 轉為 `disposition` 終態，歷史 transfer receipts 保留。原 RP 不再繼續 handoff。已核准或部分執行的方案撤回也使用此入口。
 
+DP 快照保留原始 HEAD、index、content trees，並以 `runtime.version: 1` 綁定 DP、所屬 runs 與關聯 RP 的事件位元組 hash／事件 cursor。後續比較只移除本次流程明確擁有的 journal、可重建 `state.json`、空 lock 與該快照的 archive control files；事件只能依對應 action 追加，其他產品或未知 `.cogito/` 差異仍拒絕。缺少 runtime metadata 或版本不符的 DP 快照不支援續接。
+
 原 run、已放棄的 successor、被新方案取代的 follow-up 不能藉普通 `resume` 繼續。恢復原契約由專用 DP Gate 驗證；原 run 已取消時必須另開任務。恢復不重設任何修正額度。
 
 ## 操作

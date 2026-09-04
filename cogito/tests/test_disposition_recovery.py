@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from cogito_test_support import GitTestCase
+from cogito_test_support import GitTestCase, git
 from cogito_common import CogitoError
 from cogito_disposition_store import DispositionStore
 from cogito_replan_store import ReplanStore
@@ -18,6 +18,10 @@ class DispositionRecoveryTests(GitTestCase):
     def stopped_maintenance(self):
         repo, source, baseline = self.fixture()
         self.first_task(repo, source, baseline)
+        # Keep DP/RP journals visible in every saved/current delivery tree.
+        (repo / '.gitignore').write_text('docs/cogito/packages/\n')
+        git(repo, 'add', '.gitignore')
+        git(repo, 'commit', '-qm', 'Keep Cogito runtime visible')
         replan = ReplanStore(repo, 'RP-recovery')
         replan.begin(source.run_id, 'MNT-recovery-next', 'User requests a change', 'begin')
         replan.stop('stop')

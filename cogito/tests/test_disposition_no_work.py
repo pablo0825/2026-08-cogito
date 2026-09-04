@@ -1,4 +1,5 @@
 """Cancellation before implementation can close without inventing repair work."""
+import copy
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -66,6 +67,48 @@ class NoWorkDispositionTests(GitTestCase):
             with self.assertRaisesRegex(CogitoError,'saved product content changed'):
                 disposition.stop('stop')
         self.assertEqual(disposition.load()['state'],'stopping')
+
+    def test_snapshot_without_current_runtime_version_is_rejected(self):
+        repo, source = self.unignored_source()
+        disposition = DispositionStore(repo, 'DP-old-snapshot')
+        disposition.begin(source.run_id, 'User cancels before implementation', 'begin')
+        saved = copy.deepcopy(disposition.stop('stop')['snapshot'])
+        saved.pop('runtime')
+        with self.assertRaisesRegex(CogitoError, 'runtime snapshot'):
+            disposition._validate_saved_work(saved)
+
+    def test_release_ignores_only_validated_unignored_runtime(self):
+        repo, source = self.unignored_source()
+        (repo/'note.txt').write_text('work to preserve before cancellation\n')
+        disposition = DispositionStore(repo,'DP-unignored-release')
+        disposition.begin(source.run_id,'User cancels saved work','begin')
+        disposition.stop('stop')
+        history = disposition.events_path.read_bytes()
+        disposition.release('release')
+        self.assertEqual((repo/'note.txt').read_text(),'original\n')
+        self.assertTrue(disposition.events_path.read_bytes().startswith(history))
+        self.assertTrue((disposition.directory/'archives').is_dir())
+
+    def test_release_rejects_tampered_or_missing_runtime_controls(self):
+        for corruption in ('journal-bytes', 'lock-content', 'missing-manifest'):
+            with self.subTest(corruption=corruption):
+                repo, source = self.unignored_source()
+                disposition = DispositionStore(repo, 'DP-corrupt-' + corruption)
+                disposition.begin(source.run_id, 'User cancels saved work', 'begin')
+                disposition.stop('stop')
+                if corruption == 'journal-bytes':
+                    history = disposition.events_path.read_bytes()
+                    disposition.events_path.write_bytes(b' ' + history)
+                    message = 'event history changed'
+                else:
+                    if corruption == 'lock-content':
+                        disposition.events_path.with_suffix('.jsonl.lock').write_text('not empty')
+                        message = 'synchronization file must be empty'
+                    else:
+                        next((disposition.directory/'archives').glob('*.json')).unlink()
+                        message = 'no archive manifest'
+                with self.assertRaisesRegex(CogitoError, message):
+                    disposition.release('release')
 
     def test_unstarted_cancel_closes_after_review_and_human_confirmation(self):
         with tempfile.TemporaryDirectory() as directory:

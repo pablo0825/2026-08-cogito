@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from cogito_common import CogitoError, atomic_write_json, hash_json, load_json
 from cogito_evidence_binding import capture_index_and_worktree_trees
+from cogito_disposition_snapshot import require_same_product
 
 _GRAPH = 'docs/cogito/project-graph.json'
 
@@ -242,7 +243,32 @@ def _validate_release_journal(journal, archive, saved, expected):
         raise CogitoError('completed release journal contains pending paths')
 
 
-def release_delivery(root, disposition_id, snapshot):
+def validate_control_artifacts(root, disposition_id, snapshot, *, require_manifest=False):
+    """Validate the exact archive controls that may be excluded from product trees."""
+    root = Path(root).resolve()
+    directory = _directory(root, disposition_id)
+    binding = hash_json(snapshot)
+    manifest_path = directory/'archives'/(binding+'.json')
+    if require_manifest and not manifest_path.exists():
+        raise CogitoError('saved disposition snapshot has no archive manifest')
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+        _validate_manifest(root, disposition_id, snapshot, binding, manifest,
+                           _locations(root, snapshot))
+        release_path = directory/'archives'/(binding+'.release.json')
+        if release_path.exists():
+            saved = snapshot['delivery']
+            before_index = _entries(root, saved['index_tree'])
+            before_work = _entries(root, saved['content_tree'])
+            target = _entries(root, saved['head'])
+            _validate_release_journal(
+                load_json(release_path), manifest, saved,
+                _release_records(root, snapshot, before_index, before_work, target))
+    return {manifest_path.relative_to(root).as_posix(),
+            (directory/'archives'/(binding+'.release.json')).relative_to(root).as_posix()}
+
+
+def release_delivery(root, disposition_id, snapshot, runtime_paths=()):
     """Restore saved scoped dirt to HEAD, retaining replayable before/after proof."""
     root = Path(root).resolve()
     directory = _directory(root, disposition_id)
@@ -262,9 +288,15 @@ def release_delivery(root, disposition_id, snapshot):
     else:
         index, work = capture_index_and_worktree_trees(root)
         current_index, current_work = _entries(root,index), _entries(root,work)
-        for expected, actual in [(before_index,current_index),(before_work,current_work)]:
-            if {k:v for k,v in expected.items() if k != _GRAPH} != {k:v for k,v in actual.items() if k != _GRAPH}:
-                raise CogitoError('delivery changed after saved snapshot; release refused')
+        if runtime_paths:
+            for expected, actual in ((saved['index_tree'], index), (saved['content_tree'], work)):
+                require_same_product(
+                    root, expected, actual, runtime_paths,
+                    message='delivery changed after saved snapshot; release refused')
+        else:
+            for expected, actual in [(before_index,current_index),(before_work,current_work)]:
+                if {k:v for k,v in expected.items() if k != _GRAPH} != {k:v for k,v in actual.items() if k != _GRAPH}:
+                    raise CogitoError('delivery changed after saved snapshot; release refused')
         journal = dict(snapshot_hash=archive['snapshot_hash'],head=saved['head'],
                        paths=expected_records,completed=False)
         atomic_write_json(journal_path,journal)

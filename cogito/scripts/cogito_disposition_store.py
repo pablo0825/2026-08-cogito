@@ -11,6 +11,7 @@ from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_replan_lock import project_lock, replan_authority, replans
 from cogito_run_store import RunStore
 from cogito_disposition_state import project_disposition, validate_proposal, validate_review
+from cogito_disposition_snapshot import capture_runtime, require_same_product, validate_runtime
 
 
 def mutation(method):
@@ -162,18 +163,25 @@ class DispositionStore:
                 for item in package.get('slices',[]): slices.add(item['id'])
                 for task in package.get('execution_dag',{}).get('tasks',[]):
                     paths.update(task.get('paths', []))
-        return dict(runs=runs,tasks=current['tasks'],worktrees=worktrees,
+        state = self.load()
+        saved = dict(runs=runs,tasks=current['tasks'],worktrees=worktrees,
             source_event_hash=current['last_event_hash'],package_hash=current.get('package_hash'),
             effective_contract_hash=current.get('effective_contract_hash'),
             delivery=dict(head=source._git('rev-parse','HEAD'),branch=source._git('branch','--show-current'),index_tree=index,content_tree=tree),
             graph=load_json(graph_path) if graph_path.exists() else None,
-            scope=dict(paths=sorted(paths),slice_ids=sorted(slices),reason=self.load()['reason']))
+            scope=dict(paths=sorted(paths),slice_ids=sorted(slices),reason=state['reason']))
+        saved['runtime'] = capture_runtime(
+            self.root, self.disposition_id, runs, state.get('replan_id'))
+        return saved
 
     def _validate_saved_work(self, saved):
         """Allow only our journal cancellation and Graph release during replay."""
         from cogito_execution_registry import quiescent
         current = self._capture(extra_runs=saved['runs'])
-        cancelled_runs = set()
+        a,b = saved['delivery'],current['delivery']
+        runtime_paths = validate_runtime(
+            self.root, self.disposition_id, saved, self.load(), transition=True,
+            first_tree=a['content_tree'], second_tree=b['content_tree'])
         for run_id, old in saved['runs'].items():
             if not quiescent(self.root, run_id, allow_external_receipts=True):
                 raise CogitoError('saved work has an active executor; stop before retry')
@@ -184,7 +192,6 @@ class DispositionStore:
                 raise CogitoError('source changed after saved stop intent')
             expected_tasks = copy.deepcopy(old['tasks'])
             if any(e['type'] == 'cancel' for e in events[anchor+1:]):
-                cancelled_runs.add(run_id)
                 for task in expected_tasks.values():
                     if task['status'] in {'leased', 'running'}:
                         task.update(status='blocked', released_by=self.disposition_id)
@@ -197,78 +204,15 @@ class DispositionStore:
             if path == str(self.root):
                 if any(old[k] != new[k] for k in ('head','branch','index_tree')):
                     raise CogitoError('saved delivery worker changed after stop intent')
-                self._require_same_product(old['content_tree'],new['content_tree'])
+                require_same_product(self.root, old['content_tree'], new['content_tree'], runtime_paths)
             elif old != new:
                 raise CogitoError('saved worker content changed after stop intent')
-        a,b = saved['delivery'],current['delivery']
         if any(a[key] != b[key] for key in ('head','branch','index_tree')):
             raise CogitoError('delivery changed after stop intent')
-        allowed = self._validated_transition_runtime(
-            saved, a['content_tree'], b['content_tree'], cancelled_runs)
-        self._require_same_product(a['content_tree'], b['content_tree'], allowed)
-
-    def _validated_transition_runtime(self, saved, first, second, cancelled_runs):
-        """Validate, then exclude only control files owned by this transition."""
-        from cogito_replan_snapshot import _git as git_bytes, entries
-
-        before, after = entries(self.root, first), entries(self.root, second)
-        base = f'.cogito/dispositions/{self.disposition_id}'
-        journal = base + '/events.jsonl'
-        state_path = base + '/state.json'
-        allowed = {
-            'docs/cogito/project-graph.json', journal, state_path,
-            journal + '.lock', '.cogito/project-mutation.lock',
-            base + '/archives/' + hash_json(saved) + '.json',
-        }
-        for run_id in cancelled_runs:
-            run_base = f'.cogito/runs/{run_id}'
-            allowed.update({run_base + '/events.jsonl', run_base + '/state.json',
-                            run_base + '/events.jsonl.lock'})
-
-        changed = set(filter(None, self.source()._git(
-            'diff', '--name-only', '--no-ext-diff', '--no-renames', '-z',
-            first, second, '--').split('\0')))
-        relevant = changed & allowed
-        if journal in relevant:
-            def blob(tree_entries, path):
-                item = tree_entries.get(path)
-                if item is None:
-                    return b''
-                mode, oid = item
-                if mode not in {'100644', '100755'}:
-                    raise CogitoError('disposition runtime must be a regular file: ' + path)
-                return git_bytes(self.root, 'cat-file', 'blob', oid)
-
-            old_content, new_content = blob(before, journal), blob(after, journal)
-            if old_content and not old_content.endswith(b'\n'):
-                raise CogitoError('saved disposition journal is incomplete')
-            if not new_content.startswith(old_content):
-                raise CogitoError('disposition event history changed after saved stop intent')
-            events = read_events(self.events_path)
-            suffix = events[len(old_content.splitlines()):]
-            expected = {
-                'disposition-stop-started': 'disposition-stop-intent:',
-                'disposition-pause-saved': 'disposition-pause-saved:',
-            }
-            if (len(suffix) != 1 or suffix[0]['type'] not in expected
-                    or not str(suffix[0].get('action_id', '')).startswith(expected[suffix[0]['type']])
-                    or suffix[0].get('payload', {}).get('snapshot') != saved):
-                raise CogitoError('unexpected disposition journal change during saved-work validation')
-
-        for path in relevant:
-            item = after.get(path) or before.get(path)
-            if item and item[0] not in {'100644', '100755'}:
-                raise CogitoError('disposition runtime must be a regular file: ' + path)
-            if path.endswith('.lock') and item:
-                content = git_bytes(self.root, 'cat-file', 'blob', item[1])
-                if content:
-                    raise CogitoError('disposition synchronization file must be empty: ' + path)
-        return allowed
+        require_same_product(self.root, a['content_tree'], b['content_tree'], runtime_paths)
 
     def _require_same_product(self, first, second, allowed=()):
-        changed = set(filter(None, self.source()._git('diff','--name-only','--no-ext-diff','--no-renames','-z',first,second,'--').split('\0')))
-        if changed - {'docs/cogito/project-graph.json'} - set(allowed):
-            raise CogitoError('saved product content changed; use a reviewed followup')
+        require_same_product(self.root, first, second, allowed)
 
     def _validate_no_change(self, proposal):
         state = self.load(); source = self.source(); current = source.load()
@@ -279,16 +223,25 @@ class DispositionStore:
             if current['agent_results'] or current.get('amendments') or state.get('replan_id'):
                 raise CogitoError('reported implementation or RP work requires normal disposition acceptance')
             saved = state['snapshot']
-            if (proof['head'] != saved['delivery']['head'] or proof['content_tree'] != saved['delivery']['content_tree']
+            if (proof['head'] != saved['delivery']['head']
                     or source._git('rev-parse', 'HEAD') != proof['head']):
                 raise CogitoError('no-work proof does not match the saved original baseline')
             if current.get('package_hash') and source.approved_package()['baseline_commit'] != proof['head']:
                 raise CogitoError('delivery contains new commits; use normal disposition acceptance')
             now = self._capture()
+            runtime_paths = validate_runtime(
+                self.root, self.disposition_id, saved, state,
+                first_tree=saved['delivery']['content_tree'],
+                second_tree=now['delivery']['content_tree'])
+            try:
+                require_same_product(
+                    self.root, proof['content_tree'], saved['delivery']['content_tree'], runtime_paths)
+            except CogitoError as exc:
+                raise CogitoError('no-work proof does not match the saved original baseline') from exc
             baseline_tree = source._git('rev-parse', proof['head']+'^{tree}')
             for binding in [saved['delivery'], *saved['worktrees'].values(), now['delivery'], *now['worktrees'].values()]:
                 for key in ('index_tree', 'content_tree'):
-                    self._require_same_product(baseline_tree, binding[key])
+                    require_same_product(self.root, baseline_tree, binding[key], runtime_paths)
             return
         if state.get('source_state') not in {'awaiting-human','accepted'}:
             raise CogitoError('no-change retention requires a previously verified delivery awaiting acceptance')
@@ -301,10 +254,14 @@ class DispositionStore:
             raise CogitoError('retention head and content_tree must be Git object identifiers')
         if proof['head'] != state['snapshot']['delivery']['head']:
             raise CogitoError('retention evidence targets a different saved HEAD')
-        self._require_same_product(proof['content_tree'], state['snapshot']['delivery']['content_tree'])
+        saved = state['snapshot']
         now = self._capture()['delivery']
-        self._require_same_product(proof['content_tree'], now['content_tree'])
-        self._require_same_product(now['content_tree'], source._git('rev-parse',now['head']+'^{tree}'))
+        runtime_paths = validate_runtime(
+            self.root, self.disposition_id, saved, state,
+            first_tree=saved['delivery']['content_tree'], second_tree=now['content_tree'])
+        require_same_product(self.root, proof['content_tree'], saved['delivery']['content_tree'], runtime_paths)
+        require_same_product(self.root, proof['content_tree'], now['content_tree'], runtime_paths)
+        require_same_product(self.root, now['content_tree'], source._git('rev-parse',now['head']+'^{tree}'), runtime_paths)
         evidence = []
         evidence_root = (source.run_dir/'evidence').resolve()
         for name in proof['evidence_paths']:
@@ -317,7 +274,7 @@ class DispositionStore:
         heads = {item.get('head_commit') for item in evidence}
         if len(heads) != 1: raise CogitoError('retention evidence must describe one delivery')
         for item in evidence:
-            self._require_same_product(item['worktree_binding']['content_tree'],proof['content_tree'])
+            require_same_product(self.root, item['worktree_binding']['content_tree'], proof['content_tree'], runtime_paths)
         source._validate_evidence(source.approved_package(), evidence, snapshot=source._events.snapshot(),
             phase='post-integration', current_head=next(iter(heads)), validate_supplied=True)
 
@@ -433,7 +390,9 @@ class DispositionStore:
             raise CogitoError('release delivery before approving execution of a disposition')
         from cogito_disposition_archive import release_delivery
         saved = state.get('pause_snapshot') or state['snapshot']
-        receipt = release_delivery(self.root, self.disposition_id, saved)
+        runtime_paths = validate_runtime(self.root, self.disposition_id, saved, state)
+        receipt = release_delivery(
+            self.root, self.disposition_id, saved, runtime_paths=runtime_paths)
         return self._emit('disposition-delivery-released', {'snapshot_hash':hash_json(saved), 'receipt':receipt},
                           action_id, 'release', {})
 

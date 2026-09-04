@@ -5,6 +5,7 @@ from pathlib import Path
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, atomic_write_json, hash_json, load_json
 from cogito_evidence_binding import capture_index_and_worktree_trees
+from cogito_disposition_snapshot import require_same_product, validate_runtime
 from cogito_replan_lock import run_mutation
 
 
@@ -26,6 +27,13 @@ class DispositionRunMixin:
         if (self._git('rev-parse', 'HEAD') != saved['delivery']['head']
                 or self._git('branch', '--show-current') != saved['delivery']['branch']):
             raise CogitoError('original delivery changed; propose a reviewed restoration task')
+        current_index, current_tree = capture_index_and_worktree_trees(self.root)
+        runtime_paths = validate_runtime(
+            self.root, disposition_id, saved, decision,
+            first_tree=saved['delivery']['content_tree'], second_tree=current_tree)
+        validate_runtime(
+            self.root, disposition_id, saved, decision,
+            first_tree=saved['delivery']['index_tree'], second_tree=current_index)
         target = current['blocked_from']
         if target not in self.workflow['resume_targets']:
             raise CogitoError('original phase cannot be resumed')
@@ -43,18 +51,16 @@ class DispositionRunMixin:
             if not evidence or any(e['effective_contract_hash'] != current['effective_contract_hash'] for e in evidence):
                 raise CogitoError('human repair changed the contract; use a restoration follow-up')
             binding = evidence[0]['worktree_binding']['content_tree']
-            actual = capture_index_and_worktree_trees(self.root)[1]
-            changed = set(filter(None, self._git('diff', '--name-only', '-z', binding, actual, '--').split('\0')))
-            if changed - {'docs/cogito/project-graph.json'}:
-                raise CogitoError('human delivery changed after verification; propose a restoration task')
+            require_same_product(
+                self.root, binding, current_tree, runtime_paths,
+                message='human delivery changed after verification; propose a restoration task')
             target = 'post-integration-verification'
         else:
-            current_index, current_tree = capture_index_and_worktree_trees(self.root)
             for before, after in ((saved['delivery']['index_tree'], current_index),
                                   (saved['delivery']['content_tree'], current_tree)):
-                changed = set(filter(None, self._git('diff', '--name-only', '-z', before, after, '--').split('\0')))
-                if changed - {'docs/cogito/project-graph.json'}:
-                    raise CogitoError('saved original delivery changed; propose a reviewed restoration task')
+                require_same_product(
+                    self.root, before, after, runtime_paths,
+                    message='saved original delivery changed; propose a reviewed restoration task')
             for path, binding in saved['worktrees'].items():
                 index, tree = capture_index_and_worktree_trees(Path(path))
                 if (self._git_at(Path(path), 'rev-parse', 'HEAD') != binding['head']
