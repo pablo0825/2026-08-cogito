@@ -276,6 +276,40 @@ class ReplanStore:
                                   + ', '.join(sorted(changed - allowed - tool_paths)))
         expected = state['approval']['graph'] if activated else saved['graph']
         if actual['graph'] != expected: raise CogitoError('Project Graph drifted; preserve state and reconcile')
+        return effective_delivery
+
+    def _isolated_start_fault(self, label):
+        """Stable fault-injection seam for handoff recovery tests."""
+
+    def _start_successor_isolated(self, proposal):
+        from cogito_replan_start import checkout, control_paths, manifest, validation_binding
+        state = self.load(); new = self.successor(); current = new.load()
+        package = proposal['package']
+        if package['kind'] in {'maintenance', 'documentation'}:
+            raise CogitoError('RP isolated Start Gate requires dedicated successor worktrees')
+        paths = control_paths(package, current['package_path'])
+        controls = manifest(self.root, paths)
+        head = self._assert_source(proposal, activated=True)['head']
+        prepared = {'replan_id': self.replan_id, 'snapshot_hash': hash_json(state['snapshot']),
+                    'proposal_hash': state['proposal_hash'], 'delivery_head': head,
+                    'control_manifest_hash': hash_json(controls)}
+        with checkout(self.root, head, controls) as isolated:
+            if not state.get('start_isolation'):
+                self._emit('handoff-start-isolated', prepared,
+                           'replan-start-isolated:'+self.replan_id, 'handoff-start-isolated', prepared)
+            self._isolated_start_fault('after-isolation-created')
+            validation = validation_binding(self.root, isolated, head, controls)
+            # Validate the exact source again after constructing the disposable view.
+            self._assert_source(proposal, activated=True)
+            if not self.load().get('start_validation'):
+                self._emit('handoff-start-validated', {**prepared, 'validation': validation},
+                           'replan-start-validated:'+self.replan_id, 'handoff-start-validated', prepared)
+            self._isolated_start_fault('after-isolation-validated')
+            binding = {'replan_id': self.replan_id, 'snapshot_hash': prepared['snapshot_hash'],
+                       'proposal_hash': state['proposal_hash'], 'validation': validation}
+            new.start_gate('replan-start:'+self.replan_id, _replan_checkout=isolated,
+                           _replan_start=binding, _authority=new._GATE_AUTHORITY)
+            self._isolated_start_fault('after-start-event')
 
     @mutation
     def toolchain_propose(self, proposal, action_id):
@@ -295,6 +329,26 @@ class ReplanStore:
     @mutation
     def toolchain_reject(self, proposal_hash, reason, action_id):
         from cogito_replan_toolchain import reject
+        return reject(self, proposal_hash, reason, action_id)
+
+    @mutation
+    def handoff_tool_propose(self, proposal, action_id):
+        from cogito_replan_handoff_tool import propose
+        return propose(self, proposal, action_id)
+
+    @mutation
+    def handoff_tool_review(self, review, action_id):
+        from cogito_replan_handoff_tool import review as review_handoff_tool
+        return review_handoff_tool(self, review, action_id)
+
+    @mutation
+    def handoff_tool_approve(self, proposal_hash, approver_id, action_id):
+        from cogito_replan_handoff_tool import approve
+        return approve(self, proposal_hash, approver_id, action_id)
+
+    @mutation
+    def handoff_tool_reject(self, proposal_hash, reason, action_id):
+        from cogito_replan_handoff_tool import reject
         return reject(self, proposal_hash, reason, action_id)
 
     @mutation
@@ -467,6 +521,14 @@ class ReplanStore:
         new.record('package-approved',payload,'replan-approval:'+self.replan_id,new._GATE_AUTHORITY)
         path.chmod(0o444)
 
+    def _assert_published_successor(self):
+        state = self.load(); new = self.successor(); current = new.load()
+        package = state['proposal']['package']
+        path = self.root / f'docs/cogito/packages/{new.run_id}.json'
+        if (current.get('package_hash') != package_hash(package) or not path.is_file()
+                or package_hash(load_json(path)) != package_hash(package)):
+            raise CogitoError('published successor changed during handoff recovery')
+
     def _adoption(self, proposal, row, source_tree_only=False, target_tree=None):
         from cogito_replan_adoption import validate_adoption
         state=self.load(); source=self.source(); st=source.load(); task=st['tasks'][row['source_task_id']]
@@ -484,8 +546,11 @@ class ReplanStore:
         state=self.load()
         if state['state'] not in {'ready-for-handoff','handing-off'}:
             raise CogitoError('handoff requires approved proposal')
-        self._publish_successor()
+        if state['state']=='ready-for-handoff': self._publish_successor()
+        else: self._assert_published_successor()
         state=self.load(); proposal=state['proposal']; graphpath=self.root/'docs/cogito/project-graph.json'
+        if state.get('handoff_tool_status') in {'reviewing','awaiting-approval'}:
+            raise CogitoError('finish or reject the pending handoff tool repair before resuming handoff')
         targetgraph=state['approval']['graph']
         currentgraph=load_json(graphpath)
         if state['state']=='ready-for-handoff':
@@ -497,7 +562,7 @@ class ReplanStore:
             atomic_write_json(graphpath,targetgraph)
         new=self.successor()
         if new.load()['state']=='start-gate':
-            new.start_gate('replan-start:'+self.replan_id)
+            self._start_successor_isolated(proposal)
         if new.load()['state']!='executing': raise CogitoError('successor drifted during handoff')
         for row in proposal['work']:
             if row['source_task_id'] in self.load()['transfers']: continue

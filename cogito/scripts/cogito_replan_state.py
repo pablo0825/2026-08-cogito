@@ -1,7 +1,7 @@
 """Independent, append-only replanning lifecycle; never rewrites a run."""
 from __future__ import annotations
 from typing import Any, Mapping, Sequence
-from cogito_common import CogitoError
+from cogito_common import CogitoError, hash_json
 
 TERMINAL = {'completed', 'abandoned', 'disposition'}
 TRANSITIONS = {
@@ -12,6 +12,8 @@ TRANSITIONS = {
     'proposal-rejected': ({'reviewing', 'awaiting-approval'}, 'awaiting-decision'),
     'successor-approved': ({'awaiting-approval'}, 'ready-for-handoff'),
     'handoff-started': ({'ready-for-handoff'}, 'handing-off'),
+    'handoff-start-isolated': ({'handing-off'}, 'handing-off'),
+    'handoff-start-validated': ({'handing-off'}, 'handing-off'),
     'work-transfer-planned': ({'handing-off'}, 'handing-off'),
     'work-transferred': ({'handing-off'}, 'handing-off'),
     'handoff-completed': ({'handing-off'}, 'completed'),
@@ -38,6 +40,36 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {'state': None, 'transfers': {}, 'transfer_plans': {}}
     for event in events:
         kind, payload = event.get('type'), event.get('payload')
+        if kind in {'handoff-tool-proposed', 'handoff-tool-reviewed', 'handoff-tool-approved', 'handoff-tool-rejected'}:
+            from cogito_replan_handoff_tool import validate_proposal
+            from cogito_replan_toolchain_rules import validate_review, text
+            if result.get('state') != 'handing-off' or not isinstance(payload, dict):
+                raise CogitoError('handoff tool repair requires handing-off state')
+            if kind == 'handoff-tool-proposed':
+                proposal = payload.get('proposal'); validate_proposal(proposal, result)
+                if payload.get('proposal_hash') != hash_json(proposal):
+                    raise CogitoError('handoff tool proposal hash mismatch')
+                result.update(handoff_tool_proposal=proposal,
+                              handoff_tool_proposal_hash=payload['proposal_hash'],
+                              handoff_tool_review=None, handoff_tool_status='reviewing')
+            elif kind == 'handoff-tool-reviewed':
+                if result.get('handoff_tool_status') != 'reviewing':
+                    raise CogitoError('handoff tool review requires a current proposal')
+                validate_review(payload, result['handoff_tool_proposal'], result['handoff_tool_proposal_hash'])
+                result.update(handoff_tool_review=payload, handoff_tool_status='awaiting-approval')
+            elif kind == 'handoff-tool-approved':
+                if result.get('handoff_tool_status') != 'awaiting-approval' or payload.get('proposal_hash') != result['handoff_tool_proposal_hash']:
+                    raise CogitoError('handoff tool approval requires exact reviewed proposal')
+                text(payload.get('approver_id'), 'approver_id')
+                result.update(runtime_toolchain={'proposal_hash': payload['proposal_hash'],
+                    'proposal': result['handoff_tool_proposal'], 'review': result['handoff_tool_review'],
+                    'approver_id': payload['approver_id']}, handoff_tool_status='approved')
+            else:
+                if result.get('handoff_tool_status') not in {'reviewing', 'awaiting-approval'} or payload.get('proposal_hash') != result.get('handoff_tool_proposal_hash'):
+                    raise CogitoError('handoff tool rejection must reference pending proposal')
+                text(payload.get('reason'), 'reason'); result.update(handoff_tool_status='rejected', handoff_tool_rejection=payload)
+            result.update(sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))
+            continue
         if kind in {'toolchain-proposed', 'toolchain-reviewed', 'toolchain-approved', 'toolchain-rejected'}:
             from cogito_replan_toolchain_rules import project_toolchain
             if not isinstance(payload, dict):
@@ -45,7 +77,8 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             project_toolchain(result, kind, payload)
             result.update(sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))
             continue
-        if (result.get('toolchain_status') in {'reviewing', 'awaiting-approval'} and kind in {
+        if ((result.get('toolchain_status') in {'reviewing', 'awaiting-approval'}
+             or result.get('handoff_tool_status') in {'reviewing', 'awaiting-approval'}) and kind in {
                 'proposal-prepared', 'proposal-reviewed', 'successor-approved', 'handoff-started',
                 'work-transfer-planned', 'work-transferred', 'handoff-completed', 'replan-abandon-started'}):
             raise CogitoError('finish or reject the pending toolchain proposal before advancing the RP')
@@ -75,6 +108,10 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             result['approval'] = payload
         elif kind == 'handoff-started':
             result['handoff'] = payload
+        elif kind == 'handoff-start-isolated':
+            result['start_isolation'] = payload
+        elif kind == 'handoff-start-validated':
+            result['start_validation'] = payload
         elif kind == 'work-transfer-planned':
             result['transfer_plans'][payload['task_id']] = payload
         elif kind == 'work-transferred':

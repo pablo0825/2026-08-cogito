@@ -300,8 +300,9 @@ def approve(store, digest, approver_id, action_id):
 
 
 def assert_binding(store, state, actual_delivery, override=None, candidate=None):
-    adopted = state.get('toolchain')
-    if override is None and state.get('toolchain_status') in {'reviewing', 'awaiting-approval'}:
+    adopted = state.get('runtime_toolchain') or state.get('toolchain')
+    if override is None and (state.get('toolchain_status') in {'reviewing', 'awaiting-approval'}
+                             or state.get('handoff_tool_status') in {'reviewing', 'awaiting-approval'}):
         raise CogitoError('finish independent toolchain approval before continuing the RP')
     expected = override or (adopted['proposal']['after'] if adopted else None)
     if expected is None:
