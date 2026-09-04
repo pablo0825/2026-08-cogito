@@ -11,8 +11,10 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from cogito_common import CogitoError
+from cogito_events import read_events
 
 
 def git_bytes(
@@ -52,6 +54,39 @@ def tree_entries(
 def sha256_digest(data: bytes) -> str:
     """Return the content digest used by runtime journal bindings."""
     return hashlib.sha256(data).hexdigest()
+
+
+def journal_binding(path: Path) -> dict[str, Any] | None:
+    """Bind the exact bytes and event-chain cursor of an append-only journal."""
+    events = read_events(path)
+    if not events:
+        return None
+    content = path.read_bytes()
+    return {
+        'size': len(content),
+        'sha256': sha256_digest(content),
+        'sequence': len(events),
+        'event_hash': events[-1]['event_hash'],
+    }
+
+
+def journal_suffix(path: Path, binding: Any, label: str) -> list[dict[str, Any]]:
+    """Verify an immutable journal prefix and return later valid events."""
+    if (not isinstance(binding, dict)
+            or set(binding) != {'size', 'sha256', 'sequence', 'event_hash'}):
+        raise CogitoError(f'invalid saved {label} journal binding')
+    size, sequence = binding.get('size'), binding.get('sequence')
+    if (type(size) is not int or size < 0 or type(sequence) is not int
+            or sequence < 1 or not isinstance(binding.get('sha256'), str)
+            or not isinstance(binding.get('event_hash'), str)):
+        raise CogitoError(f'invalid saved {label} journal binding')
+    events = read_events(path)
+    content = path.read_bytes() if events else b''
+    if (len(content) < size or sha256_digest(content[:size]) != binding['sha256']
+            or len(events) < sequence
+            or events[sequence - 1]['event_hash'] != binding['event_hash']):
+        raise CogitoError(f'{label} event history changed after snapshot')
+    return events[sequence:]
 
 
 def tree_without_paths(

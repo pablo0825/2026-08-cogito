@@ -14,6 +14,8 @@ from cogito_common import CogitoError
 from cogito_events import read_events
 from cogito_product_snapshot import (
     git_bytes,
+    journal_binding,
+    journal_suffix,
     sha256_digest,
     tree_entries,
     tree_without_paths,
@@ -73,11 +75,9 @@ class ReplanRuntime:
                 raise CogitoError(f'RP synchronization file must be empty: {relative}')
         for relative in sorted(self.logs):
             path = self.safe_path(relative)
-            events = read_events(path)
-            if events:
-                content = path.read_bytes()
-                bindings[relative] = dict(size=len(content), sha256=sha256_digest(content),
-                                          sequence=len(events), event_hash=events[-1]['event_hash'])
+            binding = journal_binding(path)
+            if binding is not None:
+                bindings[relative] = binding
         return bindings
 
     def assert_logs(self, bindings: dict[str, Any]) -> None:
@@ -86,13 +86,9 @@ class ReplanRuntime:
         for relative, binding in bindings.items():
             if relative not in self.logs or not isinstance(binding, dict):
                 raise CogitoError('invalid RP runtime journal binding')
-            events = read_events(self.safe_path(relative))
-            size, count = binding.get('size'), binding.get('sequence')
-            if type(size) is not int or size < 0 or type(count) is not int or count < 1:
-                raise CogitoError('invalid RP runtime journal binding')
-            content = self.safe_path(relative).read_bytes() if events else b''
-            if (len(content) < size or sha256_digest(content[:size]) != binding.get('sha256')
-                    or len(events) < count or events[count - 1]['event_hash'] != binding.get('event_hash')):
+            try:
+                journal_suffix(self.safe_path(relative), binding, 'RP runtime')
+            except CogitoError:
                 raise CogitoError(f'RP runtime event history changed: {relative}')
 
     def source_files(self) -> dict[str, Any]:
