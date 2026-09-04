@@ -12,8 +12,6 @@ TRANSITIONS = {
     'proposal-rejected': ({'reviewing', 'awaiting-approval'}, 'awaiting-decision'),
     'successor-approved': ({'awaiting-approval'}, 'ready-for-handoff'),
     'handoff-started': ({'ready-for-handoff'}, 'handing-off'),
-    'handoff-start-isolated': ({'handing-off'}, 'handing-off'),
-    'handoff-start-validated': ({'handing-off'}, 'handing-off'),
     'work-transfer-planned': ({'handing-off'}, 'handing-off'),
     'work-transferred': ({'handing-off'}, 'handing-off'),
     'handoff-completed': ({'handing-off'}, 'completed'),
@@ -95,10 +93,18 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         elif kind == 'replan-stopped':
             result['snapshot'] = payload['snapshot']
         elif kind == 'proposal-prepared':
-            if (payload.get('proposal', {}).get('start_artifact_hash') is not None
-                    and payload.get('proposal_hash') != hash_json(payload['proposal'])):
-                raise CogitoError('new RP proposal hash does not match its content')
-            result.update(proposal=payload['proposal'], proposal_hash=payload['proposal_hash'], review=None)
+            proposal = payload.get('proposal')
+            if not isinstance(proposal, dict):
+                raise CogitoError('RP proposal must be an object')
+            artifact = proposal.get('start_artifact')
+            artifact_hash = proposal.get('start_artifact_hash')
+            if ((artifact is None) != (artifact_hash is None)
+                    or (artifact is not None
+                        and (not isinstance(artifact, dict) or artifact_hash != hash_json(artifact)))):
+                raise CogitoError('RP proposal contains an invalid immutable Start artifact')
+            if artifact is not None and payload.get('proposal_hash') != hash_json(proposal):
+                raise CogitoError('RP proposal hash does not match its content')
+            result.update(proposal=proposal, proposal_hash=payload['proposal_hash'], review=None)
         elif kind == 'proposal-reviewed':
             if payload['proposal_hash'] != result['proposal_hash']:
                 raise CogitoError('review is not bound to current proposal')
@@ -114,10 +120,6 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             result['approval'] = payload
         elif kind == 'handoff-started':
             result['handoff'] = payload
-        elif kind == 'handoff-start-isolated':
-            result['start_isolation'] = payload
-        elif kind == 'handoff-start-validated':
-            result['start_validation'] = payload
         elif kind == 'work-transfer-planned':
             result['transfer_plans'][payload['task_id']] = payload
         elif kind == 'work-transferred':

@@ -87,20 +87,19 @@ New-format proposals never:
 
 - create or remove a Git worktree;
 - create directories or copy, unlink, write, or chmod control files;
-- emit `handoff-start-isolated` or `handoff-start-validated`;
+- emit intermediate Start materialization checkpoints;
 - create Bundle preparation, anchoring, validation, cleanup, or repair events;
 - add a Start recovery command.
 
 Worker layout creation and validation move to the existing formal transfer/create mutation boundary. Package publication, Project Graph activation, `work-transfer-planned`, `work-transferred`, and their recovery remain because they represent real durable mutations.
 
-#### Legacy compatibility
+#### Legacy retirement
 
-- New proposals carrying `start_artifact_hash` use immutable-object Start validation.
-- Old proposals continue through the legacy handoff path.
-- Legacy readers continue to accept both handoff Start checkpoints and old `start-gate-passed` payloads.
+- Every approvable proposal carries `start_artifact_hash` and uses immutable-object Start validation.
+- Proposals without a Start artifact remain historical evidence but cannot be approved or handed off.
 - Existing executing or completed successors are not re-gated.
 - Old proposals and approvals are never supplemented with a generated artifact hash.
-- Legacy recovery remains until inventory proves there are no unfinished legacy handoffs.
+- The detached-worktree fallback and its Start checkpoint events are removed after the unfinished legacy handoffs are withdrawn.
 
 #### Phase 1 tests
 
@@ -170,4 +169,3 @@ Stop implementation and revisit the design if any phase requires:
 ## Scope and trust boundary
 
 Phase 1 protects against hostile or malformed repository content, unauthorized deltas, Git configuration ambiguity, accidental drift, crashes, replay, and cooperating concurrent writers. It does not protect an environment where the operating system, approval identity channel, selected Git executable, bootstrap verifier, or same-UID actor capable of replacing the Gate and complete journal history is compromised. That stronger threat model requires signed or externally anchored approvals.
-

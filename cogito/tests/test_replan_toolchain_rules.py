@@ -174,18 +174,21 @@ class ReplanToolchainRulesTests(unittest.TestCase):
             self.assertEqual(state, before)
 
     def test_pending_toolchain_blocks_product_approval_in_event_projection(self):
+        artifact = {'schema_version': 1, 'case': 'pending-toolchain'}
+        product = {'start_artifact': artifact, 'start_artifact_hash': hash_json(artifact)}
+        product_hash = hash_json(product)
         events = [
             dict(type='replan-created', payload=dict(
                 replan_id='RP-contract', source_run_id='DEV-old', successor_run_id='DEV-next',
                 source_package_hash='d' * 64, reason='New dependency requirement')),
             dict(type='replan-stopped', payload=dict(snapshot=deepcopy(self.state['snapshot']))),
-            dict(type='proposal-prepared', payload=dict(proposal={}, proposal_hash='2' * 64)),
-            dict(type='proposal-reviewed', payload=dict(proposal_hash='2' * 64)),
+            dict(type='proposal-prepared', payload=dict(proposal=product, proposal_hash=product_hash)),
+            dict(type='proposal-reviewed', payload=dict(proposal_hash=product_hash)),
             dict(type='toolchain-proposed', payload=dict(proposal=self.proposal, proposal_hash=self.digest)),
         ]
         self.assertEqual(project_replan(events)['toolchain_status'], 'reviewing')
         with self.assertRaises(CogitoError):
-            project_replan(events + [dict(type='successor-approved', payload=dict(proposal_hash='2' * 64))])
+            project_replan(events + [dict(type='successor-approved', payload=dict(proposal_hash=product_hash))])
 
     def test_rejection_never_grants_toolchain_approval(self):
         state = deepcopy(self.state)

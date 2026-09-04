@@ -9,7 +9,7 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from cogito_common import CogitoError, hash_json
@@ -17,7 +17,6 @@ from cogito_contracts import package_hash, validate_package_with_limits
 from cogito_git_objects import HardenedObjectReader, TreeEntry
 from cogito_planning import validate_snapshot
 from cogito_project_graph import validate_project_graph
-from cogito_replan_start import control_paths
 
 
 MANIFEST_FIELDS = {
@@ -27,6 +26,26 @@ MANIFEST_FIELDS = {
     "project_graph_hash", "effective_contract_hash", "controls", "policy_digest",
     "workflow_digest", "tool_digest", "verifier_digest",
 }
+
+
+def _safe_control_path(path: str) -> bool:
+    value = PurePosixPath(path)
+    return (bool(path) and not value.is_absolute() and '..' not in value.parts
+            and '.' not in value.parts and '\0' not in path
+            and path == '/'.join(value.parts))
+
+
+def control_paths(package: Mapping[str, Any], package_path: str) -> list[str]:
+    paths = {package_path, "docs/cogito/project-graph.json"}
+    for item in package["slices"]:
+        paths.update((item["spec"]["path"], item["plan"]["path"]))
+    paths.update(item["path"] for item in package["source_registry"])
+    shared = package.get("shared_understanding") or {}
+    if shared.get("path"):
+        paths.add(shared["path"])
+    if not all(_safe_control_path(path) for path in paths):
+        raise CogitoError("Start artifact contains an unsafe control path")
+    return sorted(paths)
 
 
 @dataclass(frozen=True)

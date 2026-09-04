@@ -90,10 +90,6 @@ class ReplanIsolatedStartTests(GitTestCase):
         self.assertEqual(binding['replan_id'], rp.replan_id)
         self.assertEqual(binding['snapshot_hash'], hash_json(checkpoint))
         self.assertEqual(binding['start_artifact_hash'], rp.load()['proposal']['start_artifact_hash'])
-        rp_types = [event['type'] for event in read_events(rp.events_path)]
-        self.assertEqual(rp_types.count('handoff-start-isolated'), 0)
-        self.assertEqual(rp_types.count('handoff-start-validated'), 0)
-
         rp_events = rp.events_path.read_bytes()
         successor_events = successor.events_path.read_bytes()
         self.assertEqual(rp.handoff('handoff')['state'], 'completed')
@@ -141,8 +137,6 @@ class ReplanIsolatedStartTests(GitTestCase):
         self.assertEqual(rp.handoff('handoff')['state'], 'completed')
         rp_types = [event['type'] for event in read_events(rp.events_path)]
         new_types = [event['type'] for event in read_events(successor.events_path)]
-        self.assertEqual(rp_types.count('handoff-start-isolated'), 0)
-        self.assertEqual(rp_types.count('handoff-start-validated'), 0)
         self.assertEqual(new_types.count('start-gate-passed'), 1)
         self.assertEqual(rp_types.count('handoff-completed'), 1)
         self.assertEqual(rp.load()['snapshot'], checkpoint)

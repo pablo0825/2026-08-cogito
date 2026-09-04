@@ -19,6 +19,12 @@ class ReplanStateTests(unittest.TestCase):
     def add(self, kind, payload):
         return append_event(self.path, dict(type=kind,payload=payload))
 
+    @staticmethod
+    def proposal(version):
+        artifact = {'schema_version': 1, 'version': version}
+        return {'version': version, 'start_artifact': artifact,
+                'start_artifact_hash': hash_json(artifact)}
+
     def test_fence_prevents_all_source_mutations_and_successor_execution(self):
         for run, operation in [('DEV-old','resume_gate'), ('DEV-old','record'), ('DEV-new','start_gate'), ('DEV-new','approve_package'), ('DEV-other','approve_package')]:
             with self.subTest(run=run, operation=operation), self.assertRaises(CogitoError):
@@ -37,26 +43,27 @@ class ReplanStateTests(unittest.TestCase):
 
     def test_revision_invalidates_review_without_losing_history(self):
         self.add('replan-stopped',{'snapshot':{}})
-        self.add('proposal-prepared',{'proposal':{'version':1},'proposal_hash':'first'})
-        self.add('proposal-reviewed',{'proposal_hash':'first','reviewer':'R'})
-        self.add('proposal-prepared',{'proposal':{'version':2},'proposal_hash':'second'})
+        first = self.proposal(1); second = self.proposal(2)
+        self.add('proposal-prepared',{'proposal':first,'proposal_hash':hash_json(first)})
+        self.add('proposal-reviewed',{'proposal_hash':hash_json(first),'reviewer':'R'})
+        self.add('proposal-prepared',{'proposal':second,'proposal_hash':hash_json(second)})
         state=project_replan(read_events(self.path))
         self.assertEqual(state['state'],'reviewing')
         self.assertIsNone(state['review'])
         self.assertEqual(len(read_events(self.path)),5)
 
-    def test_legacy_approval_without_start_artifact_remains_readable(self):
+    def test_proposal_without_start_artifact_remains_readable_as_history(self):
         self.add('replan-stopped', {'snapshot': {}})
-        self.add('proposal-prepared', {'proposal': {'version': 1}, 'proposal_hash': 'legacy'})
-        self.add('proposal-reviewed', {'proposal_hash': 'legacy', 'reviewer': 'R'})
-        self.add('successor-approved', {'proposal_hash': 'legacy', 'graph': {}})
-        state = project_replan(read_events(self.path))
-        self.assertEqual(state['state'], 'ready-for-handoff')
-        self.assertNotIn('start_artifact_hash', state['approval'])
+        state = project_replan([*read_events(self.path), {
+            'type': 'proposal-prepared',
+            'payload': {'proposal': {'version': 1}, 'proposal_hash': 'legacy'},
+        }])
+        self.assertEqual(state['state'], 'reviewing')
+        self.assertNotIn('start_artifact_hash', state['proposal'])
 
     def test_new_approval_must_bind_proposal_start_artifact(self):
         self.add('replan-stopped', {'snapshot': {}})
-        proposal = {'start_artifact_hash': 'a' * 64}
+        proposal = self.proposal(1)
         self.add('proposal-prepared', {
             'proposal': proposal, 'proposal_hash': hash_json(proposal)})
         self.add('proposal-reviewed', {'proposal_hash': hash_json(proposal), 'reviewer': 'R'})
@@ -69,11 +76,11 @@ class ReplanStateTests(unittest.TestCase):
 
     def test_new_proposal_hash_must_match_content(self):
         self.add('replan-stopped', {'snapshot': {}})
+        proposal = self.proposal(1)
         with self.assertRaisesRegex(CogitoError, 'proposal hash'):
             project_replan([*read_events(self.path), {
                 'type': 'proposal-prepared',
-                'payload': {'proposal': {'start_artifact_hash': 'a' * 64},
-                            'proposal_hash': 'not-the-content-hash'},
+                'payload': {'proposal': proposal, 'proposal_hash': 'not-the-content-hash'},
             }])
 
     def test_reentrant_project_lock(self):

@@ -278,37 +278,6 @@ class ReplanStore:
         if actual['graph'] != expected: raise CogitoError('Project Graph drifted; preserve state and reconcile')
         return effective_delivery
 
-    def _isolated_start_fault(self, label):
-        """Stable fault-injection seam for handoff recovery tests."""
-
-    def _start_successor_isolated(self, proposal):
-        from cogito_replan_start import checkout, control_paths, manifest, validation_binding
-        state = self.load(); new = self.successor(); current = new.load()
-        package = proposal['package']
-        paths = control_paths(package, current['package_path'])
-        controls = manifest(self.root, paths)
-        head = self._assert_source(proposal, activated=True)['head']
-        prepared = {'replan_id': self.replan_id, 'snapshot_hash': hash_json(state['snapshot']),
-                    'proposal_hash': state['proposal_hash'], 'delivery_head': head,
-                    'control_manifest_hash': hash_json(controls)}
-        with checkout(self.root, head, controls) as isolated:
-            if not state.get('start_isolation'):
-                self._emit('handoff-start-isolated', prepared,
-                           'replan-start-isolated:'+self.replan_id, 'handoff-start-isolated', prepared)
-            self._isolated_start_fault('after-isolation-created')
-            validation = validation_binding(self.root, isolated, head, controls)
-            # Validate the exact source again after constructing the disposable view.
-            self._assert_source(proposal, activated=True)
-            if not self.load().get('start_validation'):
-                self._emit('handoff-start-validated', {**prepared, 'validation': validation},
-                           'replan-start-validated:'+self.replan_id, 'handoff-start-validated', prepared)
-            self._isolated_start_fault('after-isolation-validated')
-            binding = {'replan_id': self.replan_id, 'snapshot_hash': prepared['snapshot_hash'],
-                       'proposal_hash': state['proposal_hash'], 'validation': validation}
-            new.start_gate('replan-start:'+self.replan_id, _replan_checkout=isolated,
-                           _replan_start=binding, _authority=new._GATE_AUTHORITY)
-            self._isolated_start_fault('after-start-event')
-
     @mutation
     def toolchain_propose(self, proposal, action_id):
         from cogito_replan_toolchain import propose
@@ -505,6 +474,8 @@ class ReplanStore:
             if state['state']!='awaiting-approval' or proposal_hash!=state['proposal_hash']:
                 raise CogitoError('human approval must reference independently reviewed current proposal')
             proposal=state['proposal']
+            if not proposal.get('start_artifact_hash'):
+                raise CogitoError('RP proposal without an immutable Start artifact cannot be approved')
             from cogito_disposition_scope import check_package
             check_package(self.root, proposal['package'], state['successor_run_id'])
             self._assert_source(proposal)
@@ -516,9 +487,8 @@ class ReplanStore:
             new._validate_policy(proposal['package'])
             new._planning_approval_binding(new.load())
             # Durable authorization precedes publication, so recovery never invents approval.
-            payload = {'proposal_hash': proposal_hash, 'graph': self._planned_graph(proposal)}
-            if proposal.get('start_artifact_hash'):
-                payload['start_artifact_hash'] = proposal['start_artifact_hash']
+            payload = {'proposal_hash': proposal_hash, 'graph': self._planned_graph(proposal),
+                       'start_artifact_hash': proposal['start_artifact_hash']}
             self._emit('successor-approved',payload,action_id,'approve',request)
         self._publish_successor()
         return self.load()
@@ -600,6 +570,8 @@ class ReplanStore:
         state=self.load()
         if state['state'] not in {'ready-for-handoff','handing-off'}:
             raise CogitoError('handoff requires approved proposal')
+        if not state['proposal'].get('start_artifact_hash'):
+            raise CogitoError('legacy RP proposal cannot hand off; withdraw it and prepare a new proposal')
         if state['proposal']['package']['kind'] in {'maintenance', 'documentation'}:
             raise CogitoError('RP isolated Start Gate requires dedicated successor worktrees')
         if state['state']=='ready-for-handoff': self._publish_successor()
@@ -618,10 +590,7 @@ class ReplanStore:
             atomic_write_json(graphpath,targetgraph)
         new=self.successor()
         if new.load()['state']=='start-gate':
-            if proposal.get('start_artifact_hash'):
-                self._start_successor_from_artifact(proposal)
-            else:
-                self._start_successor_isolated(proposal)
+            self._start_successor_from_artifact(proposal)
         if new.load()['state']!='executing': raise CogitoError('successor drifted during handoff')
         for row in proposal['work']:
             if row['source_task_id'] in self.load()['transfers']: continue
