@@ -173,6 +173,7 @@ class DispositionStore:
         """Allow only our journal cancellation and Graph release during replay."""
         from cogito_execution_registry import quiescent
         current = self._capture(extra_runs=saved['runs'])
+        cancelled_runs = set()
         for run_id, old in saved['runs'].items():
             if not quiescent(self.root, run_id, allow_external_receipts=True):
                 raise CogitoError('saved work has an active executor; stop before retry')
@@ -183,6 +184,7 @@ class DispositionStore:
                 raise CogitoError('source changed after saved stop intent')
             expected_tasks = copy.deepcopy(old['tasks'])
             if any(e['type'] == 'cancel' for e in events[anchor+1:]):
+                cancelled_runs.add(run_id)
                 for task in expected_tasks.values():
                     if task['status'] in {'leased', 'running'}:
                         task.update(status='blocked', released_by=self.disposition_id)
@@ -201,11 +203,71 @@ class DispositionStore:
         a,b = saved['delivery'],current['delivery']
         if any(a[key] != b[key] for key in ('head','branch','index_tree')):
             raise CogitoError('delivery changed after stop intent')
-        self._require_same_product(a['content_tree'], b['content_tree'])
+        allowed = self._validated_transition_runtime(
+            saved, a['content_tree'], b['content_tree'], cancelled_runs)
+        self._require_same_product(a['content_tree'], b['content_tree'], allowed)
 
-    def _require_same_product(self, first, second):
+    def _validated_transition_runtime(self, saved, first, second, cancelled_runs):
+        """Validate, then exclude only control files owned by this transition."""
+        from cogito_replan_snapshot import _git as git_bytes, entries
+
+        before, after = entries(self.root, first), entries(self.root, second)
+        base = f'.cogito/dispositions/{self.disposition_id}'
+        journal = base + '/events.jsonl'
+        state_path = base + '/state.json'
+        allowed = {
+            'docs/cogito/project-graph.json', journal, state_path,
+            journal + '.lock', '.cogito/project-mutation.lock',
+            base + '/archives/' + hash_json(saved) + '.json',
+        }
+        for run_id in cancelled_runs:
+            run_base = f'.cogito/runs/{run_id}'
+            allowed.update({run_base + '/events.jsonl', run_base + '/state.json',
+                            run_base + '/events.jsonl.lock'})
+
+        changed = set(filter(None, self.source()._git(
+            'diff', '--name-only', '--no-ext-diff', '--no-renames', '-z',
+            first, second, '--').split('\0')))
+        relevant = changed & allowed
+        if journal in relevant:
+            def blob(tree_entries, path):
+                item = tree_entries.get(path)
+                if item is None:
+                    return b''
+                mode, oid = item
+                if mode not in {'100644', '100755'}:
+                    raise CogitoError('disposition runtime must be a regular file: ' + path)
+                return git_bytes(self.root, 'cat-file', 'blob', oid)
+
+            old_content, new_content = blob(before, journal), blob(after, journal)
+            if old_content and not old_content.endswith(b'\n'):
+                raise CogitoError('saved disposition journal is incomplete')
+            if not new_content.startswith(old_content):
+                raise CogitoError('disposition event history changed after saved stop intent')
+            events = read_events(self.events_path)
+            suffix = events[len(old_content.splitlines()):]
+            expected = {
+                'disposition-stop-started': 'disposition-stop-intent:',
+                'disposition-pause-saved': 'disposition-pause-saved:',
+            }
+            if (len(suffix) != 1 or suffix[0]['type'] not in expected
+                    or not str(suffix[0].get('action_id', '')).startswith(expected[suffix[0]['type']])
+                    or suffix[0].get('payload', {}).get('snapshot') != saved):
+                raise CogitoError('unexpected disposition journal change during saved-work validation')
+
+        for path in relevant:
+            item = after.get(path) or before.get(path)
+            if item and item[0] not in {'100644', '100755'}:
+                raise CogitoError('disposition runtime must be a regular file: ' + path)
+            if path.endswith('.lock') and item:
+                content = git_bytes(self.root, 'cat-file', 'blob', item[1])
+                if content:
+                    raise CogitoError('disposition synchronization file must be empty: ' + path)
+        return allowed
+
+    def _require_same_product(self, first, second, allowed=()):
         changed = set(filter(None, self.source()._git('diff','--name-only','--no-ext-diff','--no-renames','-z',first,second,'--').split('\0')))
-        if changed - {'docs/cogito/project-graph.json'}:
+        if changed - {'docs/cogito/project-graph.json'} - set(allowed):
             raise CogitoError('saved product content changed; use a reviewed followup')
 
     def _validate_no_change(self, proposal):

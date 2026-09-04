@@ -1,10 +1,12 @@
 """Replanning exits preserve receipts and preflight irreversible decisions."""
+import json
 import unittest
 from unittest import mock
 
-from cogito_test_support import GitTestCase
+from cogito_test_support import GitTestCase, git
 from cogito_common import CogitoError
-from cogito_replan_state import project_replan, TERMINAL
+from cogito_events import read_events
+from cogito_replan_state import project_replan
 from cogito_replan_store import ReplanStore
 from cogito_disposition_store import DispositionStore
 from cogito_run_store import RunStore
@@ -88,6 +90,39 @@ class DispositionReplanIntegrationTests(GitTestCase):
         self.assertIn(successor.run_id, disposition.load()['snapshot']['runs'])
         self.assertEqual(source.load()['state'], 'blocked')
         with self.assertRaises(CogitoError): replan.handoff('original-handoff')
+
+    def test_stop_retry_does_not_repeat_archive_graph_release_or_rp_delegation(self):
+        repo, _, source, _, replan, _ = self.setup_replan()
+        disposition = DispositionStore(repo, 'DP-retry-stop')
+        disposition.begin(source.run_id, 'Withdraw replan safely', 'begin',
+                          replan_id=replan.replan_id)
+        original_emit = disposition._emit
+        interrupted = False
+        def fail_once(kind, *args, **kwargs):
+            nonlocal interrupted
+            if kind == 'disposition-stopped' and not interrupted:
+                interrupted = True
+                raise CogitoError('interrupted after Graph release')
+            return original_emit(kind, *args, **kwargs)
+        with mock.patch.object(disposition, '_emit', side_effect=fail_once):
+            with self.assertRaisesRegex(CogitoError, 'interrupted after Graph release'):
+                disposition.stop('same-stop')
+            refs = git(repo, 'for-each-ref', '--format=%(refname) %(objectname)',
+                       'refs/cogito/dispositions/DP-retry-stop')
+            graph = (repo/'docs/cogito/project-graph.json').read_bytes()
+            self.assertIsNone(json.loads(graph)['active_run_id'])
+            disposition.stop('same-stop')
+        self.assertEqual(git(repo, 'for-each-ref', '--format=%(refname) %(objectname)',
+                             'refs/cogito/dispositions/DP-retry-stop'), refs)
+        self.assertEqual((repo/'docs/cogito/project-graph.json').read_bytes(), graph)
+        disposition.stop('same-stop')
+        dp_events = [e for e in read_events(disposition.events_path)
+                     if e['type'] == 'disposition-stopped']
+        rp_events = [e for e in read_events(replan.events_path)
+                     if e['type'] == 'replan-disposition-started']
+        self.assertEqual(len(dp_events), 1)
+        self.assertEqual(len(rp_events), 1)
+        self.assertEqual(replan.load()['state'], 'disposition')
 
     def test_partial_handoff_saves_transferred_successor_worktree(self):
         repo, _, source, _, replan, _ = self.setup_replan()

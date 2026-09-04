@@ -89,6 +89,9 @@ class DispositionPauseTests(GitTestCase):
         self.assertEqual(disposition.load()['state'],'pausing')
         self.assertTrue(disposition.events_path.read_bytes().startswith(before))
         process.terminate();process.wait(timeout=5)
+        # The saved-work validator must classify only the pause-owned runtime,
+        # even when the repository exposes every other .cogito file as product.
+        (repo/'.gitignore').write_text('docs/cogito/packages/\n')
         state = disposition.pause('User wants a restoration proposal','pause')
         self.assertEqual(state['state'],'analyzing')
         self.assertEqual(followup.load()['state'],'cancelled')
