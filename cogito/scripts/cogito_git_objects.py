@@ -313,3 +313,11 @@ class HardenedObjectReader:
         if len(matches) != 1:
             raise CogitoError(f"required blob is missing from tree: {path}")
         return matches[0], self.read_object(matches[0].oid, "blob")
+
+    def require_ref(self, ref: str, expected_oid: object) -> None:
+        if not re.fullmatch(r"refs/cogito/start-artifacts/[0-9a-f]{64}", ref):
+            raise CogitoError("Start artifact ref is not content-addressed")
+        expected = self.require_full_oid(expected_oid, "Start artifact ref target")
+        actual = self._run_text("show-ref", "--verify", "--hash", ref).strip()
+        if actual != expected:
+            raise CogitoError("Start artifact ref does not retain the approved result tree")
