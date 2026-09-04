@@ -1,6 +1,7 @@
 """End-to-end compatibility for approved RP histories predating Start artifacts."""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import cogito_test_support
+import cogito_replan_start
 from cogito_common import CogitoError, canonical_json, hash_json
 from cogito_events import read_events
 from cogito_replan_start import _cleanup_checkout, checkout, manifest
@@ -137,6 +139,98 @@ class LegacyStartCheckoutSecurityTests(GitTestCase):
                 self.fail("unsafe checkout unexpectedly materialized")
         self.assertEqual(outside.read_text(encoding="utf-8"), "outside\n")
 
+    def test_target_replacement_race_cannot_write_through_symlink(self) -> None:
+        outside = self.repo.parent / "race-target.txt"
+        outside.write_text("outside\n", encoding="utf-8")
+        head = git(self.repo, "rev-parse", "HEAD")
+        controls = manifest(self.repo, ["base.txt"])
+        original_open = cogito_replan_start.os.open
+        attacked = False
+
+        def replace_before_create(path, flags, *args, **kwargs):
+            nonlocal attacked
+            if path == "base.txt" and flags & os.O_EXCL and not attacked:
+                attacked = True
+                os.symlink(outside, path, dir_fd=kwargs["dir_fd"])
+            return original_open(path, flags, *args, **kwargs)
+
+        with mock.patch("cogito_replan_start.os.open", side_effect=replace_before_create):
+            with self.assertRaisesRegex(CogitoError, "cannot safely write"):
+                with checkout(self.repo, head, controls):
+                    self.fail("target race unexpectedly succeeded")
+        self.assertTrue(attacked)
+        self.assertEqual(outside.read_text(encoding="utf-8"), "outside\n")
+
+    def test_partial_add_with_matching_registration_is_cleaned_and_retryable(self) -> None:
+        head = git(self.repo, "rev-parse", "HEAD")
+        controls = manifest(self.repo, ["base.txt"])
+        original_git = cogito_replan_start._git
+        interrupted = False
+
+        def interrupt_after_add(root, *args):
+            nonlocal interrupted
+            result = original_git(root, *args)
+            if args[:3] == ("worktree", "add", "--detach") and not interrupted:
+                interrupted = True
+                raise CogitoError("injected post-add timeout")
+            return result
+
+        with mock.patch("cogito_replan_start._git", side_effect=interrupt_after_add):
+            with self.assertRaisesRegex(CogitoError, "injected post-add timeout"):
+                with checkout(self.repo, head, controls):
+                    pass
+        self.assertEqual(len(git(self.repo, "worktree", "list", "--porcelain").split("worktree ")) - 1, 1)
+        with checkout(self.repo, head, controls):
+            pass
+
+    def test_partial_add_with_wrong_registration_is_preserved(self) -> None:
+        expected_head = git(self.repo, "rev-parse", "HEAD")
+        (self.repo / "second.txt").write_text("second\n", encoding="utf-8")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-qm", "second")
+        wrong_head = git(self.repo, "rev-parse", "HEAD")
+        controls = manifest(self.repo, ["base.txt"])
+        original_git = cogito_replan_start._git
+        captured: list[Path] = []
+
+        def register_wrong_head(root, *args):
+            if args[:3] == ("worktree", "add", "--detach"):
+                captured.append(Path(args[-2]))
+                original_git(root, *args[:-1], wrong_head)
+                raise CogitoError("injected ambiguous add")
+            return original_git(root, *args)
+
+        with mock.patch("cogito_replan_start._git", side_effect=register_wrong_head):
+            with self.assertRaisesRegex(CogitoError, "does not match this operation"):
+                with checkout(self.repo, expected_head, controls):
+                    pass
+        self.assertTrue(captured[0].exists())
+        self.assertIn(str(captured[0]), git(self.repo, "worktree", "list", "--porcelain"))
+        git(self.repo, "worktree", "remove", "--force", str(captured[0]))
+
+    def test_partial_add_with_unreadable_registry_is_preserved(self) -> None:
+        head = git(self.repo, "rev-parse", "HEAD")
+        controls = manifest(self.repo, ["base.txt"])
+        original_git = cogito_replan_start._git
+        captured: list[Path] = []
+
+        def lose_registry_access(root, *args):
+            if args[:3] == ("worktree", "add", "--detach"):
+                captured.append(Path(args[-2]))
+                original_git(root, *args)
+                raise CogitoError("injected post-add timeout")
+            if args[:3] == ("worktree", "list", "--porcelain"):
+                raise CogitoError("injected registry failure")
+            return original_git(root, *args)
+
+        with mock.patch("cogito_replan_start._git", side_effect=lose_registry_access):
+            with self.assertRaisesRegex(CogitoError, "registry state cannot be inspected"):
+                with checkout(self.repo, head, controls):
+                    pass
+        self.assertTrue(captured[0].exists())
+        self.assertIn(str(captured[0]), git(self.repo, "worktree", "list", "--porcelain"))
+        git(self.repo, "worktree", "remove", "--force", str(captured[0]))
+
     def test_git_remove_failure_is_reported_and_blocks_retry(self) -> None:
         head = git(self.repo, "rev-parse", "HEAD")
         controls = manifest(self.repo, ["base.txt"])
@@ -169,4 +263,4 @@ class LegacyStartCheckoutSecurityTests(GitTestCase):
         self.addCleanup(shutil.rmtree, directory, True)
         with mock.patch("cogito_replan_start.shutil.rmtree", side_effect=OSError("injected rmtree failure")):
             with self.assertRaisesRegex(CogitoError, "injected rmtree failure"):
-                _cleanup_checkout(self.repo, directory, False)
+                _cleanup_checkout(self.repo, directory, None)

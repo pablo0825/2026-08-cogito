@@ -130,15 +130,39 @@ def _git(root: Path, *args: str):
         raise CogitoError(f'cannot prepare isolated Start Gate checkout: {exc}') from exc
 
 
-def _registered(root: Path, directory: Path) -> bool:
-    output = _git(root, 'worktree', 'list', '--porcelain')
+def _registration(root: Path, directory: Path):
+    output = _git(root, 'worktree', 'list', '--porcelain', '-z')
     wanted = str(directory.resolve())
-    return any(line.startswith('worktree ') and str(Path(line[9:]).resolve()) == wanted
-               for line in output.splitlines())
+    for block in output.split('\0\0'):
+        fields = {}
+        flags = set()
+        for line in block.split('\0'):
+            if not line:
+                continue
+            key, separator, value = line.partition(' ')
+            if separator:
+                fields[key] = value
+            else:
+                flags.add(key)
+        path = fields.get('worktree')
+        if path is not None and str(Path(path).resolve()) == wanted:
+            return fields, flags
+    return None
 
 
-def _cleanup_checkout(root: Path, directory: Path, added: bool) -> None:
-    if added:
+def _matches_registration(registration, head: str) -> bool:
+    if registration is None:
+        return False
+    fields, flags = registration
+    return fields.get('HEAD') == head and 'detached' in flags and 'bare' not in flags
+
+
+def _cleanup_checkout(root: Path, directory: Path, expected_head: str | None) -> None:
+    registration = _registration(root, directory)
+    if registration is not None:
+        if expected_head is None or not _matches_registration(registration, expected_head):
+            raise CogitoError('isolated Start Gate worktree registration does not match this operation; '
+                              f'preserving {directory} for inspection')
         try:
             result = subprocess.run(
                 ['git', '-C', str(root), 'worktree', 'remove', '--force', str(directory)],
@@ -150,7 +174,7 @@ def _cleanup_checkout(root: Path, directory: Path, added: bool) -> None:
             detail = result.stderr.strip()
             raise CogitoError('cannot clean isolated Start Gate worktree: '
                               + (detail or 'git worktree remove failed'))
-        if _registered(root, directory):
+        if _registration(root, directory) is not None:
             raise CogitoError('isolated Start Gate worktree remains registered after cleanup')
     if directory.exists() or directory.is_symlink():
         try:
@@ -176,10 +200,29 @@ def checkout(root: Path, head: str, controls):
                           f'inspect Git worktree registry and {directory}') from exc
     except OSError as exc:
         raise CogitoError(f'cannot create isolated Start Gate directory: {exc}') from exc
-    added = False
+    cleanup_allowed = True
     try:
-        _git(root, 'worktree', 'add', '--detach', str(directory), head)
-        added = True
+        try:
+            _git(root, 'worktree', 'add', '--detach', str(directory), head)
+        except CogitoError as add_error:
+            try:
+                registration = _registration(root, directory)
+            except CogitoError as inspect_error:
+                cleanup_allowed = False
+                raise CogitoError('isolated Start Gate worktree add failed and its registry state '
+                                  f'cannot be inspected; preserving {directory}') from inspect_error
+            if registration is not None and not _matches_registration(registration, head):
+                cleanup_allowed = False
+                raise CogitoError('isolated Start Gate worktree add failed and left a registration '
+                                  f'that does not match this operation; preserving {directory}') from add_error
+            raise
+        registration = _registration(root, directory)
+        if registration is None:
+            raise CogitoError('isolated Start Gate worktree add returned without a registry entry')
+        if not _matches_registration(registration, head):
+            cleanup_allowed = False
+            raise CogitoError('isolated Start Gate worktree registration does not match this operation; '
+                              f'preserving {directory} for inspection')
         for relative, entry in controls.items():
             content, mode = _read_regular(root, relative)
             if (hashlib.sha256(content).hexdigest() != entry['hash']
@@ -188,7 +231,8 @@ def checkout(root: Path, head: str, controls):
             _write_regular(directory, relative, content, mode)
         yield directory
     finally:
-        _cleanup_checkout(root, directory, added)
+        if cleanup_allowed:
+            _cleanup_checkout(root, directory, head)
 
 
 def validation_binding(root, checkout_root, head, controls):
