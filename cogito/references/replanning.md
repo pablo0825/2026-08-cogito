@@ -63,11 +63,15 @@ successor 使用新的 Slice ID，`lineage` 明確指向原 Slice。不得直接
 
 `handoff` 將核准的來源 task 路徑內容移入專用的新 branch/worktree，以新 commit 保留來自原 run 的來源說明。未提交內容來自已保存的 Git content tree，原 index、檔案與 commits 不改寫；omit 也不刪原成果。已整合內容自然包含在新 baseline，仍按影響分析決定是否重驗。
 
+Successor 的 Start Gate 在 repository 外建立 detached 暫存 worktree，從核准的 delivery HEAD 寫入精確綁定的 Package、Project Graph、Spec／Plan、Shared Understanding 與 source registry 後驗證。停止快照內既有且未變的 dirty 檔案不會進入這個 view，也不會因此成為 successor 交付範圍。Gate 在建立暫存 view 前後都重驗原 delivery、source events、Worker、Graph 與 runtime；Start event 保存 snapshot、proposal、control manifest 與暫存 content tree 的 binding。一般 Start Gate 仍要求原 checkout 乾淨。
+
 每個移植先記錄 before／after tree 與 commit，再寫入新 worktree，最後追加完成 receipt。重試只接受明確的未執行／已執行狀態；衝突或未知內容保持 handing-off 並回報，不覆寫外部改動。Project Graph 也比對原始／目標內容，不能以直接清 active_run_id 來修復。
 
 新任務的首個 lease 只允許精確符合已記錄承接 HEAD／tree 的例外起點，其他任務仍套用既有起點規則。符合 reuse 的 task 取得專用採認 receipt，引用原 evidence 與 reviewer；不改寫原 Result/evidence 的 run ID，不偽造新測試執行。`advance-adoptions` 可將完成採認且沒有其他可派工作的 wave 送入整合。新流程最後仍須執行新的 post-integration controlled checks 與既有結案 Gates。
 
 中斷後先 `status`，再沿用原 action ID 與參數重送 `begin`、`approve`、`handoff` 或 `abandon`。已落盤的核准不要求重複核准；提案內容改變則重新取得核准。來源、Graph 或承接 worktree 不符時停止並詢問，不猜測狀態、不刪 marker、不改事件。
+
+若 `handoff-started` 已落盤、successor 尚在 `start-gate`，且修正 Gate 本身需要新的 tool-only commit，使用 [RP 工具接軌](replan-toolchain.md) 的 handoff repair。它只適用於尚無 transfer plan／receipt、source 尚未 superseded 的邊界；修復核准後仍沿用原 handoff action ID。不得重新發布 Package、重寫產品核准或製造重複 receipt。
 
 ## CLI
 

@@ -1,0 +1,13 @@
+test_content_mode_stage_and_path_drift_are_rejected (test_replan_isolated_start.ReplanIsolatedStartTests.test_content_mode_stage_and_path_drift_are_rejected) ... ok
+test_handoff_uses_bound_isolated_start_and_preserves_root (test_replan_isolated_start.ReplanIsolatedStartTests.test_handoff_uses_bound_isolated_start_and_preserves_root) ... ok
+test_isolated_start_crash_retries_publish_each_event_once (test_replan_isolated_start.ReplanIsolatedStartTests.test_isolated_start_crash_retries_publish_each_event_once) ... ok
+test_committed_gate_only_repair_preserves_handoff_and_replays (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_committed_gate_only_repair_preserves_handoff_and_replays) ... ok
+test_mixed_product_commit_and_uncommitted_repair_are_rejected (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_mixed_product_commit_and_uncommitted_repair_are_rejected) ... ok
+test_pending_repair_blocks_original_handoff (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_pending_repair_blocks_original_handoff) ... ok
+test_repair_is_rejected_after_transfer_or_successor_start (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_repair_is_rejected_after_transfer_or_successor_start) ... ok
+test_unignored_runtime_handoff_requires_fresh_human_acceptance (test_replan_runtime_human_e2e.ReplanRuntimeHumanEndToEndTests.test_unignored_runtime_handoff_requires_fresh_human_acceptance) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 70.719s
+
+OK
