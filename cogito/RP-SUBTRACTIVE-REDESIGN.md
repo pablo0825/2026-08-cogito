@@ -96,7 +96,7 @@ Worker layout creation and validation move to the existing formal transfer/creat
 #### Legacy retirement
 
 - Every approvable proposal carries `start_artifact_hash` and uses immutable-object Start validation.
-- Proposals without a Start artifact remain historical evidence but cannot be approved or handed off.
+- Proposals without a Start artifact are unsupported and fail projection.
 - Existing executing or completed successors are not re-gated.
 - Old proposals and approvals are never supplemented with a generated artifact hash.
 - The detached-worktree fallback and its Start checkpoint events are removed after the unfinished legacy handoffs are withdrawn.

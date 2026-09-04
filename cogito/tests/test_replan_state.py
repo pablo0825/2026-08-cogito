@@ -52,14 +52,13 @@ class ReplanStateTests(unittest.TestCase):
         self.assertIsNone(state['review'])
         self.assertEqual(len(read_events(self.path)),5)
 
-    def test_proposal_without_start_artifact_remains_readable_as_history(self):
+    def test_proposal_without_start_artifact_is_rejected(self):
         self.add('replan-stopped', {'snapshot': {}})
-        state = project_replan([*read_events(self.path), {
-            'type': 'proposal-prepared',
-            'payload': {'proposal': {'version': 1}, 'proposal_hash': 'legacy'},
-        }])
-        self.assertEqual(state['state'], 'reviewing')
-        self.assertNotIn('start_artifact_hash', state['proposal'])
+        with self.assertRaisesRegex(CogitoError, 'immutable Start artifact'):
+            project_replan([*read_events(self.path), {
+                'type': 'proposal-prepared',
+                'payload': {'proposal': {'version': 1}, 'proposal_hash': 'legacy'},
+            }])
 
     def test_new_approval_must_bind_proposal_start_artifact(self):
         self.add('replan-stopped', {'snapshot': {}})

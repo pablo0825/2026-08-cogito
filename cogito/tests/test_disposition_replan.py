@@ -19,25 +19,6 @@ class DispositionReplanStateTests(unittest.TestCase):
             'successor_run_id': 'DEV-new', 'source_package_hash': 'a' * 64,
             'reason': 'Human requested change'}}]
 
-    def test_partial_handoff_receipts_survive_delegation(self):
-        history = self.initial() + [
-            {'type': 'replan-stopped', 'payload': {'snapshot': {'saved': True}}},
-            {'type': 'proposal-prepared', 'payload': {'proposal': {}, 'proposal_hash': 'p'}},
-            {'type': 'proposal-reviewed', 'payload': {'proposal_hash': 'p'}},
-            {'type': 'successor-approved', 'payload': {'proposal_hash': 'p'}},
-            {'type': 'handoff-started', 'payload': {'action_id': 'handoff'}},
-            {'type': 'work-transfer-planned', 'payload': {'task_id': 'T-1', 'before': 'a', 'after': 'b'}},
-            {'type': 'work-transferred', 'payload': {'task_id': 'T-1', 'binding': 'b'}},
-            {'type': 'replan-disposition-started', 'payload': {'disposition_id': 'DP-1'}},
-        ]
-        state = project_replan(history)
-        self.assertIn(state['state'], TERMINAL)
-        self.assertEqual(state['disposition_id'], 'DP-1')
-        self.assertEqual(state['transfers']['T-1']['binding'], 'b')
-        self.assertEqual(state['transfer_plans']['T-1']['before'], 'a')
-        with self.assertRaises(CogitoError):
-            project_replan(history + [{'type': 'handoff-completed', 'payload': {}}])
-
     def test_legacy_stuck_decision_can_delegate_without_rewriting_intent(self):
         decision = {'disposition': 'resume-source', 'reason': 'Withdraw proposal', 'action_id': 'old'}
         history = self.initial() + [

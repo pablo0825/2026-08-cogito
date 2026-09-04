@@ -94,15 +94,11 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             result['snapshot'] = payload['snapshot']
         elif kind == 'proposal-prepared':
             proposal = payload.get('proposal')
-            if not isinstance(proposal, dict):
-                raise CogitoError('RP proposal must be an object')
-            artifact = proposal.get('start_artifact')
-            artifact_hash = proposal.get('start_artifact_hash')
-            if ((artifact is None) != (artifact_hash is None)
-                    or (artifact is not None
-                        and (not isinstance(artifact, dict) or artifact_hash != hash_json(artifact)))):
-                raise CogitoError('RP proposal contains an invalid immutable Start artifact')
-            if artifact is not None and payload.get('proposal_hash') != hash_json(proposal):
+            if (not isinstance(proposal, dict)
+                    or not isinstance(proposal.get('start_artifact'), dict)
+                    or proposal.get('start_artifact_hash') != hash_json(proposal['start_artifact'])):
+                raise CogitoError('RP proposal requires an exact immutable Start artifact')
+            if payload.get('proposal_hash') != hash_json(proposal):
                 raise CogitoError('RP proposal hash does not match its content')
             result.update(proposal=proposal, proposal_hash=payload['proposal_hash'], review=None)
         elif kind == 'proposal-reviewed':
@@ -114,8 +110,8 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         elif kind == 'successor-approved':
             if payload['proposal_hash'] != result['proposal_hash']:
                 raise CogitoError('approval is not bound to current proposal')
-            artifact_hash = result['proposal'].get('start_artifact_hash')
-            if artifact_hash is not None and payload.get('start_artifact_hash') != artifact_hash:
+            artifact_hash = result['proposal']['start_artifact_hash']
+            if payload.get('start_artifact_hash') != artifact_hash:
                 raise CogitoError('approval is not bound to the current Start artifact')
             result['approval'] = payload
         elif kind == 'handoff-started':
