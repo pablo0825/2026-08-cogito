@@ -1,6 +1,7 @@
 """Task receipts remain historical; review and delivery bind current content."""
 
 import json
+import copy
 import sys
 from pathlib import Path
 
@@ -76,6 +77,44 @@ class AtomicVerificationTests(GitTestCase):
         self.assertNotEqual(evidence[-1]['head_commit'], results[-1]['head_commit'])
         store.complete_verification([evidence[-1]])
         self.review(store, results)
+
+    def test_integration_cannot_rewrite_an_earlier_task_inside_approved_paths(self):
+        repo, _, store, draft, results, evidence = self.wave()
+        store.complete_verification([evidence[-1]])
+        self.review(store, results)
+        git(repo, 'merge', '--no-ff', '-qm', 'integrate tasks', draft['slices'][0]['worker']['branch'])
+        (repo / 'src/a.txt').write_text('before\n')
+        git(repo, 'add', 'src/a.txt')
+        git(repo, 'commit', '--amend', '-qm', 'silently undo earlier Task during integration')
+        before = store.events_path.read_bytes()
+        with self.assertRaisesRegex(CogitoError, 'atomic integration'):
+            store.complete_integration(git(repo, 'rev-parse', 'HEAD'), 'FS-1')
+        self.assertEqual(store.events_path.read_bytes(), before)
+
+    def test_parallel_slices_merge_without_repeating_task_checks(self):
+        def parallel(draft):
+            second = copy.deepcopy(draft['slices'][0])
+            second['id'] = 'FS-2'
+            second['worker'].update(branch='codex/fs-2', worktree='.cogito/worktrees/FS-2')
+            draft['slices'].append(second)
+            draft['execution_dag']['tasks'][1]['slice_id'] = 'FS-2'
+            draft['execution_dag']['edges'] = []
+        repo, first_worker, store, draft = self.executing(parallel)
+        second_worker = repo / '.cogito/worktrees/FS-2'
+        git(repo, 'worktree', 'add', '-q', '-b', 'codex/fs-2', str(second_worker), draft['baseline_commit'])
+        first, ea = self.implement(store, first_worker)
+        second, eb = self.implement(store, second_worker, 'b')
+        store.transition('implementation-complete', {})
+        store.complete_verification([ea, eb])
+        self.review(store, [first, second])
+        for slice_id, branch in (('FS-1', 'codex/fs-1'), ('FS-2', 'codex/fs-2')):
+            git(repo, 'merge', '--no-ff', '-qm', 'integrate ' + slice_id, branch)
+            store.complete_integration(git(repo, 'rev-parse', 'HEAD'), slice_id)
+        post = self.check(store, repo, 'C-b', 'post-parallel')
+        self.assertEqual(store.decide_post_verification([post])['state'], 'finalizing')
+        self.assertEqual((repo / 'src/a.txt').read_text(), 'after\n')
+        self.assertEqual((repo / 'src/b.txt').read_text(), 'after\n')
+        self.assertEqual(len(store.load()['evidence']), 3)
 
     def test_fast_forward_reuses_identical_head_tree_and_contract_evidence(self):
         repo, worker, store, draft = self.executing()

@@ -943,6 +943,13 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             {"docs/cogito/project-graph.json"}, self._git_repo.read_blob,
             graph_hash=current["project_graph_hash"],
         )
+        if package.get("task_delivery") == "atomic":
+            from cogito_atomic_integration import validate_atomic_integration
+            validate_atomic_integration(
+                current["agent_results"], decision.task_ids, decision.source_heads,
+                decision.previous_delivery_head, commit_id,
+                {str(current["package_path"]), "docs/cogito/project-graph.json"}, self._git,
+            )
         payload: IntegrationCompletedPayload = {
             "commit_id": commit_id, "slice_id": slice_id or "mini-package",
             "task_ids": list(decision.task_ids), "source_heads": list(decision.source_heads),

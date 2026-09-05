@@ -14,7 +14,7 @@ from cogito_run_store import RunStore
 
 
 class AtomicTaskTests(GitTestCase):
-    def executing(self):
+    def executing(self, configure=None):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         repo = Path(temporary.name)
@@ -50,6 +50,8 @@ class AtomicTaskTests(GitTestCase):
         for field in ('spec', 'plan'):
             document = draft['slices'][0][field]
             document['hash'] = hashlib.sha256((repo / document['path']).read_bytes()).hexdigest()
+        if configure is not None:
+            configure(draft)
         store = RunStore(repo, draft['run_id'])
         store.create('feature', task_delivery='atomic')
         store.transition('shared-understanding-ready', {'shared_understanding_hash': 'b' * 64})

@@ -33,6 +33,8 @@ Atomic Package 本地只執行變更行為與受影響依賴的相關檢查，�
 
 Atomic `verify` 接收本波各 checkout 最新內容的 evidence，早期 Task 的 required evidence 已由其 Result 驗證並保留歷史，不要求重跑於後續 HEAD。Reviewer 仍逐 Task 看原 commit 範圍，並核對 checkout 沒有在最後 Task Result／正式驗證後變動。`post-verify` 只要求 `phase: integration` 的 required checks；至少一項作為最終內容依據。相同 HEAD、完整 content tree 及 effective contract 的證據可跨狀態轉移沿用；HEAD／內容／契約改變時執行必要的相關檢查，不猜測舊證據仍適用。不建立純跑測試的 Task 或空 commit。舊 Package 維持原驗證規則。
 
+Atomic 整合另以 Git `merge-tree --write-tree` 比對前一 delivery HEAD 與已審查 Task tip 的正常合併結果，拒絕在 integration commit 夾帶產品修改或撤銷已完成 Task；僅沿用 canonical Package／Project Graph 的精確控制文件例外。需要支援此命令的 Git。合併衝突或額外修改不能假裝成已驗證整合：保留現場、登錄 block，依既有 RP 重新安排需修改的工作；本版不新增整合修正狀態。一般無衝突的串行、平行 Slice 合併與 fast-forward 均可沿用。
+
 整合 Gate 除了檢查 source heads 與祖先關係，也比對前一 delivery HEAD 到 integration commit 的實際差異，拒絕超出 Package `approved_paths` 的產品檔案。此範圍包含合法 Technical Amendment 的修正，不另外縮限成原 task 路徑聯集。路徑以 NUL 分隔並將 rename 視為原路徑刪除與新路徑新增，檢查不改動 index。
 
 準備階段依 [Stage Commits](stage-commits.md) 分別保存已確認摘要、Boundary 與已核准 Package。這些 commits 在 Start Gate 前完成；Maintenance 的單一交付 commit 從 Start Gate HEAD 起算。
