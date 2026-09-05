@@ -177,6 +177,36 @@ class AtomicTaskTests(GitTestCase):
         with self.assertRaisesRegex(CogitoError, 'atomic corrections require amendment tasks'):
             store.enter_correction()
 
+    def test_failed_unrecorded_commit_can_be_corrected_without_losing_evidence(self):
+        _, worker, store, _ = self.executing()
+        self.lease(store)
+        base = git(worker, 'rev-parse', 'HEAD')
+        (worker / 'src/a.txt').write_text('wrong\n')
+        self.commit(worker)
+        failed = self.check(store, worker)
+        self.assertFalse(failed['passed'])
+        original_bytes = Path(failed['evidence_path']).read_bytes()
+        (worker / 'src/a.txt').write_text('after\n')
+        git(worker, 'add', 'src/a.txt')
+        git(worker, 'commit', '--amend', '-qm', 'fix unrecorded task')
+        passed = self.check(store, worker, action='fixed-check')
+        store.submit_agent_result(self.result(store, worker, [passed]))
+        store.update_task('T-a', 'complete', 'worker')
+        self.assertEqual(git(worker, 'rev-parse', 'HEAD^'), base)
+        self.assertEqual(Path(failed['evidence_path']).read_bytes(), original_bytes)
+
+    def test_complete_result_cannot_be_replaced_before_task_status_completion(self):
+        _, worker, store, _ = self.executing()
+        self.lease(store)
+        (worker / 'src/a.txt').write_text('after\n')
+        self.commit(worker)
+        evidence = self.check(store, worker)
+        store.submit_agent_result(self.result(store, worker, [evidence]))
+        git(worker, 'commit', '--amend', '-qm', 'rewrite after complete Result')
+        replacement = self.check(store, worker, action='replacement-check')
+        with self.assertRaisesRegex(CogitoError, 'cannot rewrite'):
+            store.submit_agent_result(self.result(store, worker, [replacement]))
+
     def test_zero_empty_multiple_and_merge_commits_are_rejected(self):
         for mode in ('zero', 'empty', 'multiple', 'merge'):
             with self.subTest(mode=mode):

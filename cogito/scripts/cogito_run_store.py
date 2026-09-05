@@ -576,6 +576,11 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         parents = self._git_at(worktree, "rev-list", "--parents", "-n", "1", head).split()[1:]
         if parents != [base] or not result["changed_paths"]:
             raise CogitoError("atomic task requires exactly one nonempty commit from its leased base")
+        if any(previous["task_id"] == result["task_id"] and previous["role"] == "implementer"
+               and previous["status"] == "complete"
+               and (previous["base_commit"], previous["head_commit"]) != (base, head)
+               for previous in snapshot.state["agent_results"]):
+            raise CogitoError("cannot rewrite an already recorded atomic commit")
         tree = self._require_atomic_clean(worktree, head, snapshot.state)
         evidence = [_load_json(Path(path)) for path in result["evidence"]]
         self._validate_evidence(self.approved_package(), evidence, snapshot=snapshot,

@@ -13,7 +13,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 - 初始化、恢復執行、執行 Gate action、修改專案或提交前，先讀適用的 `AGENTS.md`、專案政策與 Git 狀態，依 Gate 回傳的 `next_action` 操作。同一 Grilling action 內的連續純需求問答可沿用本輪已讀取的資訊，不因單題回答而重讀政策、重查 Git 或重新查詢 Gate；發現新事實缺口或資訊可能已變動時，補做相關查證。問答與保存時機依 [Grilling Workflow](references/grilling-workflow.md)。不得自行跳步、猜測狀態或繞過 guard；資料缺漏、矛盾或 Gate 失敗時 fail closed。
 - 一個 Development Package approval 是唯一正式開發核准。Shared Understanding confirmation 確認理解正確並授權提交該摘要；Boundary Gate pass 後提交邊界判斷，兩者都不授權實作。
 - Feature、Change、Correction 一律由 Coordinator 在專用 branch/worktree 派發 1–3 個 Worker；依 Project Graph DAG 動態安排，不存在執行模式選擇。Coordinator 串行整合回 Package 固定的 delivery branch。
-- Worker 不直接整合、不 push、不改寫 Git history。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
+- Worker 不直接整合、不 push，不改寫已發布或已登錄完成的 commits。Atomic Task 尚未發布、尚未登錄完成的暫存 commit 若檢查失敗，可在原 lease base 與 paths 內整理成一個 commit；保留舊 evidence 並重跑相關檢查。保留使用者既有變更；只修改 Package 或有效 Technical Amendment 允許的路徑。
 - Feature Slice 必須由不同於 Implementer 的 Reviewer 審查。只有符合客觀低風險條件的 Maintenance 可豁免一般開發審查；人工驗收退回修正仍須獨立審查。
 - 正式 checks 只由 controlled runner 執行；Agent 敘述不是證據。runner 比對 check 前後的 worktree snapshot，期間有變動即拒絕該次 evidence；只保留 bounded head/tail 診斷輸出，合計輸出超過 Policy/Package 固定上限時終止 check 並 fail closed。證據衝突時依「核准契約 > machine evidence > Agent description」保守處理。
 - 核准、Boundary、check closure、獨立審查、human applicability 與狀態轉移等敏感 verdict 只能由 runtime CLI 根據可驗證輸入計算。Agent 只回報觀察、證據與建議，不得用 boolean 自行宣告 guard 通過。
