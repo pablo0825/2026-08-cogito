@@ -132,3 +132,13 @@ def package(kind: str = "feature") -> dict:
             "worker": {"branch": "codex/fs-1", "worktree": ".cogito/worktrees/FS-1", "allowed_paths": ["src/**", "tests/**"]},
         }]
     return value
+
+
+def atomic_package(value: dict) -> dict:
+    """Use current task contracts in new-run fixtures; keep legacy builders intact."""
+    if value["kind"] in {"feature", "change", "correction"}:
+        value["task_delivery"] = "atomic"
+        for task in value["execution_dag"]["tasks"]:
+            task.update(responsibility=f"Implement {task['id']}",
+                        check_ids=[check["id"] for check in value["checks"] if check.get("required", True)])
+    return value

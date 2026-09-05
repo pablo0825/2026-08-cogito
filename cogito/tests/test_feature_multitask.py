@@ -14,6 +14,10 @@ import test_maintenance_corrections as corrections
 
 
 class FeatureCli(corrections.MaintenanceCli):
+    def create(self, kind):
+        # These cases exercise already-frozen legacy run compatibility.
+        return runtime.RunStore(self.repo, self.run_id).create(kind)
+
     def complete_integration(self, commit, slice_id):
         return self.call("integrate", "--commit-id", commit, "--slice-id", slice_id)
 

@@ -48,6 +48,10 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                 "shared_understanding_hash": None, "boundary": None,
                 "limits": dict(workflow["limits"]),
             }
+            if "task_delivery" in payload:
+                if payload["task_delivery"] != "atomic" or payload["kind"] not in {"feature", "change", "correction"}:
+                    raise CogitoError("invalid task delivery mode")
+                projection["task_delivery"] = "atomic"
             if payload.get("stage_commits") is True:
                 if not payload.get("checkpoint_head") or not payload.get("checkpoint_branch"):
                     raise CogitoError("stage commits require a Git baseline and branch")

@@ -244,8 +244,10 @@ def main(argv: list[str] | None = None) -> int:
             output = run_replan(repo, args.replan_args)
         elif args.command == "init":
             from cogito_checkpoints import is_frozen_successor
-            stage_commits = args.stage_commits if args.stage_commits is not None else not is_frozen_successor(repo, args.run_id)
-            output = RunStore(repo, args.run_id).create(args.kind, stage_commits=stage_commits)
+            frozen_successor = is_frozen_successor(repo, args.run_id)
+            stage_commits = args.stage_commits if args.stage_commits is not None else not frozen_successor
+            task_delivery = "atomic" if args.kind in {"feature", "change", "correction"} and not frozen_successor else None
+            output = RunStore(repo, args.run_id).create(args.kind, stage_commits=stage_commits, task_delivery=task_delivery)
         elif args.command == "delivery-summary":
             output = RunStore(repo, args.run_id).delivery_summary()
         elif args.command == "checkpoint":

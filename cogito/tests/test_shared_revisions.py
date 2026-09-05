@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cogito_test_support import COGITO, GitTestCase, git, init_repo, package
+from cogito_test_support import COGITO, GitTestCase, git, init_repo, package, atomic_package
 
 
 GATE = COGITO / "scripts/cogito_gate.py"
@@ -33,7 +33,7 @@ class SharedRevisionTests(GitTestCase):
             (self.repo / "docs" / f"{name}.md").write_text(f"{name}\n")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "baseline")
-        self.draft = package("feature")
+        self.draft = atomic_package(package("feature"))
         self.draft["baseline_commit"] = git(self.repo, "rev-parse", "HEAD")
         for item in self.draft["slices"]:
             for name in ("spec", "plan"):

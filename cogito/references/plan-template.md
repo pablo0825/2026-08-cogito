@@ -22,17 +22,22 @@
 ### Tests
 
 ## Tasks
-| Task ID | Depends On | Allowed Paths | Work | Completion Evidence |
+| Task ID | Depends On | Allowed Paths | Responsibility | Targeted Check IDs |
 |---|---|---|---|---|
-| T-001 | `none` | `<paths>` | <工作> | `<checks>` |
+| T-001 | `none` | `<paths>` | <單一行為或必要共同基礎，含測試與文件> | `<check_ids>` |
+
+每個 Task 獨立 commit。預計超過 15 個 production files 或包含可分離流程時，拆分或在此說明理由。
 
 ## Integration Strategy
 <順序、共享區域 owner、衝突策略與 delivery branch>
 
 ## Checks
-| Check ID | Acceptance IDs | Gate | Applicability | argv / Method |
-|---|---|---|---|---|
-| V-001 | AI-001 | `required` | `always` | `<argv array>` |
+| Check ID | Acceptance IDs | Gate | Phase | Applicability / Selection Reason | argv / Method |
+|---|---|---|---|---|---|
+| V-001 | AI-001 | `required` | `task` | <變更行為及受影響依賴> | `<argv array>` |
+| V-002 | AI-001 | `required` | `integration` | <整合後相關檢查> | `<argv array>` |
+
+完整 regression 由 CI 執行；本地只列相關檢查。CI 狀態依實際結果回報，不以本地通過代替。
 
 ## Human Integration
 | ID | Requirement | Applicability |

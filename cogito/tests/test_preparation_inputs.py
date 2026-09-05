@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cogito_test_support import COGITO, GitTestCase, git, init_repo, package
+from cogito_test_support import COGITO, GitTestCase, git, init_repo, package, atomic_package
 from cogito_common import CogitoError
 from cogito_events import append_event
 from cogito_run_store import RunStore
@@ -38,7 +38,7 @@ class PreparationInputTests(GitTestCase):
             (self.repo / "docs" / f"{name}.md").write_text(f"{name}\n", encoding="utf-8")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "baseline")
-        self.draft = package("feature")
+        self.draft = atomic_package(package("feature"))
         self.draft["baseline_commit"] = git(self.repo, "rev-parse", "HEAD")
         for item in self.draft["slices"]:
             for name in ("spec", "plan"):
@@ -102,6 +102,18 @@ class PreparationInputTests(GitTestCase):
         self.reject("shared-understanding-ready", {}, "ready")
         self.ready_and_confirm()
         self.transition("boundary-complete", self.draft["boundary"], "boundary")
+        self.finish_preparation()
+
+    def test_new_cli_run_requires_atomic_package_without_rewriting_candidate(self) -> None:
+        self.assertEqual(self.store.load()["task_delivery"], "atomic")
+        self.ready_and_confirm()
+        self.transition("boundary-complete", self.draft["boundary"], "boundary")
+        legacy = dict(self.draft)
+        legacy.pop("task_delivery")
+        before = self.snapshot()
+        with self.assertRaisesRegex(CogitoError, "new Development Packages require"):
+            self.store.prepare_package(legacy, "prepare")
+        self.assertEqual(self.snapshot(), before)
         self.finish_preparation()
 
     def test_invalid_boundary_evidence_leaves_no_write_and_action_id_can_be_corrected(self) -> None:

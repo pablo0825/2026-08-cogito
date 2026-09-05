@@ -24,6 +24,12 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 任務依賴以 `execution_dag.edges` 為準，`from` 是前置任務、`to` 是後續任務。Task 可省略 `depends_on`；若提供，其集合必須與 edges 的入邊一致，Gate 不會默默覆蓋矛盾的宣告。Mini Package 的 task 可省略 `slice_id` 或使用 `mini-package`，兩者都代表同一個工作單位。
 
+新的 Feature／Change／Correction Package 使用 `task_delivery: "atomic"`。每個 Task 必須有非空 `responsibility`、`paths`、`check_ids`；checks 使用 `phase: "task"` 或 `"integration"`（省略時為 integration）。`check_ids` 引用 required checks，Acceptance IDs 與選測理由寫在對應 check／Plan，不再另建 Commit Plan。至少保留一項 required integration check 驗證最終整合內容；最後一個 Task 可以引用並執行這項檢查。完整 regression 交由 CI，不列為例行本地檢查；既有 Project Policy 明定的 required checks 不可藉此降級。
+
+Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分，無法拆分的理由寫在既有 Plan。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
+
+新 `init` 的開發 run 會要求 atomic Package；歷史 run 與已凍結的 RP successor 保留原契約，沒有標記的舊 Package 不補寫、不改 hash。Maintenance／Documentation 維持原流程。
+
 `stop_conditions` 是隨 Package hash 凍結的停止政策。每筆可為非空文字，或包含 `id`、`condition`、`outcome` 的物件；`outcome` 可為 `blocked`、`awaiting-human`、`cancelled`。應寫明可觀察的情況、所需證據與預期處理方式，供 Coordinator 判讀。`cogito_contracts._validate_stop_conditions()` 只驗證格式，runtime 不解析條件文字、不持續監看，也不因 `outcome` 自動跳轉或取得取消授權。執行方式見 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。
 
 ## Package 核准前修訂

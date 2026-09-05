@@ -122,6 +122,7 @@ def validate_package_with_limits(
     _validate_stop_conditions(package["stop_conditions"])
     _validate_execution_dag(package, mini)
     _validate_checks(package)
+    _validate_task_delivery(package)
     validate_human_gate(package["human_gate"], frozen=True)
     limits = package["limits"]
     retry_names = ("transient_retries", "verification_corrections", "review_fix_cycles", "format_repairs")
@@ -252,6 +253,8 @@ def validate_check(check: Any) -> None:
         raise CogitoError("check cwd escapes the worktree")
     require_integer(check.get("timeout_seconds", 300), "timeout_seconds", 1, 3600)
     require_boolean(check.get("required", True), "check.required")
+    if "phase" in check:
+        require_choice(check["phase"], "check.phase", {"task", "integration"})
     _validate_environment_names(check.get("env_allowlist", []), "check.env_allowlist")
     for pattern in require_array(check.get("redact_patterns", []), "redact_patterns"):
         # An empty regular expression is valid; non-string values are not.
@@ -270,6 +273,32 @@ def _validate_checks(package: Mapping[str, Any]) -> None:
     check_ids = [check["id"] for check in checks]
     if len(check_ids) != len(set(check_ids)):
         raise CogitoError("check ids must be unique")
+
+
+def _validate_task_delivery(package: Mapping[str, Any]) -> None:
+    """Opt-in atomic delivery preserves the meaning and hashes of frozen Packages."""
+    if "task_delivery" not in package:
+        if any("phase" in check for check in package["checks"]):
+            raise CogitoError("check.phase requires atomic task delivery")
+        return
+    require_choice(package["task_delivery"], "task_delivery", {"atomic"})
+    if package["kind"] not in {"feature", "change", "correction"}:
+        raise CogitoError("atomic task delivery requires feature, change, or correction")
+    checks = {check["id"]: check for check in package["checks"]}
+    if not any(check.get("required", True) and check.get("phase", "integration") == "integration"
+               for check in checks.values()):
+        raise CogitoError("atomic task delivery requires a required integration check")
+    for task in package["execution_dag"]["tasks"]:
+        require_string(task.get("responsibility"), "task.responsibility")
+        require_paths(task.get("paths"), "task.paths", nonempty=True)
+        require_strings(task.get("check_ids"), "task.check_ids", nonempty=True)
+        check_ids = task["check_ids"]
+        if len(check_ids) != len(set(check_ids)):
+            raise CogitoError("task.check_ids must be unique")
+        for check_id in check_ids:
+            require_id(check_id, "task check id")
+            if check_id not in checks or checks[check_id].get("required", True) is not True:
+                raise CogitoError("task.check_ids must reference required checks")
 
 
 def validate_required_checks(
@@ -446,6 +475,7 @@ def materialize_contract_with_limits(
             for task in addition.get("added_tasks", []) for dependency in task.get("depends_on", [])
         )
         _validate_execution_dag(effective, mini)
+        _validate_task_delivery(effective)
         if slice_dependencies(dag) != frozen_dependencies:
             raise CogitoError("amendment cannot change approved Slice dependencies")
         amendment_ids.add(amendment["id"])

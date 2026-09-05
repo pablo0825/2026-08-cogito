@@ -15,6 +15,8 @@ class _OptionalTaskFields(TypedDict, total=False):
     slice_id: str | None
     paths: list[str]
     depends_on: list[str]
+    responsibility: str
+    check_ids: list[str]
     task_id: str
     agent_id: str
     worktree: str
@@ -66,6 +68,7 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    task_delivery: Literal["atomic"]
     stage_commits: bool
     checkpoint_head: str
     checkpoint_branch: str

@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from cogito_test_support import COGITO, GitTestCase, git, init_repo, package
+from cogito_test_support import COGITO, GitTestCase, git, init_repo, package, atomic_package
 from cogito_common import CogitoError, atomic_write_json
 from cogito_contracts import package_hash
 from cogito_run_store import RunStore
@@ -35,7 +35,7 @@ class PackageRevisionTests(GitTestCase):
             (repo / "docs" / f"{name}.md").write_text(f"{name}\n")
         git(repo, "add", ".")
         git(repo, "commit", "-qm", "baseline")
-        value = package(kind)
+        value = atomic_package(package(kind))
         value["baseline_commit"] = git(repo, "rev-parse", "HEAD")
         for item in value["slices"]:
             for name in ("spec", "plan"):

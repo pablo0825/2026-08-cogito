@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cogito_test_support import GitTestCase, COGITO, git, init_repo, minimal_package
+from cogito_test_support import GitTestCase, COGITO, git, init_repo, minimal_package, atomic_package
 from cogito_common import hash_json
 from cogito_contracts import package_hash
 
@@ -80,6 +80,7 @@ class GateCliContractTests(GitTestCase):
                 "limits": {"transient_retries": 2, "verification_corrections": 3, "review_fix_cycles": 3, "format_repairs": 2},
                 "stop_conditions": ["contract-drift"], "source_registry": [],
             }
+            atomic_package(package)
             draft = root / "package.json"
             draft.write_text(json.dumps(package))
             self.invoke(repo, "init", "--no-stage-commits", "--run-id", run_id, "--kind", "feature")

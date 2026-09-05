@@ -104,10 +104,14 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         )
 
     @run_mutation
-    def create(self, kind: str, *, stage_commits: bool = False) -> RunState:
+    def create(self, kind: str, *, stage_commits: bool = False, task_delivery: str | None = None) -> RunState:
         if self._events.exists():
             raise CogitoError(f"run already exists: {self.run_id}")
         payload: dict[str, Any] = {"run_id": self.run_id, "kind": kind}
+        if task_delivery is not None:
+            if task_delivery != "atomic" or kind not in {"feature", "change", "correction"}:
+                raise CogitoError("atomic task delivery requires a Development Package")
+            payload["task_delivery"] = task_delivery
         if stage_commits:
             from cogito_checkpoints import is_frozen_successor
             if is_frozen_successor(self.root, self.run_id):
@@ -289,6 +293,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         guard_checkpoint(current, "package-ready")
         if package["kind"] != current["kind"]:
             raise CogitoError("Package kind must match the run kind")
+        if current.get("task_delivery") == "atomic" and package.get("task_delivery") != "atomic":
+            raise CogitoError("new Development Packages require task_delivery: atomic")
         if current.get("candidate_package_hash") and current["candidate_package_hash"] != package_hash(package):
             raise CogitoError("a different candidate requires a new planning round")
         self._planning_environment(current)
