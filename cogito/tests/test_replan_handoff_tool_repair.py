@@ -15,18 +15,6 @@ import test_replan_runtime_snapshot as runtime_support
 import test_replan_toolchain as tool_support
 
 
-class HandoffToolCli(tool_support.ToolchainCli):
-    def handoff_tool_propose(self, value, action_id):
-        return self.call('handoff-tool-propose', action_id, value)
-
-    def handoff_tool_review(self, value, action_id):
-        return self.call('handoff-tool-review', action_id, value)
-
-    def handoff_tool_approve(self, digest, approver, action_id):
-        return self.call('handoff-tool-approve', action_id,
-                         proposal_hash=digest, approver_id=approver)
-
-
 class ReplanHandoffToolRepairTests(GitTestCase):
     result = staticmethod(feature_support.FeatureMultitaskTests.result)
     TOOL_ROOT = '.codex/skills/cogito'
@@ -86,19 +74,19 @@ class ReplanHandoffToolRepairTests(GitTestCase):
     def test_committed_gate_only_repair_preserves_handoff_and_replays(self):
         repo, source, successor, store, protected = self.handing_off()
         self.commit_repair(repo)
-        rp = HandoffToolCli(store)
-        proposed = rp.handoff_tool_propose(self.request(), 'repair-propose')
+        rp = tool_support.ToolchainCli(store)
+        proposed = rp.toolchain_propose(self.request(), 'repair-propose')
         digest = proposed['handoff_tool_proposal_hash']
-        reviewed = rp.handoff_tool_review(self.review(digest), 'repair-review')
+        reviewed = rp.toolchain_review(self.review(digest), 'repair-review')
         self.assertEqual(reviewed['handoff_tool_status'], 'awaiting-approval')
-        approved = rp.handoff_tool_approve(digest, 'synthetic-user', 'repair-approve')
+        approved = rp.toolchain_approve(digest, 'synthetic-user', 'repair-approve')
         self.assertEqual(approved['handoff_tool_status'], 'approved')
         self.assert_product_authorization(rp, protected)
         history = rp.events_path.read_bytes()
         for operation in (
-            lambda: rp.handoff_tool_propose(self.request(), 'repair-propose'),
-            lambda: rp.handoff_tool_review(self.review(digest), 'repair-review'),
-            lambda: rp.handoff_tool_approve(digest, 'synthetic-user', 'repair-approve')):
+            lambda: rp.toolchain_propose(self.request(), 'repair-propose'),
+            lambda: rp.toolchain_review(self.review(digest), 'repair-review'),
+            lambda: rp.toolchain_approve(digest, 'synthetic-user', 'repair-approve')):
             self.assertEqual(operation()['state'], 'handing-off')
         self.assertEqual(rp.events_path.read_bytes(), history)
         self.assert_product_authorization(rp, protected)
@@ -109,12 +97,28 @@ class ReplanHandoffToolRepairTests(GitTestCase):
         self.assertEqual(rp.handoff('original-handoff')['state'], 'completed')
         self.assertEqual(successor.load()['state'], 'executing')
         self.assertEqual(source.load()['state'], 'superseded')
+        history = rp.events_path.read_bytes()
+        for operation in (
+            lambda: rp.toolchain_propose(self.request(), 'repair-propose'),
+            lambda: rp.toolchain_review(self.review(digest), 'repair-review'),
+            lambda: rp.toolchain_approve(digest, 'synthetic-user', 'repair-approve')):
+            self.assertEqual(operation()['state'], 'completed')
+        self.assertEqual(rp.events_path.read_bytes(), history)
+        for operation in (
+            lambda: rp.toolchain_propose(
+                {**self.request(), 'reason': 'Changed repair request'}, 'repair-propose'),
+            lambda: rp.toolchain_review(
+                {**self.review(digest), 'reviewer_id': 'different-reviewer'}, 'repair-review'),
+            lambda: rp.toolchain_approve(digest, 'different-user', 'repair-approve')):
+            with self.assertRaises(CogitoError):
+                operation()
+        self.assertEqual(rp.events_path.read_bytes(), history)
 
     def test_pending_repair_blocks_original_handoff(self):
         repo, _, successor, store, protected = self.handing_off()
         self.commit_repair(repo)
-        rp = HandoffToolCli(store)
-        proposed = rp.handoff_tool_propose(self.request(), 'repair-propose')
+        rp = tool_support.ToolchainCli(store)
+        proposed = rp.toolchain_propose(self.request(), 'repair-propose')
         digest = proposed['handoff_tool_proposal_hash']
         self.assertIn('independently review', proposed['next_action'])
         self.assertIn('exact', proposed['next_action'])
@@ -128,10 +132,10 @@ class ReplanHandoffToolRepairTests(GitTestCase):
                 self.assertEqual(successor.load()['state'], 'start-gate')
                 self.assert_product_authorization(rp, protected)
             if status == 'reviewing':
-                reviewed = rp.handoff_tool_review(self.review(digest), 'repair-review')
+                reviewed = rp.toolchain_review(self.review(digest), 'repair-review')
                 self.assertIn('human approval', reviewed['next_action'])
                 self.assertIn('exact', reviewed['next_action'])
-        approved = rp.handoff_tool_approve(digest, 'synthetic-user', 'repair-approve')
+        approved = rp.toolchain_approve(digest, 'synthetic-user', 'repair-approve')
         self.assertNotIn('human approval', approved['next_action'])
         self.assertEqual(rp.handoff('resume-original-handoff')['state'], 'completed')
         self.assertEqual(successor.load()['state'], 'executing')
@@ -144,10 +148,10 @@ class ReplanHandoffToolRepairTests(GitTestCase):
                     self.commit_repair(repo, product=True)
                 else:
                     (repo / self.TOOL_ROOT / 'VERSION').write_bytes((COGITO / 'VERSION').read_bytes())
-                rp = HandoffToolCli(store)
+                rp = tool_support.ToolchainCli(store)
                 before = rp.events_path.read_bytes()
                 with self.assertRaises(CogitoError):
-                    rp.handoff_tool_propose(self.request(), 'invalid-repair')
+                    rp.toolchain_propose(self.request(), 'invalid-repair')
                 self.assertEqual(rp.events_path.read_bytes(), before)
                 self.assert_product_authorization(rp, protected)
 
@@ -161,7 +165,7 @@ class ReplanHandoffToolRepairTests(GitTestCase):
                                 'synthetic-plan', 'transfer-plan', {'row': {}})
                     before = store.events_path.read_bytes()
                     with self.assertRaisesRegex(CogitoError, 'before successor start and work transfer'):
-                        store.handoff_tool_propose(self.request(), 'late-repair')
+                        store.toolchain_propose(self.request(), 'late-repair')
                 else:
                     original = RunStore.load
                     def executing(instance):
@@ -172,7 +176,7 @@ class ReplanHandoffToolRepairTests(GitTestCase):
                     before = store.events_path.read_bytes()
                     with mock.patch.object(RunStore, 'load', new=executing):
                         with self.assertRaisesRegex(CogitoError, 'before successor start and work transfer'):
-                            store.handoff_tool_propose(self.request(), 'late-repair')
+                            store.toolchain_propose(self.request(), 'late-repair')
                 self.assertEqual(store.events_path.read_bytes(), before)
                 self.assert_product_authorization(store, protected)
 

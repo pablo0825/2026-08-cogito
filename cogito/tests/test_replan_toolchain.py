@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import copy
+import contextlib
+import io
+import unittest
 import shutil
 import json
 import subprocess
@@ -421,3 +424,80 @@ runpy.run_path(gate, run_name='__main__')
         self.assertEqual(rp.events_path.read_bytes(), history)
         self.assertEqual(rp.load()['state'], 'analyzing')
         self.assertEqual(rp.load()['snapshot'], snapshot)
+
+
+class ToolchainEntryRoutingTests(unittest.TestCase):
+    """Public routing selects rules without creating repositories or transitions."""
+
+    def route(self, state, operation='propose', digest=None, events=()):
+        from cogito_replan_store import ReplanStore
+        store = ReplanStore(Path.cwd(), 'RP-routing')
+        with mock.patch('cogito_replan_store.read_events', return_value=events), \
+                mock.patch.object(store, 'load', return_value=state):
+            return store._tool_operation(operation, 'same-action', digest)
+
+    def test_current_phase_selects_its_tool_rules(self):
+        import cogito_replan_toolchain as planning
+        import cogito_replan_handoff_tool as handoff
+        from cogito_replan_toolchain_rules import STAGES
+        for phase in sorted(STAGES | {'handing-off'}):
+            module = handoff if phase == 'handing-off' else planning
+            prefix = 'handoff_tool' if phase == 'handing-off' else 'toolchain'
+            state = {'state': phase, prefix + '_proposal_hash': 'approved-digest'}
+            for operation in ('propose', 'review', 'approve', 'reject'):
+                with self.subTest(phase=phase, operation=operation):
+                    self.assertIs(self.route(state, operation, 'approved-digest'),
+                                  getattr(module, operation))
+
+    def test_invalid_phase_wrong_hash_and_cross_family_pending_are_rejected(self):
+        for phase in ('completed', 'abandoned', 'stopping'):
+            with self.subTest(phase=phase), self.assertRaisesRegex(CogitoError, 'current RP phase'):
+                self.route({'state': phase})
+        for phase, prefix, other in (
+                ('analyzing', 'toolchain', 'handoff_tool'),
+                ('handing-off', 'handoff_tool', 'toolchain')):
+            for operation in ('review', 'approve', 'reject'):
+                for digest in (None, 'different-digest'):
+                    with self.subTest(phase=phase, operation=operation, digest=digest):
+                        with self.assertRaisesRegex(CogitoError, 'current phase proposal hash'):
+                            self.route({'state': phase, prefix + '_proposal_hash': 'correct'},
+                                       operation, digest)
+            for pending in ('reviewing', 'awaiting-approval'):
+                with self.subTest(phase=phase, pending=pending):
+                    with self.assertRaisesRegex(CogitoError, 'different RP phase'):
+                        self.route({'state': phase, other + '_status': pending})
+
+    def test_historical_action_keeps_its_family_after_phase_changes(self):
+        import cogito_replan_toolchain as planning
+        import cogito_replan_handoff_tool as handoff
+        for family, module, phase in (
+                ('toolchain', planning, 'handing-off'),
+                ('handoff-tool', handoff, 'completed')):
+            for operation, suffix in (('propose', 'proposed'), ('review', 'reviewed'),
+                                      ('approve', 'approved'), ('reject', 'rejected')):
+                with self.subTest(family=family, operation=operation):
+                    events = [{'action_id': 'same-action', 'type': family + '-' + suffix}]
+                    self.assertIs(self.route({'state': phase}, operation, events=events),
+                                  getattr(module, operation))
+
+    def test_action_cannot_be_reused_for_a_different_operation(self):
+        for event_type in ('toolchain-reviewed', 'handoff-tool-reviewed', 'proposal-created'):
+            with self.subTest(event_type=event_type):
+                with self.assertRaisesRegex(CogitoError, 'different operation'):
+                    self.route({'state': 'analyzing'}, events=[
+                        {'action_id': 'same-action', 'type': event_type}])
+
+    def test_cli_exposes_only_the_unified_tool_commands(self):
+        from cogito_replan_cli import run
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as stopped:
+            run(Path('/unused'), ['--help'])
+        self.assertEqual(stopped.exception.code, 0)
+        help_text = output.getvalue()
+        for operation in ('propose', 'review', 'approve', 'reject'):
+            self.assertIn('toolchain-' + operation, help_text)
+            self.assertNotIn('handoff-tool-' + operation, help_text)
+            with self.subTest(operation=operation), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as rejected:
+                    run(Path('/unused'), ['handoff-tool-' + operation])
+                self.assertEqual(rejected.exception.code, 2)

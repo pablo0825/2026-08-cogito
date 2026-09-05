@@ -4,7 +4,7 @@ RP 停止後，專案內 `.codex/skills/cogito/` 的更新必須獨立提案、�
 
 ## 支援範圍
 
-- 一般工具接軌支援未核准 successor 的 RP：analyzing、reviewing、awaiting-approval、awaiting-decision。已寫入 `handoff-started` 的特定中斷點另使用下述 handoff repair。
+- 一般工具接軌支援未核准 successor 的 RP：analyzing、reviewing、awaiting-approval、awaiting-decision。已寫入 `handoff-started` 的特定中斷點由同一組 `toolchain-*` 命令自動使用下述交接修正规則。
 - 支援新快照，以及尚未包含工具欄位的舊快照。舊工具必須仍可從原 Git trees 取得；沒有保存的舊 bytes 時拒絕接軌，不補造證據。
 - 第一版固定工具根目錄為 `.codex/skills/cogito`。如果原產品、Worker 或契約範圍與此目錄重疊，不能以工具名義豁免。
 - 新快照要求專案內工具的 regular files 完整出現在 Git content tree；被忽略的工具檔案會明確拒絕。Python `__pycache__` 為不執行的衍生快取，可由 Git 忽略；不能把產品檔案放入工具目錄當成快取。
@@ -80,7 +80,7 @@ python3 .codex/skills/cogito/scripts/cogito_gate.py --repo . replan toolchain-re
 
 這個流程只接受 `handing-off`、successor 仍為 `start-gate`、沒有 transfer plan／receipt、source 尚未 superseded，且 Graph 仍是停止版或核准版。修復必須已完整提交，提交鏈只能改 `.codex/skills/cogito/`；HEAD、index、content 三份工具 manifest 必須相同。Mini successor 仍受 RP handoff 的 dedicated Worker 限制。
 
-依序使用 `handoff-tool-propose`、`handoff-tool-review`、`handoff-tool-approve`（或 `handoff-tool-reject`）。參數格式與一般 toolchain 操作相同。提案額外綁定停止快照、原產品 proposal／approval、`handoff-started`、source／successor event、Package、Graph 與空 transfer journal。Reviewer 必須與 author 不同，核准必須引用精確 proposal hash。
+依序使用 `toolchain-propose`、`toolchain-review`、`toolchain-approve`（或 `toolchain-reject`）。Gate 根據階段選擇交接規則，Agent 不指定模式；審查、核准與拒絕必須引用本階段已保存的提案 hash。提案額外綁定停止快照、原產品 proposal／approval、`handoff-started`、source／successor event、Package、Graph 與空 transfer journal。Reviewer 必須與 author 不同，核准必須引用精確 proposal hash。
 
 核准只追加 `runtime_toolchain` binding；RP 維持 `handing-off`，原產品提案、覆核、核准及 handoff intent 全部保留。之後用原 handoff action ID 重送 `handoff`，Gate 重新驗證原核准的 immutable Start artifact；successor 後續須重跑全部必要 checks，不沿用舊 evidence。pending repair 期間不得開始 successor、移植成果或完成 handoff。`replan status` 在待審查時提示獨立審查，在待核准時提示取得精確 proposal hash 的人工核准；核准或拒絕後恢復該階段的下一步提示。拒絕不會自動授權仍留在工作區的工具差異。
 
@@ -89,3 +89,5 @@ python3 .codex/skills/cogito/scripts/cogito_gate.py --repo . replan toolchain-re
 Gate 實際重播來源／successor／RP 事件、驗證來源及候選契約、比對有效契約、載入 workflow 並驗證原快照、產品與 Worker。這些檢查證明保存資料可由新版工具讀取與驗證；不能自動證明任意 validator 語義修改安全，仍須獨立覆核與使用者核准。
 
 工具接軌包含新增的 RP 事件型別。尚未實作此協定的舊版 Gate 不支援讀取這些事件；不能在接軌後直接退回舊 Gate。中斷後先查看 replan status，再以原 action ID 與相同輸入重試；不得刪除事件、手改 state 或覆寫原 snapshot。
+
+公開工具更新入口只有四個 `toolchain-*` 命令；舊 `handoff-tool-*` 命令已移除。內部兩種事件格式保持不變，既有提案不改寫。相同 action ID 重試先依原事件選回原規則，再核對操作與輸入；不同輸入或操作不得重用 action。未成功寫入事件的首次操作仍須通過目前階段的資格檢查。

@@ -278,45 +278,46 @@ class ReplanStore:
         if actual['graph'] != expected: raise CogitoError('Project Graph drifted; preserve state and reconcile')
         return effective_delivery
 
+    def _tool_operation(self, operation, action_id, proposal_hash=None):
+        from cogito_replan_toolchain_rules import STAGES
+        import cogito_replan_toolchain as planning
+        import cogito_replan_handoff_tool as handoff
+        families = {'toolchain': planning, 'handoff-tool': handoff}
+        suffix = {'propose': 'proposed', 'review': 'reviewed', 'approve': 'approved', 'reject': 'rejected'}[operation]
+        for event in read_events(self.events_path):
+            if event.get('action_id') == action_id:
+                for family, module in families.items():
+                    if event['type'] == family + '-' + suffix:
+                        return getattr(module, operation)  # Existing replay checks the exact request.
+                raise CogitoError('action_id was already used for a different operation')
+        state = self.load()
+        family = 'toolchain' if state['state'] in STAGES else 'handoff-tool'
+        if state['state'] not in STAGES | {'handing-off'}:
+            raise CogitoError('tool update is not allowed in the current RP phase')
+        prefix = family.replace('-', '_')
+        other = 'handoff_tool' if prefix == 'toolchain' else 'toolchain'
+        if state.get(other + '_status') in {'reviewing', 'awaiting-approval'}:
+            raise CogitoError('pending tool proposal belongs to a different RP phase')
+        if operation != 'propose' and (proposal_hash is None or proposal_hash != state.get(prefix + '_proposal_hash')):
+            raise CogitoError('tool operation requires the current phase proposal hash')
+        return getattr(families[family], operation)
+
     @mutation
     def toolchain_propose(self, proposal, action_id):
-        from cogito_replan_toolchain import propose
-        return propose(self, proposal, action_id)
+        return self._tool_operation('propose', action_id)(self, proposal, action_id)
 
     @mutation
     def toolchain_review(self, review, action_id):
-        from cogito_replan_toolchain import review as review_toolchain
-        return review_toolchain(self, review, action_id)
+        digest = review.get('proposal_hash') if isinstance(review, dict) else None
+        return self._tool_operation('review', action_id, digest)(self, review, action_id)
 
     @mutation
     def toolchain_approve(self, proposal_hash, approver_id, action_id):
-        from cogito_replan_toolchain import approve
-        return approve(self, proposal_hash, approver_id, action_id)
+        return self._tool_operation('approve', action_id, proposal_hash)(self, proposal_hash, approver_id, action_id)
 
     @mutation
     def toolchain_reject(self, proposal_hash, reason, action_id):
-        from cogito_replan_toolchain import reject
-        return reject(self, proposal_hash, reason, action_id)
-
-    @mutation
-    def handoff_tool_propose(self, proposal, action_id):
-        from cogito_replan_handoff_tool import propose
-        return propose(self, proposal, action_id)
-
-    @mutation
-    def handoff_tool_review(self, review, action_id):
-        from cogito_replan_handoff_tool import review as review_handoff_tool
-        return review_handoff_tool(self, review, action_id)
-
-    @mutation
-    def handoff_tool_approve(self, proposal_hash, approver_id, action_id):
-        from cogito_replan_handoff_tool import approve
-        return approve(self, proposal_hash, approver_id, action_id)
-
-    @mutation
-    def handoff_tool_reject(self, proposal_hash, reason, action_id):
-        from cogito_replan_handoff_tool import reject
-        return reject(self, proposal_hash, reason, action_id)
+        return self._tool_operation('reject', action_id, proposal_hash)(self, proposal_hash, reason, action_id)
 
     @mutation
     def propose(self, proposal, action_id):
