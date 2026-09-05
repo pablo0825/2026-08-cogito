@@ -1,6 +1,20 @@
-# RP Subtractive Redesign and Phase 1 Implementation Plan
+# RP Subtractive Redesign Implementation Plan
 
 Status: implementation plan; this document is not an active runtime contract.
+
+## 目前進度與本次確認範圍（2026-09-05）
+
+本次只更新計畫，Phase 2 尚待使用者確認，不因本文件更新而開始實作。
+
+| 階段 | 目前狀態 | 接下來的處理 |
+|---|---|---|
+| Phase 1：immutable-object Start | 已實作，legacy Start 入口已於 `caa6a30` 移除 | 保留現行入口；本次 focused 檢查不代表重新完成下方所有原始驗收項目 |
+| Phase 1.5：RP／DP 快照共用 | 已實作至 `dca826f`，本次 48 項相關測試通過 | 以下記錄實作邊界與證據，不重新實作快照 |
+| Phase 2A：共用工具審查機械層 | 下一個建議階段，待確認 | 整理兩套仍有用途的流程，修正下一步提示 |
+| Phase 2B：統一工具接軌介面與驗證權限 | 設計候選，另行討論 | 不併入 2A；先釐清是否值得變更事件與命令 |
+| Phase 3／4 | 延後 | Agent 範圍判斷與依賴修補授權不在下一次實作範圍 |
+
+使用者已撤回需要舊 RP Start／快照相容的情境，因此不恢復這些舊入口，也不為缺少必要快照欄位的歷史資料補造核准證據。`handoff-tool-*` 則仍服務目前的新流程，不能因名稱或起源而視為已退役功能。
 
 ## Objective
 
@@ -15,15 +29,16 @@ The governing architecture rules are:
 
 ## Delivery sequence
 
-### Phase 0: compatibility baseline
+### Phase 0: supported-state baseline (revised after legacy retirement)
 
-- Preserve fixtures for legacy snapshots, ordinary toolchain adoption, pending tool proposals, both handoff Start checkpoints, approved handoff tool repair, successor Start success, partial transfer, and completed RP.
+- Preserve fixtures for supported snapshots, ordinary toolchain adoption, pending tool proposals, approved handoff tool repair, successor Start success, partial transfer, and completed RP.
+- Retired snapshot formats and detached Start checkpoints require no compatibility execution path. Preserve historical evidence without promising that unsupported journals can resume.
 - Record projected state and `next_action` for each fixture before changing writers.
 - Never rewrite an existing RP, source, or successor journal.
 
 ### Phase 1: immutable-object successor Start Gate
 
-Phase 1 is the only immediately authorized implementation phase.
+The following records the Phase 1 design. Its legacy Start entry cleanup is complete; it does not authorize further implementation in this document.
 
 #### Hash dependency order
 
@@ -83,7 +98,7 @@ Keep existing receipt fields required by integration, finalization, and workflow
 
 #### Removed active behavior
 
-New-format proposals never:
+Successor Start verification for new-format proposals never:
 
 - create or remove a Git worktree;
 - create directories or copy, unlink, write, or chmod control files;
@@ -111,24 +126,108 @@ Worker layout creation and validation move to the existing formal transfer/creat
 - live Package/Graph publication drift;
 - same action/same artifact replay, same action/different artifact rejection, and event-tip CAS races;
 - interruption at every object-validation point without new RP events;
-- every legacy state fixture, integration base-head compatibility, and executing/completed successor behavior.
+- supported-state fixtures, rejection of unsupported proposals, integration base-head compatibility, and executing/completed successor behavior.
 
 #### Phase 1 acceptance gates
 
 - zero Start Gate checkout, control-file write, chmod, cleanup, fetch, hook, or filter behavior;
 - zero new RP states, Start checkpoints, Bundle lifecycle events, or recovery commands;
 - new proposals use only immutable artifact semantics plus read-only live publication checks;
-- all legacy journals replay without rewriting evidence;
-- full regression and configured mypy pass;
+- supported journals replay without rewriting evidence; unsupported legacy data receives no fabricated upgrade;
+- run tests for changed files, related disposition flows and necessary RP integration cases; explain any proposed expansion first, and do not run all `test_replan*.py` or the full suite by default;
 - security, legacy, and behavioral results are reported separately.
 
-### Phase 2: reviewed-change core and tool migration
+### Phase 1.5：RP／DP 共用快照（已實作，補記）
 
-After Phase 1 acceptance, extract only the common proposed/reviewed/approved/rejected mechanics: canonical hashes, author/reviewer separation, findings, exact approval, action replay, CAS, pending guards, and `next_action`. Keep eligibility, proposal construction, compatibility validation, and phase-specific approval effects separate.
+#### 已完成什麼
 
-Initially retain legacy `toolchain-*` and `handoff-tool-*` event bytes while both use the same internal core. Publish readers for a fixed `tool-migration-*` family before any writer emits it. Pending legacy proposals must complete or be rejected under their original schema and hash. A small bootstrap verifier outside the ordinary candidate-tool authority range validates tool-only history, authority manifests, review, approval, and minimum invalidation; a candidate tool cannot be its sole verifier.
+- `cogito_product_snapshot.py` 共用 Git tree entries、排除已驗證路徑後推導產品樹，以及 journal 原始位元組前綴／事件游標的綁定和檢查。
+- `cogito_replan_snapshot.py` 保留 RP 的分類：產品、凍結文件、來源證據、Worker、工具與允許更新的 runtime 各自驗證；不再接受缺少目前必要 runtime binding 的舊快照。
+- `cogito_disposition_snapshot.py` 使用同一組底層原語，保留 DP 的 stop／pause、來源取消、RP 委派及封存控制文件規則。
+- 產品比對只能排除已辨識且通過相應規則的 runtime 路徑；不全面忽略 `.cogito/`。Graph 的合法變更由對應流程邊界另外驗證。
+- 原始 delivery／Worker trees、事件歷史與核准內容保留；產品樹投影不覆蓋原始證據。
+- DP archive／release 驗證精確 refs、封存清單與恢復紀錄，保留真正修改工作內容所需的重試機制。
 
-Long-term targets are 23 to at most 17 active RP event kinds and 17 to at most 13 public RP lifecycle commands. Compatibility readers remain even after old writers stop.
+相關提交依序為 `941cd77`、`6961183`、`1f8e53d`、`0bb33b9`、`f037f75`、`dca826f`。這是共用底層機械操作，不是把 RP 與 DP 合併成同一個生命週期。
+
+#### 寫入邊界：避免把「快照共用」誤解成完全零寫入
+
+Phase 1 的 Start verifier 直接驗證已核准 immutable artifact。Phase 1.5 的產品樹投影目前仍用暫存 Git index 執行 `read-tree`／`update-index`／`write-tree`，會產生 Git objects；它不是 Phase 1 的 hardened object reader，也不能自動繼承其全部安全保證。
+
+這些投影操作不建立驗證用 worktree、不複製產品檔案、不更新正式 index，也不新增流程事件。暫存 index 或無引用 tree 本身沒有核准權力。若未來要將投影改為完全唯讀的 entry 比對，應另行提出修改與收益，不在 Phase 2A 順帶重寫。
+
+DP 的 pin／release 則確實需要保存 refs 或改動工作內容，應保留既有 intent、receipt 與 recovery。不能把驗證用暫存 worktree 的刪除原則套用到這些必要操作。
+
+#### 本次檢查證據
+
+2026-09-05，於 `dca826f` 執行以下 8 個測試模組，共 **48 項通過**：
+
+```sh
+PYTHONPATH=cogito/tests:cogito/scripts python3 -m unittest \
+  test_replan_runtime_snapshot test_disposition_no_work \
+  test_disposition_archive test_disposition_pause \
+  test_disposition_recovery test_disposition_replan \
+  test_disposition_flow test_replan_handoff_tool_repair -q
+```
+
+涵蓋未忽略 runtime 的正常流程、產品／Worker／凍結證據漂移、歷史前綴篡改、封存綁定、release、stop／pause 中斷重試，以及目前格式的 handoff 工具修正。首次執行受 sandbox 禁止 `ps` 影響；使用必要權限重跑相同範圍後通過。
+
+本次沒有跑完整 suite、所有 `test_replan*.py`、mypy 或新的人工驗收旅程；也不宣稱涵蓋所有惡意檔案系統情境。檢查沒有發現阻擋下一階段的快照問題。
+
+### Phase 2A：整理共用工具審查步驟（待使用者確認）
+
+#### 要解決的問題
+
+`toolchain-*` 處理規劃期間的工具接軌；`handoff-tool-*` 處理已進入 `handing-off`、但 successor 尚未 Start 且尚未移植工作時的工具修正。後者仍能使用目前 immutable Start artifact 完成交接，已有整合測試，不是可直接刪除的舊 Start fallback。
+
+兩者都有「提案 → 獨立審查 → 精確 hash 核准／拒絕」，但部分程式碼各寫一份。已確認的具體問題是：`handoff_tool_status` 正在 `reviewing` 或 `awaiting-approval` 時，`next_action` 仍提示繼續交接，而 handoff Gate 正確拒絕交接。Agent 因此可能反覆嘗試被禁止的操作。
+
+#### 預計修改順序
+
+1. **固定現有行為與差異。** 列出兩個流程的允許階段、核准綁定、失效效果、pending guard、replay 與事件寫入邊界；以既有測試為基礎，只補缺少的相關案例。
+2. **先修正下一步提示。** 等審查就提示審查；等精確 hash 核准就提示核准；只有完成或拒絕後才按當前狀態提示交接。測試需同時核對提示與實際 Gate 行為。
+3. **抽出確實相同的機械步驟，並同步刪除重複實作。** 候選包括 proposal hash 核對、reviewer 與作者分離、review binding、核准／拒絕的狀態檢查、pending 判斷與提示選擇。對 replay、CAS、鎖與事件追加優先沿用現有 store／event 基礎設施，不另建第二套。
+4. **讓兩個現有入口使用共用步驟。** 僅用固定的兩種流程設定表達欄位或名稱差異；保留各自必要的商業與安全判斷。如果某一步語義不同，保留在原流程，不以大量 callback 或新例外硬塞進共用核心。
+5. **清除被替代的程式碼並更新對應說明。** 檢查 imports、委派方法及事件分派；只有已無呼叫者或已被完整替代的部分才刪除。新的共用檔案若有必要，必須同時指出它替代了哪些舊實作。
+
+#### 預計影響檔案
+
+| 檔案 | 預計處理 |
+|---|---|
+| `scripts/cogito_replan_state.py` | 共用審查狀態處理與正確的 `next_action` |
+| `scripts/cogito_replan_toolchain_rules.py` | 抽出實際相同的純驗證；保留工具接軌特有規則 |
+| `scripts/cogito_replan_toolchain.py` | 呼叫共用步驟；保留 proposal 建構、scope、compatibility 與 revalidation |
+| `scripts/cogito_replan_handoff_tool.py` | 呼叫共用步驟；保留交接 checkpoint、階段資格與核准效果 |
+| `scripts/cogito_replan_store.py` | 僅在接線或共用 guard 確實需要時修改 |
+| 以上檔案對應 tests／references | 驗證行為一致、提示修正與操作說明 |
+
+以上是預期範圍，不要求每個檔案都修改。若需要修改 snapshot、Start verifier、DP lifecycle 或其他授權規則，先說明具體原因並回到計畫討論。
+
+#### 保留與不擴張的邊界
+
+- 保留兩個現有流程的資格限制、產品／工具範圍檢查、相容性判斷及不同的核准失效效果。
+- 保留 `toolchain-*` 與 `handoff-tool-*` 的事件格式、proposal hash、CLI 與現行歷史投影；這些仍是目前有效格式，不是恢復已退役的 Start／snapshot 相容層。
+- 不新增 `tool-migration-*` 事件、命令、狀態或恢復流程；不做可動態擴充的通用 workflow engine。
+- 不讓 Agent 自行核准、不放寬工具目錄或產品路徑、不改成只看檔名就豁免安全檢查。
+- 不把 Phase 3 的 Agent 範圍判斷、Phase 4 的依賴修補授權或新的 bootstrap verifier 併入本階段。
+
+#### 相關測試與驗收
+
+優先選擇 `test_replan_toolchain_rules.py`、`test_replan_toolchain.py`、`test_replan_handoff_tool_repair.py` 中直接受影響的測試。若修改共用 RP projector，補跑其對應 state 測試；只有涉及 handoff 接線才追加必要的 RP handoff integration。Phase 1.5 的 48 項不需要因純文件或無關提示修改全部重跑。
+
+必須確認：審查／核准提示與 guard 一致；自我審查、錯誤或過期 hash、未核准接續仍被拒絕；相同 action 重試不重複寫事件，不同輸入不能冒用 action；兩個流程原有核准效果及正常交接保持一致。若變更碰到 CAS 或鎖，才補跑其對應競爭／中斷案例。
+
+驗收要求是：共用步驟已有兩個真實呼叫者、被替代的重複程式碼已刪除、沒有新增公開流程分支、既有事件／核准證據不被改寫。回報修改前後的 production 行數與重複實作，測試與文件另計；不能只新增共用層卻留下兩套原實作。若 production 程式碼淨增加，先說明必要性，再決定是否調整設計。
+
+實作經確認後，建議把「提示修正與相關測試」和「共用機械層與舊碼刪除」分成可獨立閱讀的提交；本次文件更新不執行這些修改。
+
+### Phase 2B：是否統一工具接軌的公開介面（延後另議）
+
+原計畫的 `tool-migration-*` 家族、bootstrap verifier 與命令縮減目標移到此處作為候選，並非既定實作要求。Phase 2A 只減少內部重複，**不等於已減少公開 RP 事件或命令**。
+
+完成 2A 後，再確認能否把兩個現行工具接軌生命週期整合為一個、以階段區分資格與失效效果。任何新事件家族都必須有取代舊家族的明確收益與退役安排，不能累加第三套流程。歷史讀取需求、pending proposal 的處置及獨立驗證工具權限都要在那次設計中明確決定；不能靜默改寫既有 hashes，也不能讓候選工具成為自己升級的唯一驗證者。
+
+原先「23→17 事件、17→13 命令」屬於舊基線目標；經 Phase 1／1.5 刪除後須重新盤點，不能直接當作目前數量或 2A 驗收數字。
 
 ### Phase 3: Agent impact claims and Gate-derived route
 
