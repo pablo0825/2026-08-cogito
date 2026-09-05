@@ -244,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
             output = run_replan(repo, args.replan_args)
         elif args.command == "init":
             from cogito_checkpoints import is_frozen_successor
+            from cogito_local_exclude import ensure_local_excludes
+            ensure_local_excludes(Path(repo))
             frozen_successor = is_frozen_successor(repo, args.run_id)
             stage_commits = args.stage_commits if args.stage_commits is not None else not frozen_successor
             task_delivery = "atomic" if args.kind in {"feature", "change", "correction"} and not frozen_successor else None

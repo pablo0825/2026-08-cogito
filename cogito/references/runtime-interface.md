@@ -39,6 +39,8 @@ python3 cogito/scripts/cogito_gate.py --repo <root> transition \
 
 ## 儲存與復原
 
+`init` 在 Git repository 的本地 `info/exclude` 補入 `/.cogito/runs/` 與 `/.cogito/worktrees/`；linked worktree 使用共用的 Git 設定位置。預設規則置於既有內容之前，保留原始內容與使用者例外的優先權，重複初始化不重複加入。不修改 `.gitignore`，也不取消追蹤已提交的檔案；`status`／`report` 不安裝這些規則。非 Git 目錄仍可使用 `init --no-stage-commits`。
+
 - `.cogito/runs/<run-id>/events.jsonl` 是 append-only source of truth；event 包含 sequence、action ID、前一事件 hash、payload，以及新增 Gate 命令的 `request_hash`。此指紋綁定命令名稱與原始輸入，納入 event hash；衍生 verdict 保持在 payload。
 - Event JSONL 每一行必須是 JSON object；array、null、字串、數值或布林值會回傳含行號的結構化錯誤與 exit code `2`，不產生 traceback，不跳過該行或修補權威事件，也不改寫 state cache。
 - `state.json` 是 events 可重建的 projection。內容不一致時以 events 重建並 fail closed 檢查。
