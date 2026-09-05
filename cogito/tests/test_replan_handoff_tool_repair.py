@@ -114,13 +114,27 @@ class ReplanHandoffToolRepairTests(GitTestCase):
         repo, _, successor, store, protected = self.handing_off()
         self.commit_repair(repo)
         rp = HandoffToolCli(store)
-        rp.handoff_tool_propose(self.request(), 'repair-propose')
-        before = rp.events_path.read_bytes()
-        with self.assertRaisesRegex(CogitoError, 'pending handoff tool repair'):
-            rp.handoff('resume-original-handoff')
-        self.assertEqual(rp.events_path.read_bytes(), before)
-        self.assertEqual(successor.load()['state'], 'start-gate')
-        self.assert_product_authorization(rp, protected)
+        proposed = rp.handoff_tool_propose(self.request(), 'repair-propose')
+        digest = proposed['handoff_tool_proposal_hash']
+        self.assertIn('independently review', proposed['next_action'])
+        self.assertIn('exact', proposed['next_action'])
+        for status in ('reviewing', 'awaiting-approval'):
+            with self.subTest(status=status):
+                self.assertEqual(rp.load()['handoff_tool_status'], status)
+                before = rp.events_path.read_bytes()
+                with self.assertRaisesRegex(CogitoError, 'pending handoff tool repair'):
+                    rp.handoff('resume-original-handoff')
+                self.assertEqual(rp.events_path.read_bytes(), before)
+                self.assertEqual(successor.load()['state'], 'start-gate')
+                self.assert_product_authorization(rp, protected)
+            if status == 'reviewing':
+                reviewed = rp.handoff_tool_review(self.review(digest), 'repair-review')
+                self.assertIn('human approval', reviewed['next_action'])
+                self.assertIn('exact', reviewed['next_action'])
+        approved = rp.handoff_tool_approve(digest, 'synthetic-user', 'repair-approve')
+        self.assertNotIn('human approval', approved['next_action'])
+        self.assertEqual(rp.handoff('resume-original-handoff')['state'], 'completed')
+        self.assertEqual(successor.load()['state'], 'executing')
 
     def test_mixed_product_commit_and_uncommitted_repair_are_rejected(self):
         for mode in ('mixed', 'uncommitted'):

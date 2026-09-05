@@ -4,13 +4,13 @@ Status: implementation plan; this document is not an active runtime contract.
 
 ## 目前進度與本次確認範圍（2026-09-05）
 
-本次只更新計畫，Phase 2 尚待使用者確認，不因本文件更新而開始實作。
+本計畫最初僅更新文件；使用者後續已授權開始 Phase 2A，實作結果補記如下。Phase 2B／3／4 尚未開始。
 
 | 階段 | 目前狀態 | 接下來的處理 |
 |---|---|---|
 | Phase 1：immutable-object Start | 已實作，legacy Start 入口已於 `caa6a30` 移除 | 保留現行入口；本次 focused 檢查不代表重新完成下方所有原始驗收項目 |
 | Phase 1.5：RP／DP 快照共用 | 已實作至 `dca826f`，本次 48 項相關測試通過 | 以下記錄實作邊界與證據，不重新實作快照 |
-| Phase 2A：共用工具審查機械層 | 下一個建議階段，待確認 | 整理兩套仍有用途的流程，修正下一步提示 |
+| Phase 2A：共用工具審查機械層 | 已完成本次共用投影與提示修正，47 項相關測試通過 | 兩套現行入口保留，實作與驗證範圍見下方補記 |
 | Phase 2B：統一工具接軌介面與驗證權限 | 設計候選，另行討論 | 不併入 2A；先釐清是否值得變更事件與命令 |
 | Phase 3／4 | 延後 | Agent 範圍判斷與依賴修補授權不在下一次實作範圍 |
 
@@ -174,7 +174,7 @@ PYTHONPATH=cogito/tests:cogito/scripts python3 -m unittest \
 
 本次沒有跑完整 suite、所有 `test_replan*.py`、mypy 或新的人工驗收旅程；也不宣稱涵蓋所有惡意檔案系統情境。檢查沒有發現阻擋下一階段的快照問題。
 
-### Phase 2A：整理共用工具審查步驟（待使用者確認）
+### Phase 2A：整理共用工具審查步驟（已授權並完成本次實作）
 
 #### 要解決的問題
 
@@ -220,6 +220,15 @@ PYTHONPATH=cogito/tests:cogito/scripts python3 -m unittest \
 驗收要求是：共用步驟已有兩個真實呼叫者、被替代的重複程式碼已刪除、沒有新增公開流程分支、既有事件／核准證據不被改寫。回報修改前後的 production 行數與重複實作，測試與文件另計；不能只新增共用層卻留下兩套原實作。若 production 程式碼淨增加，先說明必要性，再決定是否調整設計。
 
 實作經確認後，建議把「提示修正與相關測試」和「共用機械層與舊碼刪除」分成可獨立閱讀的提交；本次文件更新不執行這些修改。
+
+#### Phase 2A 實作與驗證補記
+
+- 在既有 `cogito_replan_toolchain_rules.py` 抽出兩個呼叫者共用的 `project_tool_review`，刪除 handoff 分派中的重複 proposed／reviewed／approved／rejected 投影。沒有新增檔案。
+- 各入口仍先驗證所屬階段與 proposal；一般工具接軌的產品核准失效處理保留在原 wrapper，handoff 工具修正保留原產品核准。CLI 的不同建構與 live revalidation 步驟未硬合併；原本已共用的 reviewer 檢查、store replay／事件寫入也未再包一層。
+- `next_action` 現在依目前階段的工具審查狀態提示獨立審查或精確 hash 核准。公開命令、事件格式與權限邊界不變。
+- Production 修改僅涉及上述 rules 與 `cogito_replan_state.py`，共新增 56 行、刪除 57 行，淨減少 1 行。這次收益是移除一份重複狀態邏輯，並非大幅減少行數或公開流程分支。
+- 自動化驗證：`test_replan_toolchain_rules` 18 項；`test_replan_toolchain`、`test_replan_handoff_tool_repair`、`test_replan_state` 合計 29 項；共 47 項通過。測試涵蓋兩種核准效果、過期 hash、自我審查、拒絕保留先前綁定、提示與 handoff guard 一致，以及同 action 重試。未執行完整 suite、DP 快照測試或新的人工旅程。
+- 更新 `references/replan-toolchain.md` 的下一步說明，並移除已過時的「隔離 Start Gate」敘述。Phase 2B 尚未實作。
 
 ### Phase 2B：是否統一工具接軌的公開介面（延後另議）
 

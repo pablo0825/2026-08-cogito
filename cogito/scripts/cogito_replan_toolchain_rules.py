@@ -120,39 +120,52 @@ def validate_review(review, proposal, digest):
         text(review['assessment'].get(key), 'toolchain assessment.' + key)
 
 
+def project_tool_review(result, kind, payload, *, handoff=False):
+    """Project shared review steps; callers validate family eligibility/proposals."""
+    prefix = 'handoff_tool' if handoff else 'toolchain'
+    family = 'handoff-tool' if handoff else 'toolchain'
+    label = 'handoff tool' if handoff else 'toolchain'
+    status = result.get(prefix + '_status')
+    if kind == family + '-proposed':
+        proposal = payload.get('proposal')
+        if payload.get('proposal_hash') != hash_json(proposal):
+            raise CogitoError(label + ' proposal hash mismatch')
+        result.update({prefix + '_proposal': proposal,
+                       prefix + '_proposal_hash': payload['proposal_hash'],
+                       prefix + '_review': None, prefix + '_status': 'reviewing'})
+    elif kind == family + '-reviewed':
+        if status != 'reviewing':
+            raise CogitoError(label + ' review requires a current proposal')
+        validate_review(payload, result[prefix + '_proposal'], result[prefix + '_proposal_hash'])
+        result.update({prefix + '_review': payload, prefix + '_status': 'awaiting-approval'})
+    elif kind == family + '-approved':
+        if status != 'awaiting-approval' or payload.get('proposal_hash') != result[prefix + '_proposal_hash']:
+            raise CogitoError(label + ' approval requires the independently reviewed exact proposal')
+        text(payload.get('approver_id'), 'approver_id')
+        proposal = result[prefix + '_proposal']
+        result.update({'runtime_toolchain' if handoff else 'toolchain': {
+            'proposal_hash': payload['proposal_hash'], 'proposal': proposal,
+            'review': result[prefix + '_review'], 'approver_id': payload['approver_id']},
+            prefix + '_status': 'approved'})
+    elif kind == family + '-rejected':
+        if status not in {'reviewing', 'awaiting-approval'} or payload.get('proposal_hash') != result.get(prefix + '_proposal_hash'):
+            raise CogitoError(label + ' rejection must reference the pending proposal')
+        text(payload.get('reason'), 'reason')
+        result.update({prefix + '_status': 'rejected', prefix + '_rejection': payload})
+    else:
+        raise CogitoError('invalid ' + label + ' event')
+
+
 def project_toolchain(result, kind, payload):
     if result['state'] not in STAGES:
         raise CogitoError('toolchain adoption requires an unapproved, stopped RP')
     if kind == 'toolchain-proposed':
-        proposal = payload.get('proposal')
-        validate_proposal(proposal, result)
-        if payload.get('proposal_hash') != hash_json(proposal):
-            raise CogitoError('toolchain proposal hash mismatch')
-        result.update(toolchain_proposal=proposal, toolchain_proposal_hash=payload['proposal_hash'],
-                      toolchain_review=None, toolchain_status='reviewing')
-    elif kind == 'toolchain-reviewed':
-        if result.get('toolchain_status') != 'reviewing':
-            raise CogitoError('toolchain review requires an open proposal')
-        validate_review(payload, result['toolchain_proposal'], result['toolchain_proposal_hash'])
-        result.update(toolchain_review=payload, toolchain_status='awaiting-approval')
-    elif kind == 'toolchain-approved':
-        if (result.get('toolchain_status') != 'awaiting-approval'
-                or payload.get('proposal_hash') != result['toolchain_proposal_hash']):
-            raise CogitoError('toolchain approval requires the independently reviewed exact proposal')
-        text(payload.get('approver_id'), 'approver_id')
-        proposal = result['toolchain_proposal']
-        validate_proposal(proposal, result)
-        result.update(toolchain={'proposal_hash': payload['proposal_hash'],
-                                 'proposal': proposal, 'review': result['toolchain_review'],
-                                 'approver_id': payload['approver_id']},
-                      toolchain_status='approved', state='analyzing')
+        validate_proposal(payload.get('proposal'), result)
+    elif (kind == 'toolchain-approved' and result.get('toolchain_status') == 'awaiting-approval'
+          and payload.get('proposal_hash') == result.get('toolchain_proposal_hash')):
+        validate_proposal(result['toolchain_proposal'], result)
+    project_tool_review(result, kind, payload)
+    if kind == 'toolchain-approved':
+        result['state'] = 'analyzing'
         for key in ('proposal', 'proposal_hash', 'review', 'approval', 'rejection', 'proposal_stale'):
             result.pop(key, None)
-    elif kind == 'toolchain-rejected':
-        if (result.get('toolchain_status') not in {'reviewing', 'awaiting-approval'}
-                or payload.get('proposal_hash') != result.get('toolchain_proposal_hash')):
-            raise CogitoError('toolchain rejection must reference the pending proposal')
-        text(payload.get('reason'), 'reason')
-        result.update(toolchain_status='rejected', toolchain_rejection=payload)
-    else:
-        raise CogitoError('invalid toolchain event')

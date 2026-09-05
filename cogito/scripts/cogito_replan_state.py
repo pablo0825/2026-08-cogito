@@ -40,32 +40,12 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         kind, payload = event.get('type'), event.get('payload')
         if kind in {'handoff-tool-proposed', 'handoff-tool-reviewed', 'handoff-tool-approved', 'handoff-tool-rejected'}:
             from cogito_replan_handoff_tool import validate_proposal
-            from cogito_replan_toolchain_rules import validate_review, text
+            from cogito_replan_toolchain_rules import project_tool_review
             if result.get('state') != 'handing-off' or not isinstance(payload, dict):
                 raise CogitoError('handoff tool repair requires handing-off state')
             if kind == 'handoff-tool-proposed':
-                proposal = payload.get('proposal'); validate_proposal(proposal, result)
-                if payload.get('proposal_hash') != hash_json(proposal):
-                    raise CogitoError('handoff tool proposal hash mismatch')
-                result.update(handoff_tool_proposal=proposal,
-                              handoff_tool_proposal_hash=payload['proposal_hash'],
-                              handoff_tool_review=None, handoff_tool_status='reviewing')
-            elif kind == 'handoff-tool-reviewed':
-                if result.get('handoff_tool_status') != 'reviewing':
-                    raise CogitoError('handoff tool review requires a current proposal')
-                validate_review(payload, result['handoff_tool_proposal'], result['handoff_tool_proposal_hash'])
-                result.update(handoff_tool_review=payload, handoff_tool_status='awaiting-approval')
-            elif kind == 'handoff-tool-approved':
-                if result.get('handoff_tool_status') != 'awaiting-approval' or payload.get('proposal_hash') != result['handoff_tool_proposal_hash']:
-                    raise CogitoError('handoff tool approval requires exact reviewed proposal')
-                text(payload.get('approver_id'), 'approver_id')
-                result.update(runtime_toolchain={'proposal_hash': payload['proposal_hash'],
-                    'proposal': result['handoff_tool_proposal'], 'review': result['handoff_tool_review'],
-                    'approver_id': payload['approver_id']}, handoff_tool_status='approved')
-            else:
-                if result.get('handoff_tool_status') not in {'reviewing', 'awaiting-approval'} or payload.get('proposal_hash') != result.get('handoff_tool_proposal_hash'):
-                    raise CogitoError('handoff tool rejection must reference pending proposal')
-                text(payload.get('reason'), 'reason'); result.update(handoff_tool_status='rejected', handoff_tool_rejection=payload)
+                validate_proposal(payload.get('proposal'), result)
+            project_tool_review(result, kind, payload, handoff=True)
             result.update(sequence=event.get('sequence'), last_event_hash=event.get('event_hash'))
             continue
         if kind in {'toolchain-proposed', 'toolchain-reviewed', 'toolchain-approved', 'toolchain-rejected'}:
@@ -136,8 +116,14 @@ def project_replan(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if result['state'] is None:
         raise CogitoError('replan event history is empty')
     result['next_action'] = NEXT[result['state']]
-    if result['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'} and result.get('toolchain_status') == 'reviewing':
-        result['next_action'] = 'independently review the exact toolchain proposal; product RP remains paused'
-    elif result['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'} and result.get('toolchain_status') == 'awaiting-approval':
-        result['next_action'] = 'obtain human approval of the exact toolchain proposal hash'
+    if result['state'] == 'handing-off':
+        status, label = result.get('handoff_tool_status'), 'handoff tool'
+    elif result['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'}:
+        status, label = result.get('toolchain_status'), 'toolchain'
+    else:
+        status, label = None, ''
+    if status == 'reviewing':
+        result['next_action'] = f'independently review the exact {label} proposal; product RP remains paused'
+    elif status == 'awaiting-approval':
+        result['next_action'] = f'obtain human approval of the exact {label} proposal hash'
     return result

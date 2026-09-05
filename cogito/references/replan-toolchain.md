@@ -78,11 +78,11 @@ python3 .codex/skills/cogito/scripts/cogito_gate.py --repo . replan toolchain-re
 
 ## Handoff 中斷後的工具修復
 
-這個流程只接受 `handing-off`、successor 仍為 `start-gate`、沒有 transfer plan／receipt、source 尚未 superseded，且 Graph 仍是停止版或核准版。修復必須已完整提交，提交鏈只能改 `.codex/skills/cogito/`；HEAD、index、content 三份工具 manifest 必須相同。Mini successor 不適用一次性的隔離 Start Gate。
+這個流程只接受 `handing-off`、successor 仍為 `start-gate`、沒有 transfer plan／receipt、source 尚未 superseded，且 Graph 仍是停止版或核准版。修復必須已完整提交，提交鏈只能改 `.codex/skills/cogito/`；HEAD、index、content 三份工具 manifest 必須相同。Mini successor 仍受 RP handoff 的 dedicated Worker 限制。
 
 依序使用 `handoff-tool-propose`、`handoff-tool-review`、`handoff-tool-approve`（或 `handoff-tool-reject`）。參數格式與一般 toolchain 操作相同。提案額外綁定停止快照、原產品 proposal／approval、`handoff-started`、source／successor event、Package、Graph 與空 transfer journal。Reviewer 必須與 author 不同，核准必須引用精確 proposal hash。
 
-核准只追加 `runtime_toolchain` binding；RP 維持 `handing-off`，原產品提案、覆核、核准及 handoff intent 全部保留。之後用原 handoff action ID 重送 `handoff`，Gate 重新執行隔離 Start Gate 與全部 successor checks，不沿用舊 evidence。pending repair 期間不得開始 successor、移植成果或完成 handoff。
+核准只追加 `runtime_toolchain` binding；RP 維持 `handing-off`，原產品提案、覆核、核准及 handoff intent 全部保留。之後用原 handoff action ID 重送 `handoff`，Gate 重新驗證原核准的 immutable Start artifact；successor 後續須重跑全部必要 checks，不沿用舊 evidence。pending repair 期間不得開始 successor、移植成果或完成 handoff。`replan status` 在待審查時提示獨立審查，在待核准時提示取得精確 proposal hash 的人工核准；核准或拒絕後恢復該階段的下一步提示。拒絕不會自動授權仍留在工作區的工具差異。
 
 ## 相容性與恢復
 

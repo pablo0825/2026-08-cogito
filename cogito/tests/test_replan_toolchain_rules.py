@@ -7,7 +7,7 @@ import cogito_test_support
 from cogito_common import CogitoError, hash_json
 from cogito_replan_state import project_replan
 from cogito_replan_toolchain_rules import (
-    ASSESSMENTS, TOOL_ROOT, VIEWS, differences, project_toolchain,
+    ASSESSMENTS, TOOL_ROOT, VIEWS, differences, project_tool_review, project_toolchain,
     validate_binding, validate_proposal, validate_review,
 )
 
@@ -231,6 +231,61 @@ class ReplanToolchainRulesTests(unittest.TestCase):
         self.assertEqual(state['toolchain']['proposal_hash'], self.digest)
         for field in ('proposal', 'proposal_hash', 'review', 'approval'):
             self.assertNotIn(field, state)
+
+    def test_handoff_review_envelope_preserves_product_authorization(self):
+        # The envelope receives proposals already validated by their own flow.
+        validate_proposal(self.proposal, self.state)
+        state = dict(state='handing-off', proposal={'product': True},
+                     proposal_hash='2' * 64, review={'product': 'reviewed'},
+                     approval={'product': 'approved'})
+        protected = deepcopy(state)
+        project_tool_review(state, 'handoff-tool-proposed',
+                            dict(proposal=self.proposal, proposal_hash=self.digest), handoff=True)
+        project_tool_review(state, 'handoff-tool-reviewed', self.review, handoff=True)
+        self.assertEqual(state['handoff_tool_status'], 'awaiting-approval')
+        project_tool_review(state, 'handoff-tool-approved',
+                            dict(proposal_hash=self.digest, approver_id='user'), handoff=True)
+        self.assertEqual(state['handoff_tool_status'], 'approved')
+        self.assertEqual(state['runtime_toolchain']['proposal_hash'], self.digest)
+        self.assertEqual(state['runtime_toolchain']['review'], self.review)
+        for key, value in protected.items():
+            self.assertEqual(state[key], value)
+
+    def test_handoff_stale_hash_and_self_review_leave_projection_unchanged(self):
+        state = dict(state='handing-off')
+        project_tool_review(state, 'handoff-tool-proposed',
+                            dict(proposal=self.proposal, proposal_hash=self.digest), handoff=True)
+        for review in ({**self.review, 'proposal_hash': '0' * 64},
+                       {**self.review, 'reviewer_id': self.proposal['author_id']}):
+            before = deepcopy(state)
+            with self.subTest(review=review), self.assertRaises(CogitoError):
+                project_tool_review(state, 'handoff-tool-reviewed', review, handoff=True)
+            self.assertEqual(state, before)
+        project_tool_review(state, 'handoff-tool-reviewed', self.review, handoff=True)
+        for kind, payload in (
+            ('handoff-tool-approved', dict(proposal_hash='0' * 64, approver_id='user')),
+            ('handoff-tool-rejected', dict(proposal_hash='0' * 64, reason='Declined')),
+        ):
+            before = deepcopy(state)
+            with self.subTest(kind=kind), self.assertRaises(CogitoError):
+                project_tool_review(state, kind, payload, handoff=True)
+            self.assertEqual(state, before)
+
+    def test_handoff_rejection_preserves_prior_runtime_binding(self):
+        binding = dict(proposal_hash='3' * 64, approver_id='prior-user')
+        state = dict(state='handing-off', runtime_toolchain=deepcopy(binding))
+        project_tool_review(state, 'handoff-tool-proposed',
+                            dict(proposal=self.proposal, proposal_hash=self.digest), handoff=True)
+        project_tool_review(state, 'handoff-tool-reviewed', self.review, handoff=True)
+        project_tool_review(state, 'handoff-tool-rejected',
+                            dict(proposal_hash=self.digest, reason='Declined'), handoff=True)
+        self.assertEqual(state['runtime_toolchain'], binding)
+        self.assertEqual(state['handoff_tool_status'], 'rejected')
+        before = deepcopy(state)
+        with self.assertRaises(CogitoError):
+            project_tool_review(state, 'handoff-tool-approved',
+                                dict(proposal_hash=self.digest, approver_id='user'), handoff=True)
+        self.assertEqual(state, before)
 
 
 if __name__ == '__main__':
