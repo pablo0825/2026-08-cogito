@@ -165,3 +165,32 @@ class CleanupTests(GitTestCase):
                 self.assertTrue(self.worker.exists())
                 git(self.worker, 'update-index', '--no-' + flag, 'source')
                 git(self.worker, 'checkout', '--', 'source')
+
+    def test_nested_registered_worktree_under_dependency_cache_is_retained(self):
+        nested = self.worker / 'node_modules/nested-project'
+        git(self.root, 'worktree', 'add', '-qb', 'nested-worker', str(nested))
+        outcome = cleanup_accepted(self.store)
+        self.assertTrue(outcome['retained'])
+        self.assertIn('nested', outcome['retained'][0]['reason'])
+        self.assertTrue(self.worker.exists())
+        self.assertEqual(git(nested, 'branch', '--show-current'), 'nested-worker')
+
+    def test_other_run_ancestor_or_descendant_path_is_retained(self):
+        (self.root / '.cogito/runs/RUN-2').mkdir()
+        for referenced in (self.worker.parent, self.worker / 'node_modules/nested'):
+            with self.subTest(referenced=referenced):
+                other = SimpleNamespace(load=lambda: {'tasks': {'T-other': {
+                    'worktree': str(referenced), 'branch': 'different'}}})
+                with patch('cogito_run_store.RunStore', return_value=other):
+                    self.assertTrue(cleanup_accepted(self.store)['retained'])
+                    self.assertTrue(self.worker.exists())
+
+    def test_other_run_delivery_root_lease_does_not_block_cleanup(self):
+        (self.root / '.cogito/runs/RUN-2').mkdir()
+        other = SimpleNamespace(load=lambda: {'tasks': {'T-maintenance': {
+            'worktree': str(self.root), 'branch': 'delivery'}}})
+        with patch('cogito_run_store.RunStore', return_value=other):
+            outcome = cleanup_accepted(self.store)
+        self.assertEqual(outcome['retained'], [])
+        self.assertEqual(outcome['removed'], [str(self.worker)])
+        self.assertTrue(self.root.exists())

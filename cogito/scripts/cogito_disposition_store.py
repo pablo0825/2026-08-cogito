@@ -134,6 +134,10 @@ class DispositionStore:
                     path = Path(task['worktree']).resolve()
                     try: path.relative_to(self.root)
                     except ValueError as exc: raise CogitoError('worker worktree escapes project') from exc
+                    if not path.exists():
+                        from cogito_cleanup import cleaned_worktree
+                        if cleaned_worktree(run, path):
+                            continue
                     index, tree = capture_index_and_worktree_trees(path)
                     worktrees[str(path)] = dict(head=run._git_at(path,'rev-parse','HEAD'),
                         branch=run._git_at(path,'branch','--show-current'),index_tree=index,content_tree=tree)
@@ -149,6 +153,10 @@ class DispositionStore:
             for name in candidates:
                 path = Path(name).resolve()
                 if not path.is_relative_to(self.root): raise CogitoError('transfer worktree escapes project')
+                if not path.exists():
+                    from cogito_cleanup import cleaned_worktree
+                    if any(cleaned_worktree(RunStore(self.root, run_id), path) for run_id in runs):
+                        continue
                 index,tree = capture_index_and_worktree_trees(path)
                 worktrees[str(path)] = dict(head=source._git_at(path,'rev-parse','HEAD'),
                     branch=source._git_at(path,'branch','--show-current'),index_tree=index,content_tree=tree)

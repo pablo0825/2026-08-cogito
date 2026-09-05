@@ -1342,7 +1342,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         request_hash = request_fingerprint("finalize", result_path=result_path, project_graph_path=project_graph_path, final_commit=final_commit)
         replay = self._replay(action_id, "finalization-complete", request_hash)
         if replay is not None:
-            return replay
+            return self._cleanup_after_acceptance(replay)
         current = self.load()
         if current["state"] != "finalizing":
             raise CogitoError("finalization is not legal in the current state")
@@ -1360,7 +1360,20 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             workflow_limits=self.workflow["limits"],
         )
         validate_transition(self.workflow, current["state"], "finalization-complete", payload, current["counters"])
-        return self.record("finalization-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        accepted = self.record("finalization-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
+        return self._cleanup_after_acceptance(accepted)
+
+    def _cleanup_after_acceptance(self, current: RunState) -> RunState:
+        # The accepted event is already durable. Cleanup is a best-effort effect,
+        # with transient diagnostics outside the verdict and immutable Result.
+        if current["state"] != "accepted":
+            return current
+        try:
+            from cogito_cleanup import cleanup_accepted
+            outcome = cleanup_accepted(self)
+        except Exception as exc:
+            outcome = {"removed": [], "retained": [], "error": str(exc)}
+        return {**current, "cleanup": outcome}
 
     def delivery_summary(self) -> dict[str, Any]:
         """Produce the ledger-derived Result section after all acceptance Gates."""

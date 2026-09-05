@@ -68,6 +68,7 @@ class EvidenceLedgerEntry(_OptionalEvidenceLedgerFields):
 
 
 class _OptionalRunFields(TypedDict, total=False):
+    cleanup: dict[str, Any]  # Transient finalize response; never projected or persisted.
     task_delivery: Literal["atomic"]
     stage_commits: bool
     checkpoint_head: str

@@ -142,7 +142,10 @@ class ActionReplayTests(GitTestCase):
         final = self.git("rev-parse", "HEAD")
         graph_rel = "docs/cogito/project-graph.json"
         self.store.finalize(result_rel, graph_rel, final, "finalize")
-        self.assert_replay(self.store.finalize, result_rel, graph_rel, final, "finalize")
+        before = self.store.events_path.read_bytes()
+        expected = {**self.store.load(), "cleanup": {"removed": [], "retained": []}}
+        self.assertEqual(self.store.finalize(result_rel, graph_rel, final, "finalize"), expected)
+        self.assertEqual(self.store.events_path.read_bytes(), before)
         for args in (("other.json", graph_rel, final), (result_rel, "other.json", final), (result_rel, graph_rel, self.head)):
             self.assert_conflict(self.store.finalize, *args, "finalize")
 

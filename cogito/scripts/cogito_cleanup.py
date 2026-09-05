@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from cogito_common import CogitoError, atomic_write_json, hash_json, load_json
+from cogito_contracts import package_hash
 from cogito_disposition_scope import dispositions
 from cogito_disposition_state import TERMINAL as DP_TERMINAL
 from cogito_execution_registry import quiescent_guard
@@ -108,6 +109,10 @@ def _pin(store, current, final, head):
 
 def _other_use(store, path, branch):
     from cogito_run_store import RunStore
+    for registered in _registrations(GitRepository(store.root)):
+        nested = Path(registered).resolve()
+        if nested != path and nested.is_relative_to(path):
+            raise CogitoError('another registered worktree is nested inside this worktree')
     if any(item['state'] not in RP_TERMINAL for item in replans(store.root)):
         raise CogitoError('an active replan may still use worktrees')
     if any(item['state'] not in DP_TERMINAL for item in dispositions(store.root)):
@@ -124,7 +129,9 @@ def _other_use(store, path, branch):
             references += [item['worker'] for item in other.approved_package().get('slices', [])]
         for item in references:
             candidate = item.get('worktree')
-            if item.get('branch') == branch or (candidate and (store.root / candidate).resolve() == path):
+            referenced = (store.root / candidate).resolve() if candidate else None
+            if item.get('branch') == branch or (referenced is not None and referenced != store.root and
+                    (referenced.is_relative_to(path) or path.is_relative_to(referenced))):
                 raise CogitoError('another run references this worktree or branch')
 
 
@@ -137,6 +144,18 @@ def _clean(git, path):
     for name in git.run_at(path, 'ls-files', '--others', '--ignored', '--exclude-standard', '-z').split('\0'):
         if name and not any(part in _CACHE_DIRS for part in Path(name).parts[:-1]):
             raise CogitoError('worktree contains unknown ignored data')
+
+
+def _owned_task(task, branch, package):
+    if task.get('status') != 'integrated':
+        return False
+    if task.get('branch'):
+        return task['branch'] == branch
+    # Reused RP tasks have a Gate-recorded adoption instead of a Worker lease.
+    adoption = task.get('adoption') or {}
+    return (adoption.get('successor_run_id') == package['run_id']
+            and adoption.get('successor_package_hash') == package_hash(package)
+            and adoption.get('target_task_id') == task.get('id'))
 
 
 def cleaned_worktree(store, path) -> bool:
@@ -166,6 +185,14 @@ def cleaned_worktree(store, path) -> bool:
         return False
 
 
+def cleaned_content_tree(store, path) -> str | None:
+    """Use the retained clean HEAD for existing RP evidence-adoption checks."""
+    if not cleaned_worktree(store, path):
+        return None
+    item = load_json(_receipt_path(store))['worktrees'][str(path)]
+    return GitRepository(store.root).run('rev-parse', item['head'] + '^{tree}')
+
+
 def cleanup_accepted(store) -> dict[str, Any]:
     """Never changes acceptance. Call again after resolving a retained reason."""
     result: dict[str, Any] = {'removed': [], 'retained': []}
@@ -191,7 +218,7 @@ def cleanup_accepted(store) -> dict[str, Any]:
                     registration = _registrations(git).get(str(path))
                     branch = worker['branch']
                     leases = [task for task in current['tasks'].values() if task.get('worktree') == str(path)]
-                    if not leases or any(task.get('branch') != branch or task.get('status') != 'integrated' for task in leases):
+                    if not leases or any(not _owned_task(task, branch, package) for task in leases):
                         raise CogitoError('recorded task leases do not establish completed ownership')
                     if not registration or registration.get('branch') != 'refs/heads/' + branch or 'locked' in registration or 'prunable' in registration:
                         raise CogitoError('Git worktree registration differs or is locked')

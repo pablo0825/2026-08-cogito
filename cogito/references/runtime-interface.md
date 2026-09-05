@@ -89,3 +89,12 @@ RP 內的 `toolchain-propose`、`toolchain-review`、`toolchain-approve`、`tool
 在 `finalizing` 使用 `delivery-summary --run-id <ID>` 取得 Result 的 `delivery_summary` 欄位，查詢不建立 commit 或追加事件。Gate 從同一份事件快照產生摘要，`finalize` 再與已提交 Result 逐項核對。啟用階段提交的 run 必填，舊 run 可省略；若提供也須與事件相符。`report` 讀取 final commit 內的摘要，並另外提供 final commit ID，不從目前工作副本重建或改寫 Result。
 
 一般 run 的 `init` 預設啟用 `stage_commits`，有效 RP successor 保留既有 frozen-delivery 協定。Shared Understanding confirmation、Boundary complete 與 Package approval 後，`next` 先回傳 `commit-stage-artifacts`；未登記對應 commit 前拒絕推進。`checkpoint prepare` 產生精確路徑清單與不可變階段紀錄，Coordinator 建立本地 commit，再以 `checkpoint record --commit-id ... --action-id ...` 交給 Gate 驗證。操作與相容性詳見 [Stage Commits](stage-commits.md)。
+
+
+## 結案後 worktree 清理
+
+`finalize` 成功寫入 `accepted` 後，自動嘗試回收本次 Run 已不再使用的 Cogito worktree。只有核准 Package、Task lease（或 RP adoption）與 Git 登記一致、Task 已整合、HEAD 已完整包含於 final commit，且沒有執行中的 Worker／check、其他 Run 引用或進行中的 RP／DP，才會移除。只處理 `.cogito/worktrees/` 內的實際受管目錄；目前工作目錄、符號連結、locked worktree、未提交或未追蹤內容、隱藏修改的索引旗標都會使清理保留該目錄。
+
+已忽略的 `node_modules`、`__pycache__`、`.pytest_cache`、`.mypy_cache` 可隨 worktree 移除；其他 ignored 資料（例如 `.env`、本地資料庫）會阻止清理。使用一般 `git worktree remove` 一併移除該 worktree 的 Git 登記，不使用 force 或全域 prune；branch 與 `.cogito/runs/<run-id>` 全部保留。清理前以 `refs/cogito/cleanup/<run-id>/` 保護事件與 evidence 引用的 Git 物件，避免後續 Git GC 破壞稽核內容。
+
+`finalize` 回應的 `cleanup.removed`／`cleanup.retained` 列出移除項目與保留原因；清理故障不會撤回 `accepted`。排除保留原因後，重送原本相同參數與 `--action-id` 的 `finalize` 即可重試，不重做驗收或追加結案事件。已清理的 worktree 直接略過。Run 內的 `cleanup.json` 留存與 accepted 事件綁定的清理憑據，供中斷恢復及後續 RP／DP 辨識已清理的歷史 worktree；不改寫原事件、evidence、Result 或結案報告。沒有額外清理命令、branch 刪除或 runtime 到期刪除政策。

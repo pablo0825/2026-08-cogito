@@ -132,6 +132,10 @@ class ReplanStore:
             if task.get('worktree'):
                 path = Path(task['worktree']).resolve()
                 path.relative_to(self.root)
+                if not path.exists():
+                    from cogito_cleanup import cleaned_worktree
+                    if cleaned_worktree(source, path):
+                        continue
                 index, tree = capture_index_and_worktree_trees(path)
                 worktrees[str(path)] = dict(index_tree=index, content_tree=tree,
                     head=source._git_at(path,'rev-parse','HEAD'), branch=source._git_at(path,'branch','--show-current'))
@@ -560,6 +564,11 @@ class ReplanStore:
         from cogito_replan_adoption import validate_adoption
         state=self.load(); source=self.source(); st=source.load(); task=st['tasks'][row['source_task_id']]
         binding=state['snapshot']['worktrees'].get(task.get('worktree'))
+        if not binding and task.get('worktree'):
+            from cogito_cleanup import cleaned_content_tree
+            tree = cleaned_content_tree(source, Path(task['worktree']))
+            if tree:
+                binding = {'content_tree': tree}
         if not binding: raise CogitoError('source has no verifiable saved worktree; rerun')
         records={p:load_json(Path(p)) for p in st['evidence']}
         return validate_adoption(source.approved_package(),proposal['package'],st,source._events.read(),
