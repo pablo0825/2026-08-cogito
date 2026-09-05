@@ -106,6 +106,26 @@ class ExecutionRegistryTests(GitTestCase):
             with self.assertRaises(CogitoError):
                 registry.quiescent(self.root, self.run)
 
+    def test_quiescent_guard_serializes_external_admission(self):
+        script = """import sys
+from cogito_execution_registry import register_external
+print('ready', flush=True)
+register_external(sys.argv[1], sys.argv[2], 'late', 'late-worker')
+print('registered', flush=True)
+"""
+        env = {**os.environ, 'PYTHONPATH': str(Path(registry.__file__).parent)}
+        with registry.quiescent_guard(self.root, self.run) as quiet:
+            self.assertTrue(quiet)
+            child = subprocess.Popen([sys.executable, '-c', script, str(self.root), self.run],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            self.assertEqual(child.stdout.readline().strip(), 'ready')
+            with self.assertRaises(subprocess.TimeoutExpired):
+                child.communicate(timeout=0.1)
+        output, errors = child.communicate(timeout=5)
+        self.assertEqual(child.returncode, 0, errors)
+        self.assertIn('registered', output)
+        self.assertFalse(registry.quiescent(self.root, self.run))
+
     def test_inspection_failure_is_not_termination(self):
         child = self.child()
         registry.register_process(self.root, self.run, "worker", child.pid)

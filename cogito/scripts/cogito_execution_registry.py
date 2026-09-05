@@ -205,31 +205,42 @@ def request_stop(root: str | Path, run_id: str, deadline_seconds: float = 60, *,
     return snapshot(root, run_id)
 
 
+def _observe(data: dict[str, Any], *, allow_external_receipts: bool) -> dict[str, Any]:
+    for entry in data["entries"].values():
+        if entry["kind"] == "external":
+            entry["terminated"] = bool(allow_external_receipts and entry["receipt"])
+            entry["observation"] = "attested" if entry["terminated"] else "unverified-external"
+            continue
+        identity = entry["identity"]
+        current = process_identity(identity["pid"])
+        if current is not None and current != identity:
+            entry["terminated"] = False
+            entry["observation"] = "identity-mismatch"
+        elif current is not None:
+            entry["terminated"] = False
+            entry["observation"] = "running"
+        else:
+            # Only independently created groups belong to this executor.
+            dedicated = identity["pgid"] == identity["pid"]
+            alive = _group_alive(identity["pgid"]) if dedicated else True
+            entry["terminated"] = not alive
+            entry["observation"] = ("unverified-shared-group" if not dedicated else
+                                    "descendants-running" if alive else "terminated")
+    data["stop_requested"] = data["stop_request"] is not None
+    data["quiescent"] = all(entry["terminated"] for entry in data["entries"].values())
+    return data
+
+
 def snapshot(root: str | Path, run_id: str, *, allow_external_receipts: bool = False) -> dict[str, Any]:
     with _locked(root, run_id) as (_, data):
-        for entry in data["entries"].values():
-            if entry["kind"] == "external":
-                entry["terminated"] = bool(allow_external_receipts and entry["receipt"])
-                entry["observation"] = "attested" if entry["terminated"] else "unverified-external"
-                continue
-            identity = entry["identity"]
-            current = process_identity(identity["pid"])
-            if current is not None and current != identity:
-                entry["terminated"] = False
-                entry["observation"] = "identity-mismatch"
-            elif current is not None:
-                entry["terminated"] = False
-                entry["observation"] = "running"
-            else:
-                # Only independently created groups belong to this executor.
-                dedicated = identity["pgid"] == identity["pid"]
-                alive = _group_alive(identity["pgid"]) if dedicated else True
-                entry["terminated"] = not alive
-                entry["observation"] = ("unverified-shared-group" if not dedicated else
-                                        "descendants-running" if alive else "terminated")
-        data["stop_requested"] = data["stop_request"] is not None
-        data["quiescent"] = all(entry["terminated"] for entry in data["entries"].values())
-        return data
+        return _observe(data, allow_external_receipts=allow_external_receipts)
+
+
+@contextmanager
+def quiescent_guard(root: str | Path, run_id: str, *, allow_external_receipts: bool = False) -> Iterator[bool]:
+    """Keep executor admission locked while the caller removes unused resources."""
+    with _locked(root, run_id) as (_, data):
+        yield bool(_observe(data, allow_external_receipts=allow_external_receipts)["quiescent"])
 
 
 def quiescent(root: str | Path, run_id: str, *, allow_external_receipts: bool = False) -> bool:
@@ -274,7 +285,7 @@ def terminate_overdue(root: str | Path, run_id: str, *, now: float | None = None
 
 # Controlled runner shares the same admission fence as Worker registration.
 from contextvars import ContextVar
-_execution_context = ContextVar('cogito_controlled_execution', default=None)
+_execution_context: ContextVar[tuple[str | Path, str, str] | None] = ContextVar('cogito_controlled_execution', default=None)
 
 @contextmanager
 def controlled_executor(root, run_id, identifier):
