@@ -52,6 +52,7 @@ from cogito_gate_validation import (
     validate_evidence as validate_gate_evidence,
     validate_policy as validate_gate_policy,
     derive_review_decision,
+    verification_checks,
 )
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_ports import EventRepositoryPort, GitRepositoryPort
@@ -341,6 +342,13 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             raise CogitoError("task is outside the effective Package")
         if current["state"] == "human-correction" and task_id not in current["human"]["task_ids"]:
             raise CogitoError("human correction may dispatch only its current amendment tasks")
+        package = self.approved_package()
+        if status == "complete" and package.get("task_delivery") == "atomic":
+            results = [item for item in current["agent_results"]
+                       if item["task_id"] == task_id and item["role"] == "implementer"]
+            if not results or results[-1]["status"] != "complete":
+                raise CogitoError("atomic task completion requires an Implementer Result")
+            self._validate_atomic_result(results[-1], task, self._events.snapshot())
         if status == "leased":
             if current['state'] == 'human-correction' and any(is_active_task(t) for t in current['tasks'].values()):
                 raise CogitoError('human correction uses one serial delivery checkout lease')
@@ -350,6 +358,11 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             else:
                 worktree, branch = self._task_worktree(task, package)
             base_commit = self._git_at(worktree, "rev-parse", "HEAD")
+            if package.get("task_delivery") == "atomic":
+                if any(is_active_task(item) and Path(str(item.get("worktree", ""))).resolve() == worktree.resolve()
+                       for item in current["tasks"].values()):
+                    raise CogitoError("atomic tasks require one active lease per checkout")
+                self._require_atomic_clean(worktree, base_commit, current)
             task_slice = effective_slice_id(task)
             prior_heads = [
                 item["head_commit"] for item in current["agent_results"]
@@ -497,10 +510,47 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             raise CogitoError("Agent Result changed_paths do not match its commit range")
         if any(not _path_allowed(path, task.get("paths", [])) for path in actual_paths):
             raise CogitoError("Agent Result exceeds its task path responsibility")
+        if package.get("task_delivery") == "atomic" and result["role"] == "implementer":
+            if task.get("status") != "running":
+                raise CogitoError("atomic Implementer Result requires a running task")
+            if result["status"] == "complete":
+                self._validate_atomic_result(result, task, self._events.snapshot())
         return self._record_gate_event(
             AgentResultRecordedEvent(type="agent-result-recorded", payload=payload), action_id,
             request_hash=request_hash,
         )
+
+    def _require_atomic_clean(self, worktree: Path, head: str, state: RunState) -> str:
+        index, tree = capture_index_and_worktree_trees(worktree)
+        controls = {state.get("package_path"), "docs/cogito/project-graph.json"}
+        changes = working_tree_changed_paths(worktree, head)
+        for value in (index, tree):
+            changes.update(filter(None, self._git_at(
+                worktree, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", head, value, "--",
+            ).split("\0")))
+        if any(path not in controls and not path.startswith(".cogito/") for path in changes):
+            raise CogitoError("atomic task has uncommitted product content")
+        return tree
+
+    def _validate_atomic_result(
+        self, result: Mapping[str, Any], task: Mapping[str, Any], snapshot: EventSnapshot,
+    ) -> None:
+        worktree = Path(task["worktree"])
+        base, head = result["base_commit"], result["head_commit"]
+        if (base != task["base_commit"] or self._git_at(worktree, "rev-parse", "HEAD") != head
+                or self._git_at(worktree, "branch", "--show-current") != task["branch"]):
+            raise CogitoError("atomic Result no longer matches its task checkout")
+        parents = self._git_at(worktree, "rev-list", "--parents", "-n", "1", head).split()[1:]
+        if parents != [base] or not result["changed_paths"]:
+            raise CogitoError("atomic task requires exactly one nonempty commit from its leased base")
+        tree = self._require_atomic_clean(worktree, head, snapshot.state)
+        evidence = [_load_json(Path(path)) for path in result["evidence"]]
+        self._validate_evidence(self.approved_package(), evidence, snapshot=snapshot,
+                                phase="task", task_id=result["task_id"])
+        for item in evidence:
+            if (item["head_commit"] not in {base, head}
+                    or item["worktree_binding"].get("content_tree") != tree):
+                raise CogitoError("targeted evidence does not match the task commit content")
 
     def _validate_review_content(self, worktree: Path, content_tree: str) -> None:
         """A task review must refer to the current wave's verified content."""
@@ -586,6 +636,15 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             eligible = {Path(str(task.get("worktree", ""))).resolve() for task in state["tasks"].values() if task.get("status") == "complete"}
             if supplied_worktree not in eligible:
                 raise CogitoError("verification checks must run in a completed Package Slice worktree")
+        elif package.get("task_delivery") == "atomic" and state["state"] in {
+            "executing", "technical-correction", "review-fix", "post-integration-correction", "human-correction",
+        }:
+            active = [task for task in state["tasks"].values()
+                      if task.get("status") == "running"
+                      and Path(str(task.get("worktree", ""))).resolve() == supplied_worktree
+                      and check_id in task.get("check_ids", [])]
+            if len(active) != 1:
+                raise CogitoError("task checks require the running task's checkout and targeted check ID")
         else:
             raise CogitoError("controlled checks are not legal in the current state")
         prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
@@ -655,6 +714,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         else:
             raise CogitoError("correction is not legal in the current state")
         amendment = amendments[-1]["payload"]["amendment"]
+        if self.approved_package().get("task_delivery") == "atomic" and not amendment.get("added_tasks"):
+            raise CogitoError("atomic corrections require amendment tasks; check-only additions can verify directly")
         payload = {"scope_within_contract": True, "amendment_id": amendment["id"], "effective_contract_hash": amendments[-1]["payload"]["effective_contract_hash"]}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
@@ -1298,9 +1359,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
 
     def _validate_evidence(
         self, package: Mapping[str, Any], evidence: Sequence[Mapping[str, Any]], *,
-        snapshot: EventSnapshot, phase: Literal["implementation", "post-integration"],
+        snapshot: EventSnapshot, phase: Literal["task", "implementation", "post-integration"],
         current_head: str | None = None,
         validate_supplied: bool = False,
+        task_id: str | None = None,
     ) -> None:
         """Collect immutable files for pure rules using the operation's snapshot.
 
@@ -1311,7 +1373,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             validate_check_evidence(item)
         prior = [item["payload"]["amendment"] for item in snapshot.events if item["type"] == "technical-amendment-added"]
         effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
-        required = {check["id"] for check in effective["checks"] if check.get("required", True)}
+        required = set(verification_checks(effective, phase, task_id))
         supplied = {item["check_id"]: item for item in evidence}
         if validate_supplied:
             known = {check['id'] for check in effective['checks']}
@@ -1340,6 +1402,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             package, evidence, snapshot.events, ledger, recorded_evidence,
             effective_contract=effective, phase=phase, current_head=current_head,
             validate_supplied=validate_supplied,
+            task_id=task_id,
         )
 
     def next_action(self) -> dict[str, Any]:

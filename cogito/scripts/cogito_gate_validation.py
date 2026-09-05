@@ -128,6 +128,21 @@ def derive_review_decision(
     return {"reviews": sorted(closed), "approved": True, "independent": True}
 
 
+def verification_checks(
+    contract: Mapping[str, Any], phase: str, task_id: str | None = None,
+) -> dict[str, Any]:
+    """Select frozen requirements without weakening their check definitions."""
+    checks = {item["id"]: item for item in contract["checks"]}
+    if phase == "task":
+        if contract.get("task_delivery") != "atomic":
+            raise CogitoError("task verification requires atomic delivery")
+        tasks = {task["id"]: task for task in contract["execution_dag"]["tasks"]}
+        if task_id not in tasks:
+            raise CogitoError("task verification requires a known task")
+        return {key: checks[key] for key in tasks[task_id]["check_ids"]}
+    return {key: check for key, check in checks.items() if check.get("required", True)}
+
+
 def validate_evidence(
     package: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
@@ -136,9 +151,10 @@ def validate_evidence(
     recorded_evidence: Mapping[str, Mapping[str, Any]],
     *,
     effective_contract: Mapping[str, Any],
-    phase: Literal["implementation", "post-integration"],
+    phase: Literal["task", "implementation", "post-integration"],
     current_head: str | None = None,
     validate_supplied: bool = False,
+    task_id: str | None = None,
 ) -> None:
     """Validate loaded evidence against one contract, ledger, and event snapshot.
 
@@ -146,8 +162,8 @@ def validate_evidence(
     Both loaded mappings use each supplied evidence_path's original string as
     their key; canonical path lookup belongs to the caller. No inputs are mutated.
     """
-    if phase not in {"implementation", "post-integration"}:
-        raise CogitoError("evidence phase must be implementation or post-integration")
+    if phase not in {"task", "implementation", "post-integration"}:
+        raise CogitoError("invalid evidence phase")
     post_integration = phase == "post-integration"
     if post_integration and (
         not isinstance(current_head, str) or not GIT_OBJECT_RE.fullmatch(current_head)
@@ -159,11 +175,10 @@ def validate_evidence(
             tree = item["worktree_binding"].get("content_tree")
             if not isinstance(tree, str) or not GIT_OBJECT_RE.fullmatch(tree):
                 raise CogitoError("post-integration evidence lacks a content tree; rerun controlled checks")
-    required = {
-        item["id"]: item for item in effective_contract["checks"]
-        if item.get("required", True)
-    }
-    supplied = {item.get("check_id"): item for item in evidence}
+    required = verification_checks(effective_contract, phase, task_id)
+    supplied = {item["check_id"]: item for item in evidence}
+    if phase == "task" and (len(supplied) != len(evidence) or set(supplied) != set(required)):
+        raise CogitoError("task evidence must exactly cover its targeted checks")
     if validate_supplied:
         known = {item['id']: item for item in effective_contract['checks']}
         if not supplied or len(supplied) != len(evidence) or supplied.keys() - known.keys():
@@ -177,6 +192,13 @@ def validate_evidence(
     anchor_sequence = max(
         (item["sequence"] for item in events if item["type"] in anchors), default=0
     )
+    if phase == "task":
+        anchor_sequence = max((item["sequence"] for item in events
+                               if item["type"] == "task-updated"
+                               and item["payload"].get("task_id") == task_id
+                               and item["payload"].get("status") == "leased"), default=0)
+        if not anchor_sequence:
+            raise CogitoError("task evidence requires a recorded lease")
     if set(required) - set(supplied):
         raise CogitoError("required verification evidence is missing")
 
