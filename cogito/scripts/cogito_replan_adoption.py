@@ -33,6 +33,17 @@ def _semantics(task: Mapping[str, Any]) -> dict[str, Any]:
             if key not in {'id', 'slice_id', 'status', 'depends_on'}}
 
 
+def validate_atomic_transfer(
+    source: Mapping[str, Any], target: Mapping[str, Any], manifest: Sequence[Mapping[str, Any]],
+) -> None:
+    """Do not import pre-lease commits into the new one-commit Task protocol."""
+    if (source.get('task_delivery') == 'atomic' and target['kind'] in {'feature', 'change', 'correction'}
+            and target.get('task_delivery') != 'atomic'):
+        raise CogitoError('atomic successor cannot downgrade Task delivery; keep task_delivery: atomic')
+    if target.get('task_delivery') == 'atomic' and any(row.get('disposition') != 'omit' for row in manifest):
+        raise CogitoError('atomic successor requires fresh Tasks; mark unintegrated source work omit and preserve its snapshot')
+
+
 def validate_adoption(
     source_package: Mapping[str, Any], successor_package: Mapping[str, Any],
     source_state: Mapping[str, Any], source_events: Sequence[Mapping[str, Any]],
@@ -45,6 +56,8 @@ def validate_adoption(
     This first version deliberately rejects dependent tasks and all changed
     global verification inputs. It never infers semantic non-impact from paths.
     """
+    _require(source_package.get('task_delivery') != 'atomic' and successor_package.get('task_delivery') != 'atomic',
+             'atomic Task evidence remains historical; use fresh successor Tasks')
     _require(bool(source_content_tree) and source_content_tree == target_content_tree,
              'complete source and target content trees differ')
     source_run = source_package['run_id']

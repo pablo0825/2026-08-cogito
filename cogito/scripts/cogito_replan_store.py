@@ -356,6 +356,8 @@ class ReplanStore:
         targets = {t['id']:t for t in package['execution_dag']['tasks']}
         if {row.get('source_task_id') for row in manifest} != set(source_tasks) or len(manifest) != len(source_tasks):
             raise CogitoError('manifest must classify every source task exactly once')
+        from cogito_replan_adoption import validate_atomic_transfer
+        validate_atomic_transfer(self.source().approved_package(), package, manifest)
         used = set()
         for row in manifest:
             if row.get('disposition') not in {'retain','adapt','omit'}: raise CogitoError('invalid work disposition')

@@ -4,7 +4,7 @@ import unittest
 from cogito_test_support import minimal_package
 from cogito_common import CogitoError, hash_json
 from cogito_contracts import package_hash
-from cogito_replan_adoption import validate_adoption
+from cogito_replan_adoption import validate_adoption, validate_atomic_transfer
 from test_evidence_contract import valid_evidence
 
 
@@ -61,6 +61,25 @@ class ReplanAdoptionTests(unittest.TestCase):
     def test_changed_tree_requires_rerun(self):
         with self.assertRaisesRegex(CogitoError, 'rerun'):
             self.adopt('f' * 40)
+
+    def test_atomic_evidence_cannot_be_adopted_as_a_completed_successor_task(self):
+        for side in ('source', 'target'):
+            with self.subTest(side=side):
+                self.setUp()
+                getattr(self, side)['task_delivery'] = 'atomic'
+                with self.assertRaisesRegex(CogitoError, 'atomic Task evidence'):
+                    self.adopt()
+
+    def test_atomic_transfer_requires_fresh_work_without_downgrading_contract(self):
+        source = {**self.source, 'task_delivery': 'atomic'}
+        target = {**self.target, 'task_delivery': 'atomic'}
+        for disposition in ('retain', 'adapt'):
+            with self.assertRaisesRegex(CogitoError, 'fresh Tasks'):
+                validate_atomic_transfer(source, target, [{'disposition': disposition, 'validation': 'rerun'}])
+        validate_atomic_transfer(source, target, [{'disposition': 'omit', 'validation': 'rerun'}])
+        with self.assertRaisesRegex(CogitoError, 'cannot downgrade'):
+            validate_atomic_transfer(source, self.target, [{'disposition': 'omit'}])
+        validate_atomic_transfer(self.source, self.target, [{'disposition': 'adapt', 'validation': 'rerun'}])
 
     def test_changed_shared_understanding_checks_policy_or_spec_require_rerun(self):
         changes = [lambda: self.target['shared_understanding'].update(hash='f'*64),

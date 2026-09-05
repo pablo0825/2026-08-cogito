@@ -96,3 +96,7 @@ python3 cogito/scripts/cogito_gate.py --repo <repo> replan status --replan-id RP
 ## 階段提交相容性
 
 RP successor 保留 frozen delivery 與既有 handoff 協定；在有效 RP 內初始化 successor 時，不啟用一般 run 的階段提交。這項相容性保留撤回後恢復 source 的能力，不移動停止時的 delivery HEAD。一般 run 與同一 run 的規劃修訂依 [Stage Commits](stage-commits.md) 保存各階段。
+
+## Atomic Task 相容性
+
+Atomic 開發 Package 的 successor 仍須保留 `task_delivery: "atomic"`。本版不把先於 lease 建立的 RP carryover commits 當成新 Task 的獨立交付，也不跨 run 採用 atomic Task 的舊 evidence。核准前的 RP proposal 會拒絕這類承接；將未整合來源標記 `omit`、保留來源快照，另在 successor 規劃與執行新的 Task。已在保存 delivery baseline 的內容仍是 successor 起點，不需重做已整合行為。`omit` 不刪除 source 成果。舊的非 atomic Package／已凍結交接與事件維持原協定，不改寫舊 hash 或 evidence。
