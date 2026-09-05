@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 
 from cogito_state_types import RunState
 from cogito_common import CogitoError, hash_json
+from cogito_gate_validation import verification_checks
 from cogito_contract_fields import GIT_OBJECT_RE
 from cogito_contracts import package_hash
 from cogito_evidence_contract import validate_check_evidence
@@ -146,9 +147,7 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
 
 def _validate_verification_summary(context: FinalizationContext) -> set[str]:
     result, events, effective = context.result, context.events, context.effective_contract
-    required_checks = {
-        item["id"] for item in effective["checks"] if item.get("required", True)
-    }
+    required_checks = set(verification_checks(effective, "post-integration"))
     passed_checks = {
         item.get("id")
         for item in result["checks"]

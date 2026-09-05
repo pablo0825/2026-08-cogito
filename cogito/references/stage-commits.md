@@ -31,11 +31,11 @@ Git commit 已成功而 receipt 未成功時，先檢查 HEAD 與事件，沿用
 
 RP successor 仍依 [Replanning](replanning.md) 保存 frozen delivery 快照與既有 handoff 流程；本次階段提交不套用於 RP，以保留撤回後恢復 source 的能力。CLI 偵測有效 RP successor 時預設維持舊協定，明確要求 `--stage-commits` 會在初始化前拒絕，不改動原 run。
 
-## 實作到結案（方案 A）
+## 實作到結案
 
 | 階段 | 提交方式 | 原因 |
 |---|---|---|
-| Worker 完成一項完整修改 | 將相關程式與對應測試放進同一個有意義的 commit；較大的任務可拆成數個完整修改 | 方便審查與回復，避免程式與保障其行為的測試分離 |
+| Worker 完成一個 Task | Atomic Task 的程式、相關測試與必要文件必須獨立 commit；較大的工作先在 Package 拆成多個 Task | 方便審查與回復，避免程式與保障其行為的測試分離 |
 | Slice 整合 | 保留實際 worker commits，由 Gate 登記整合 HEAD；可 fast-forward | 保存真正交付的版本，不為了湊階段數建立空 commit |
 | 驗證或獨立 review | 結果先記錄在本地事件與 evidence；若需要改程式，另建合法修正 commit | 單純檢查不會改變產品版本；修正則必須可追蹤 |
 | 人工驗收 | 退回、再次驗證與確認記錄於事件；一般修正各自 commit | 使用者尚未接受時不能先結案；有明確條件式授權時依 Human Acceptance 規則處理 |

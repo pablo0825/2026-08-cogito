@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from cogito_common import CogitoError
+from cogito_common import CogitoError, atomic_write_json, hash_json
 from cogito_contracts import materialize_contract, package_hash, validate_package
+from cogito_gate_validation import validate_policy
 from cogito_test_support import minimal_package, package as package_for_kind
 
 
@@ -72,10 +74,12 @@ class AtomicTaskContractTests(unittest.TestCase):
         package["task_delivery"] = "batch"
         with self.assertRaises(CogitoError):
             validate_package(package)
-        package = atomic_package()
-        package["checks"][0]["phase"] = "ci"
-        with self.assertRaises(CogitoError):
-            validate_package(package)
+        for phase in ("ci", "", None, [], {}, True):
+            with self.subTest(phase=phase):
+                package = atomic_package()
+                package["checks"][0]["phase"] = phase
+                with self.assertRaises(CogitoError):
+                    validate_package(package)
 
     def test_atomic_delivery_is_development_only(self) -> None:
         for kind in ("feature", "change", "correction", "maintenance", "documentation"):
@@ -95,7 +99,7 @@ class AtomicTaskContractTests(unittest.TestCase):
         amendment = self.amendment()
         effective = materialize_contract(package, [amendment])
         self.assertEqual(effective["execution_dag"]["tasks"][-1]["check_ids"], ["C-2"])
-        amendment["added_tasks"][0]["check_ids"] = ["C-1"]
+        amendment["added_tasks"][0]["check_ids"] = ["C-1", "C-2"]
         materialize_contract(package, [amendment])
 
     def test_later_amendment_cannot_repair_missing_check_reference(self) -> None:
@@ -112,6 +116,39 @@ class AtomicTaskContractTests(unittest.TestCase):
             materialize_contract(atomic_package(), [amendment])
         with self.assertRaisesRegex(CogitoError, "requires atomic"):
             materialize_contract(minimal_package(), [self.amendment()])
+
+    def test_required_task_check_cannot_be_orphaned(self) -> None:
+        package = atomic_package()
+        package["checks"].append({"id": "C-orphan", "argv": ["true"], "phase": "task"})
+        with self.assertRaisesRegex(CogitoError, "referenced by a task.*C-orphan"):
+            validate_package(package)
+        package["checks"][-1]["required"] = False
+        validate_package(package)
+
+    def test_later_task_cannot_repair_orphaned_check_amendment(self) -> None:
+        first = self.amendment()
+        tasks = first.pop("added_tasks")
+        second = {"id": "TA-2", "reason": "Late task", "added_tasks": tasks}
+        with self.assertRaisesRegex(CogitoError, "referenced by a task.*C-2"):
+            materialize_contract(atomic_package(), [first, second])
+
+    def test_policy_required_checks_cannot_move_to_task_phase(self) -> None:
+        policy = {"schema_version": "3.0", "required_checks": ["C-1"]}
+        package = atomic_package()
+        package["checks"][0]["phase"] = "task"
+        package["checks"].append({"id": "C-final", "argv": ["true"]})
+        package["policy_snapshot"]["hash"] = hash_json(policy)
+        validate_package(package)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            atomic_write_json(root / "docs/cogito/project-policy.json", policy)
+            with self.assertRaisesRegex(CogitoError, "Project Policy.*integration-scoped"):
+                validate_policy(root, package)
+        package["policy_snapshot"]["required_checks"] = ["C-1"]
+        with self.assertRaisesRegex(CogitoError, "policy snapshot.*integration-scoped"):
+            validate_package(package)
+        package["checks"][0]["phase"] = "integration"
+        validate_package(package)
 
     @staticmethod
     def amendment() -> dict:

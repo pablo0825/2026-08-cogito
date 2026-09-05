@@ -2,7 +2,7 @@
 
 ## 派發與隔離
 
-Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 仍可依序完成。只有 Coordinator 可串行整合到固定 delivery branch。
+Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；atomic 模式須先通過 targeted checks、獨立 commit、記錄 Implementer Result 並完成 Task，才開始下一個 Task。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
 
 Implementer 完成後，由不同 Agent 進行獨立 review。Gate 逐 task 比對 Implementer task lease 的 `agent_id`、Reviewer Result 的 `reviewed_implementer` 與不同的 reviewer `agent_id`，由已登錄 Result 推導審查完成情況，不接受 Agent 回報的 `independent: true`，也不在 Package 預先綁定 Agent 身分。Coordinator 必須指派實際不同的 Agent，並維持穩定且唯一的 ID；Gate 的 ID 比對不提供外部身分驗證。Reviewer 可建議核准、提出 Package 內修正或升級風險，但不得移除 human predicate；最終 review verdict 由 Gate 計算。Maintenance 只有在 Mini Package 的低風險宣告已有足夠證據並經核准、且 Gate 的檢查通過時可豁免；語意判斷與機械檢查的分工見 [Package Authoring](package-authoring.md#package-核准後)。
 
@@ -14,7 +14,7 @@ Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停�
 
 Amendment 只能單調增加或加強工作，不能刪除/降級 required check、擴張路徑、要求 Package policy snapshot 未核准的環境變數，或改變產品契約。超出邊界時依 [Replanning](replanning.md) 建立重新規劃單，先限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
 
-新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
+Atomic 的產品 correction 必須使用新增 Task；只增加檢查可直接重新 verify，不開啟無任務的產品修正。新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
 
 ## 驗證、審查與整合
 
@@ -27,7 +27,11 @@ Amendment 只能單調增加或加強工作，不能刪除/降級 required check
 - Controlled runner 不把完整 stdout/stderr 寫入暫存檔；每個 stream 只保留固定大小的 head/tail 診斷資料。兩者合計超過 Package policy snapshot 的 `max_check_output_bytes` 時，runner 嘗試終止受控 process group/tree、在固定期限後關閉 capture pipes，記錄 `output_limit_exceeded: true` 並判定失敗。平台限制導致只能終止 direct child 時另記錄 `termination_degraded: true`；不得把該次執行當成通過 evidence。缺少 Package 欄位時使用 10 MiB 相容預設值，但舊 evidence 若沒有實際上限欄位必須重跑。
 - 開發 correction 最多三輪，review/fix 最多三輪，transient retry 最多兩次；人工驗收修正另外使用同一 run 累計三輪額度，每次 start 計次，分批回饋也不重設。所有計數器不得因 resume 或換 Agent 重設。
 - Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改 check、worktree 或執行契約。已發布 evidence 可在事件追加失敗後補登錄。若 attempt 已開始但沒有完整 evidence，結果視為未知，先確認程序與外部副作用再處理，不以自動重跑假裝恢復成功。
-- 每一執行波依 `complete -> verified -> reviewed -> integrated` 推進；Reviewer closure 逐 task 計算，不能用一筆結果關閉整個 Slice。Coordinator 串行記錄每個 Slice 的 source heads、前一 delivery head 與 integration commit。相依 Slice 只在這一步完成後解鎖。所有 Slice 整合完成後，在最新 delivery branch 重跑 post-integration checks；失敗共用 correction 預算，修正完直接回到 post-integration verification，不重做已完成的 integration。
+- 每一執行波依 `complete -> verified -> reviewed -> integrated` 推進；Reviewer closure 逐 task 計算，不能用一筆結果關閉整個 Slice。Coordinator 串行記錄每個 Slice 的 source heads、前一 delivery head 與 integration commit。相依 Slice 只在這一步完成後解鎖。所有 Slice 整合完成後，在最新 delivery branch 驗證 post-integration checks；失敗共用 correction 預算，修正完直接回到 post-integration verification，不重做已完成的 integration。
+
+Atomic Package 本地只執行變更行為與受影響依賴的相關檢查，完整 regression 交給 CI，不固定在本地執行完整 build／lint／migration；其中任一項若是 Task 或整合的必要驗證，仍列為相關 check。Coordinator 在 Plan 記錄選測理由，影響擴大時依 Amendment 補充，不只看哪些測試檔被修改。Gate 不自動推算測試影響範圍，也不以本地通過宣稱 CI 已通過；合併依既有 CI 要求，未執行／等待／失敗如實回報。
+
+Atomic `verify` 接收本波各 checkout 最新內容的 evidence，早期 Task 的 required evidence 已由其 Result 驗證並保留歷史，不要求重跑於後續 HEAD。Reviewer 仍逐 Task 看原 commit 範圍，並核對 checkout 沒有在最後 Task Result／正式驗證後變動。`post-verify` 只要求 `phase: integration` 的 required checks；至少一項作為最終內容依據。相同 HEAD、完整 content tree 及 effective contract 的證據可跨狀態轉移沿用；HEAD／內容／契約改變時執行必要的相關檢查，不猜測舊證據仍適用。不建立純跑測試的 Task 或空 commit。舊 Package 維持原驗證規則。
 
 整合 Gate 除了檢查 source heads 與祖先關係，也比對前一 delivery HEAD 到 integration commit 的實際差異，拒絕超出 Package `approved_paths` 的產品檔案。此範圍包含合法 Technical Amendment 的修正，不另外縮限成原 task 路徑聯集。路徑以 NUL 分隔並將 rename 視為原路徑刪除與新路徑新增，檢查不改動 index。
 

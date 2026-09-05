@@ -140,6 +140,12 @@ def verification_checks(
         if task_id not in tasks:
             raise CogitoError("task verification requires a known task")
         return {key: checks[key] for key in tasks[task_id]["check_ids"]}
+    if contract.get("task_delivery") == "atomic":
+        if phase == "implementation":
+            # Tasks already closed with their own required evidence.
+            return {}
+        checks = {key: check for key, check in checks.items()
+                  if check.get("phase", "integration") == "integration"}
     return {key: check for key, check in checks.items() if check.get("required", True)}
 
 
@@ -179,7 +185,8 @@ def validate_evidence(
     supplied = {item["check_id"]: item for item in evidence}
     if phase == "task" and (len(supplied) != len(evidence) or set(supplied) != set(required)):
         raise CogitoError("task evidence must exactly cover its targeted checks")
-    if validate_supplied:
+    atomic = effective_contract.get("task_delivery") == "atomic"
+    if validate_supplied or (atomic and phase != "task"):
         known = {item['id']: item for item in effective_contract['checks']}
         if not supplied or len(supplied) != len(evidence) or supplied.keys() - known.keys():
             raise CogitoError('human evidence must name distinct known checks and cannot be empty')
@@ -199,6 +206,10 @@ def validate_evidence(
                                and item["payload"].get("status") == "leased"), default=0)
         if not anchor_sequence:
             raise CogitoError("task evidence requires a recorded lease")
+    elif atomic:
+        # Runtime also checks current content: state-only transitions need not
+        # force a repeat of a check bound to exactly the same content/contract.
+        anchor_sequence = 0
     if set(required) - set(supplied):
         raise CogitoError("required verification evidence is missing")
 

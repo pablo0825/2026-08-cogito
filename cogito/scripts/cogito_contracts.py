@@ -288,6 +288,7 @@ def _validate_task_delivery(package: Mapping[str, Any]) -> None:
     if not any(check.get("required", True) and check.get("phase", "integration") == "integration"
                for check in checks.values()):
         raise CogitoError("atomic task delivery requires a required integration check")
+    targeted: set[str] = set()
     for task in package["execution_dag"]["tasks"]:
         require_string(task.get("responsibility"), "task.responsibility")
         require_paths(task.get("paths"), "task.paths", nonempty=True)
@@ -299,6 +300,12 @@ def _validate_task_delivery(package: Mapping[str, Any]) -> None:
             require_id(check_id, "task check id")
             if check_id not in checks or checks[check_id].get("required", True) is not True:
                 raise CogitoError("task.check_ids must reference required checks")
+            targeted.add(check_id)
+    orphaned = sorted(check_id for check_id, check in checks.items()
+                      if check.get("required", True) and check.get("phase") == "task"
+                      and check_id not in targeted)
+    if orphaned:
+        raise CogitoError(f"required task checks must be referenced by a task: {orphaned}")
 
 
 def validate_required_checks(
@@ -319,6 +326,10 @@ def validate_required_checks(
     })
     if optional:
         raise CogitoError(f"Package marks checks required by {source} as optional: {optional}")
+    task_only = sorted(check_id for check_id in required_ids
+                       if by_id[check_id].get("phase", "integration") != "integration")
+    if task_only:
+        raise CogitoError(f"checks required by {source} must remain integration-scoped: {task_only}")
 
 
 def validate_human_gate(human: Any, *, frozen: bool = False) -> None:

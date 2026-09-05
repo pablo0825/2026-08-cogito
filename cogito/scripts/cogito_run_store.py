@@ -560,10 +560,21 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             raise CogitoError("review requires recorded verification")
         paths = verified[-1]["payload"]["evidence"]
         evidence = [_load_json(Path(path)) for path in paths]
+        if self.approved_package().get("task_delivery") == "atomic" and verified[-1]["type"] == "verification-passed":
+            for path in paths:
+                entry = snapshot.state["evidence"].get(path)
+                if not entry or (entry.get("event_sequence") or 0) >= verified[-1]["sequence"]:
+                    raise CogitoError("review evidence was not part of the recorded verification")
+            self._validate_atomic_wave(evidence, snapshot)
+            return
         head = self._git_at(worktree, "rev-parse", "HEAD")
         matching = [item for item in evidence if item["head_commit"] == head]
         if not matching or any(item["worktree_binding"].get("content_tree") != content_tree for item in matching):
             raise CogitoError("review worktree differs from verified content; rerun verification")
+        if self.approved_package().get("task_delivery") == "atomic":
+            self._validate_evidence(self.approved_package(), matching, snapshot=snapshot,
+                                    phase="post-integration", current_head=head, validate_supplied=True)
+            return
         amendments = [event["payload"]["amendment"] for event in snapshot.events
                       if event["type"] == "technical-amendment-added"]
         effective = materialize_contract_with_limits(self.approved_package(), amendments, self.workflow["limits"])
@@ -582,6 +593,52 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
                                 phase="post-integration" if verified[-1]["type"] == "human-correction-verified" else "implementation",
                                 current_head=head if verified[-1]["type"] == "human-correction-verified" else None)
 
+    def _validate_atomic_wave(self, evidence: Sequence[Mapping[str, Any]], snapshot: EventSnapshot) -> None:
+        """Keep Task receipts historical while binding review to current contents."""
+        for item in evidence:
+            validate_check_evidence(item)
+        state = snapshot.state
+        tasks = {key: task for key, task in state["tasks"].items()
+                 if task["status"] in {"complete", "verified"}}
+        latest = {result["task_id"]: result for result in state["agent_results"]
+                  if result["role"] == "implementer" and result["task_id"] in tasks}
+        if not tasks or set(latest) != set(tasks) or any(result["status"] != "complete" for result in latest.values()):
+            raise CogitoError("atomic verification requires completed Task Results")
+        # Each contract was verified when its Result was recorded. Amendments
+        # do not retroactively change those authenticated historical receipts.
+        for result in latest.values():
+            for path in result["evidence"]:
+                item = _load_json(Path(path))
+                entry = state["evidence"].get(path)
+                if not entry or entry["evidence_hash"] != hash_json(item):
+                    raise CogitoError("recorded Task evidence changed or is missing")
+        worktrees = {Path(task["worktree"]) for task in tasks.values()}
+        used: set[str] = set()
+        for worktree in worktrees:
+            results = [result for result in state["agent_results"]
+                       if result["role"] == "implementer" and result["task_id"] in tasks
+                       and result is latest[result["task_id"]]
+                       and Path(tasks[result["task_id"]]["worktree"]) == worktree]
+            last = results[-1]
+            head = self._git_at(worktree, "rev-parse", "HEAD")
+            if (last["head_commit"] != head
+                    or self._git_at(worktree, "branch", "--show-current") != tasks[last["task_id"]]["branch"]):
+                raise CogitoError("review checkout changed after its last Task Result")
+            tree = self._require_atomic_clean(worktree, head, state)
+            for result in results:
+                self._git_at(worktree, "merge-base", "--is-ancestor", result["head_commit"], head)
+            matching = [item for item in evidence
+                        if item["worktree_binding"].get("content_tree") == tree
+                        and (item["head_commit"] == head or item["evidence_path"] in last["evidence"])]
+            if not matching:
+                raise CogitoError("atomic review requires evidence for the current checkout content")
+            for item in matching:
+                self._validate_evidence(self.approved_package(), [item], snapshot=snapshot,
+                                        phase="implementation")
+                used.add(item["evidence_path"])
+        if len(used) != len(evidence) or used != {item["evidence_path"] for item in evidence}:
+            raise CogitoError("wave evidence must describe current checkout contents only")
+
     @run_mutation
     def complete_verification(self, evidence: Sequence[Mapping[str, Any]], action_id: str | None = None) -> RunState:
         request_hash = request_fingerprint("verify", evidence=evidence)
@@ -594,7 +651,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             raise CogitoError("verification closure is not legal in the current state")
         package = self._approved_package_from_state(current)
         self._events.refresh_cache(current)
-        self._validate_evidence(package, evidence, snapshot=snapshot, phase="implementation")
+        if package.get("task_delivery") == "atomic":
+            self._validate_atomic_wave(evidence, snapshot)
+        else:
+            self._validate_evidence(package, evidence, snapshot=snapshot, phase="implementation")
         payload = {"passed": True, "evidence": [item["evidence_path"] for item in evidence]}
         validate_transition(self.workflow, current["state"], "verification-passed", payload, current["counters"])
         return self.record(
@@ -1375,7 +1435,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
         required = set(verification_checks(effective, phase, task_id))
         supplied = {item["check_id"]: item for item in evidence}
-        if validate_supplied:
+        if validate_supplied or (effective.get("task_delivery") == "atomic" and phase != "task"):
             known = {check['id'] for check in effective['checks']}
             if not supplied or len(supplied) != len(evidence) or supplied.keys() - known:
                 raise CogitoError('human evidence must name distinct known checks and cannot be empty')
@@ -1404,6 +1464,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             validate_supplied=validate_supplied,
             task_id=task_id,
         )
+        if effective.get("task_delivery") == "atomic" and phase == "post-integration":
+            tree = self._require_atomic_clean(self.root, str(current_head), snapshot.state)
+            if any(item["worktree_binding"].get("content_tree") != tree for item in evidence):
+                raise CogitoError("integration evidence does not match current delivery content")
 
     def next_action(self) -> dict[str, Any]:
         from cogito_disposition_scope import dispositions

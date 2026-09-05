@@ -51,7 +51,9 @@ Agent Result 至少回報 run/task/agent/role、status、base/head commit、chan
 
 Atomic Task 執行順序為 `task leased` → `task running` → 實作及 targeted `run-check` → 獨立 commit → `agent-result` → `task complete`。也可先 commit 再檢查；提交前的證據只有在檢查內容與提交後內容完全相同時才有效。Result 的 `evidence` 精確列出該 Task `check_ids` 的 controlled evidence 路徑。Gate 驗證一個非空、單一 parent 的 commit，parent 必須為 lease base；拒絕混入未提交產品內容、過期或不完整證據。下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙混入未登錄修改。正式檢查失敗時留在該 Task 修正並以新 action ID 重跑，不能先宣告完成。一般 run 的 block／resume 保留原 lease 與證據歷史。
 
-Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task 最新完成 Implementer Result 的 `base_commit`／`head_commit`，不把後續 task 的 commit 範圍併入。該 head 必須仍是目前 worktree HEAD 的祖先；目前 HEAD 與內容須對應本輪 `verification-passed` 採用的正式 evidence。修正後重新驗證，即需重新提交本輪各 task 的 review，不能沿用上一輪核准。審查結束轉移也會重新比對 worktree，拒絕 review 後才加入的未驗證內容。只有 optional checks 的 Package 仍需至少一份本輪已登錄、未竄改且通過的 controlled evidence 作為審查內容依據。
+Atomic `verify --evidence` 提交本波每個 checkout 最新內容的一份或多份相關證據，不把較早 Task 的歷史 evidence 當成目前內容。最後 Task 的提交前證據若與交付內容完全一致，可作為該 Task Result 綁定的 review 證據。`post-verify` 提交 required integration checks 的證據；只在 HEAD、完整 content tree、effective contract 均相同時沿用既有證據，否則執行相關檢查。`Result.checks` 記錄最後整合驗證採用的 checks；Task 檢查留在 Implementer Results 與 delivery summary，不混入最終內容快照依據。
+
+Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task 最新完成 Implementer Result 的 `base_commit`／`head_commit`，不把後續 task 的 commit 範圍併入。該 head 必須仍是目前 worktree HEAD 的祖先；目前 HEAD 與內容須對應本輪 `verification-passed` 採用的正式 evidence；atomic 模式也接受最後 Task Result 綁定的相同內容提交前證據。修正後重新驗證，即需重新提交本輪各 task 的 review，不能沿用上一輪核准。審查結束轉移也會重新比對 worktree，拒絕 review 後才加入的未驗證內容。只有 optional checks 的 Package 仍需至少一份本輪已登錄、未竄改且通過的 controlled evidence 作為審查內容依據。
 
 Maintenance 的新 lease 由 Gate 記錄 working tree 與 index 兩份起始快照；Implementer Result 的 `changed_paths` 只列本次任務相對這兩份快照的增量。Gate 另驗整個 checkout 的累積修改是否仍在 Package 範圍內，且不更動使用者 index。請在取得 lease 後才修改或 stage 任務負責的檔案，不要替其他 task stage；一般執行階段的任務間隙若出現未登錄修改，下一個 lease 會拒絕。獨立 Reviewer 使用 Gate 保存的該任務完成快照判定責任，並確認目前內容仍是本輪正式驗證的內容。舊 lease 完全沒有快照時，維持原本保守的 baseline 全範圍驗證，不從目前檔案倒填起始快照；因此舊版多 task run 可能仍需另外處理，不能自動套用新的增量規則。不完整或 Git object 遺失的快照會拒絕操作。
 
