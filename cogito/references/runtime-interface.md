@@ -49,7 +49,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> transition \
 
 Agent Result 至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
 
-Atomic Task 執行順序為 `task leased` → `task running` → 實作及 targeted `run-check` → 獨立 commit → `agent-result` → `task complete`。也可先 commit 再檢查；提交前的證據只有在檢查內容與提交後內容完全相同時才有效。Result 的 `evidence` 精確列出該 Task `check_ids` 的 controlled evidence 路徑。Gate 驗證一個非空、單一 parent 的 commit，parent 必須為 lease base；拒絕混入未提交產品內容、過期或不完整證據。下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙混入未登錄修改。正式檢查失敗時留在該 Task 修正並以新 action ID 重跑，不能先宣告完成。一般 run 的 block／resume 保留原 lease 與證據歷史。
+Atomic Task 執行順序為 `task leased` → `task running` → 實作及 targeted `run-check` → 獨立 commit → `agent-result` → `task complete`。也可先 commit 再檢查；提交前的證據只有在檢查內容與提交後內容完全相同時才有效。Result 的 `evidence` 精確列出該 Task `check_ids` 的 controlled evidence 路徑。Gate 驗證一個非空、單一 parent 的 commit，parent 必須為 lease base；拒絕混入未提交產品內容、過期或不完整證據。下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙混入未登錄修改。正式檢查失敗時留在該 Task 修正並以新 action ID 重跑，不能先宣告完成。一般 run 的 block／resume 保留原 lease 與證據歷史。Task 本身走 `blocked → pending → leased` 時保留原 base，允許原 paths 內未完成的修改或尚未登錄的一個 commit，但須在新 lease 後重新執行 targeted checks；已登錄的完成 commit 不得改寫，也不能吸收其他 Task 的變更。
 
 Atomic `verify --evidence` 提交本波每個 checkout 最新內容的一份或多份相關證據，不把較早 Task 的歷史 evidence 當成目前內容。最後 Task 的提交前證據若與交付內容完全一致，可作為該 Task Result 綁定的 review 證據。`post-verify` 提交 required integration checks 的證據；只在 HEAD、完整 content tree、effective contract 均相同時沿用既有證據，否則執行相關檢查。`Result.checks` 記錄最後整合驗證採用的 checks；Task 檢查留在 Implementer Results 與 delivery summary，不混入最終內容快照依據。
 

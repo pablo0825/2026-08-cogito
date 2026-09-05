@@ -115,6 +115,47 @@ class AtomicTaskTests(GitTestCase):
         with self.assertRaises(CogitoError):
             store.update_task('T-b', 'leased', 'worker')
 
+    def test_interrupted_task_retains_original_base_and_requires_fresh_evidence(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed):
+                _, worker, store, _ = self.executing()
+                self.lease(store)
+                base = git(worker, 'rev-parse', 'HEAD')
+                (worker / 'src/a.txt').write_text('after\n')
+                if committed:
+                    self.commit(worker)
+                old = self.check(store, worker)
+                store.update_task('T-a', 'blocked', 'worker')
+                store.update_task('T-a', 'pending', 'worker')
+                self.lease(store)
+                self.assertEqual(store.load()['tasks']['T-a']['base_commit'], base)
+                if not committed:
+                    self.commit(worker)
+                with self.assertRaisesRegex(CogitoError, 'predates'):
+                    store.submit_agent_result(self.result(store, worker, [old]))
+                fresh = self.check(store, worker, action='resumed-check')
+                store.submit_agent_result(self.result(store, worker, [fresh]))
+                store.update_task('T-a', 'complete', 'worker')
+                self.lease(store, 'T-b')
+
+    def test_interrupted_task_cannot_absorb_another_task_or_rewrite_recorded_commit(self):
+        for mode in ('outside-path', 'rewrite-recorded'):
+            with self.subTest(mode=mode):
+                _, worker, store, _ = self.executing()
+                self.lease(store)
+                (worker / 'src/a.txt').write_text('after\n')
+                if mode == 'rewrite-recorded':
+                    self.commit(worker)
+                    evidence = self.check(store, worker)
+                    store.submit_agent_result(self.result(store, worker, [evidence]))
+                    git(worker, 'commit', '--amend', '-qm', 'different recorded commit')
+                else:
+                    (worker / 'src/b.txt').write_text('unowned change\n')
+                store.update_task('T-a', 'blocked', 'worker')
+                store.update_task('T-a', 'pending', 'worker')
+                with self.assertRaises(CogitoError):
+                    store.update_task('T-a', 'leased', 'worker')
+
     def test_one_commit_per_task_and_precommit_content_evidence(self):
         _, worker, store, _ = self.executing()
         first, evidence = self.implement(store, worker, precommit=True)

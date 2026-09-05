@@ -358,11 +358,16 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             else:
                 worktree, branch = self._task_worktree(task, package)
             base_commit = self._git_at(worktree, "rev-parse", "HEAD")
+            resuming_atomic = package.get("task_delivery") == "atomic" and bool(task.get("base_commit"))
             if package.get("task_delivery") == "atomic":
                 if any(is_active_task(item) and Path(str(item.get("worktree", ""))).resolve() == worktree.resolve()
                        for item in current["tasks"].values()):
                     raise CogitoError("atomic tasks require one active lease per checkout")
-                self._require_atomic_clean(worktree, base_commit, current)
+                if resuming_atomic:
+                    self._validate_atomic_task_resume(worktree, branch, task, current)
+                    base_commit = task["base_commit"]
+                else:
+                    self._require_atomic_clean(worktree, base_commit, current)
             task_slice = effective_slice_id(task)
             prior_heads = [
                 item["head_commit"] for item in current["agent_results"]
@@ -370,7 +375,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
                 and effective_slice_id(current["tasks"].get(item.get("task_id"), {})) == task_slice
             ]
             expected_base = prior_heads[-1] if prior_heads and current["state"] not in {"post-integration-correction", "human-correction"} else self._git("rev-parse", "HEAD")
-            if base_commit != expected_base:
+            if not resuming_atomic and base_commit != expected_base:
                 carried = current.get('carryover_worktrees', {}).get(str(worktree))
                 index, tree = capture_index_and_worktree_trees(worktree)
                 if (prior_heads or not carried or carried != {'head': base_commit, 'index_tree': index, 'content_tree': tree}
@@ -519,6 +524,34 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             AgentResultRecordedEvent(type="agent-result-recorded", payload=payload), action_id,
             request_hash=request_hash,
         )
+
+    def _validate_atomic_task_resume(
+        self, worktree: Path, branch: str, task: Mapping[str, Any], state: RunState,
+    ) -> None:
+        """Retain an interrupted Task's original base and in-scope unfinished work."""
+        if (Path(task["worktree"]).resolve() != worktree.resolve() or task["branch"] != branch
+                or self._git_at(worktree, "branch", "--show-current") != branch):
+            raise CogitoError("atomic task resume must retain its leased checkout")
+        base = task["base_commit"]
+        head = self._git_at(worktree, "rev-parse", "HEAD")
+        if head != base and self._git_at(worktree, "rev-list", "--parents", "-n", "1", head).split()[1:] != [base]:
+            raise CogitoError("atomic task resume must retain its original commit base")
+        recorded = [result for result in state["agent_results"]
+                    if result["task_id"] == task["id"] and result["role"] == "implementer"
+                    and result["status"] == "complete"]
+        if recorded:
+            if recorded[-1]["head_commit"] != head:
+                raise CogitoError("cannot rewrite an already recorded atomic commit")
+            self._require_atomic_clean(worktree, head, state)
+        controls = {state.get("package_path"), "docs/cogito/project-graph.json"}
+        changes = working_tree_changed_paths(worktree, base)
+        for tree in capture_index_and_worktree_trees(worktree):
+            changes.update(filter(None, self._git_at(
+                worktree, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", base, tree, "--",
+            ).split("\0")))
+        if any(path not in controls and not path.startswith(".cogito/")
+               and not _path_allowed(path, task["paths"]) for path in changes):
+            raise CogitoError("atomic task resume exceeds its original path responsibility")
 
     def _require_atomic_clean(self, worktree: Path, head: str, state: RunState) -> str:
         index, tree = capture_index_and_worktree_trees(worktree)
