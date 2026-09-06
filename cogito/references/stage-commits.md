@@ -31,21 +31,11 @@ Git commit 已成功而 receipt 未成功時，先檢查 HEAD 與事件，沿用
 
 RP successor 仍依 [Replanning](replanning.md) 保存 frozen delivery 快照與既有 handoff 流程；本次階段提交不套用於 RP，以保留撤回後恢復 source 的能力。CLI 偵測有效 RP successor 時預設維持舊協定，明確要求 `--stage-commits` 會在初始化前拒絕，不改動原 run。
 
-## 實作到結案
+## 準備完成後
 
-| 階段 | 提交方式 | 原因 |
-|---|---|---|
-| Worker 完成一個 Task | Atomic Task 的程式、相關測試與必要文件必須獨立 commit；較大的工作先在 Package 拆成多個 Task | 方便審查與回復，避免程式與保障其行為的測試分離 |
-| Slice 整合 | 保留實際 worker commits，由 Gate 登記整合 HEAD；可 fast-forward | 保存真正交付的版本，不為了湊階段數建立空 commit |
-| 驗證或獨立 review | 結果先記錄在本地事件與 evidence；若需要改程式，另建合法修正 commit | 單純檢查不會改變產品版本；修正則必須可追蹤 |
-| 人工驗收 | 退回、再次驗證與確認記錄於事件；一般修正各自 commit | 使用者尚未接受時不能先結案；有明確條件式授權時依 Human Acceptance 規則處理 |
-| 正式結案 | 最後一個 commit 保存 Result、Project Graph 與完整 `delivery_summary` | 將主要版本、檢查、審查與人工驗收歷程一併保存至 Git |
+Start Gate 後的 Task commits、驗證、審查與整合依 [Execution Policy](execution-policy.md)。Maintenance 的單一交付 commit 從 Start Gate HEAD 起算，不包含準備階段的 Package checkpoint。
 
-Maintenance 仍採 Start Gate 後單一產品 commit：任務與修正先保存工作樹快照，最後連同 Result／Graph 提交。摘要以基線、content tree 表示這些未提交成果，不捏造中途 commit。
-
-進入 `finalizing` 後執行 `delivery-summary --run-id <run-id>`，將輸出 JSON 原樣放入 Result 的 `delivery_summary` 欄位，再提交 Result 與 Project Graph。摘要由 Gate 從實際事件產生，包含準備 checkpoint、implementer 的任務與版本、整合版本、controlled checks、獨立 reviewer，以及人工退回／修正／接受紀錄。產生摘要本身不代表已結案；`finalize` 仍須核對已提交 Result、事件與驗證內容。
-
-啟用 `stage_commits` 的 run 缺少摘要、漏掉階段、改動 commit 或使用過期驗收摘要時，Gate 拒絕結案。完整檢查輸出與回饋原文仍留在本地 `.cogito`；Git 中保存的是摘要與證據引用，不提供完整事件還原，也不另建 audit branch。Result 不含自身 commit ID；通過 finalization 後，由結案報告附上實際 final commit。
+Gate 進入 `finalizing` 後，依 [Finalization](finalization.md) 將準備與交付歷程合成 `delivery_summary`，隨 Result／Project Graph 保存。檢查或審查本身不建立空 commit。
 
 ## 相容性
 

@@ -45,16 +45,12 @@ Atomic 整合另以 Git `merge-tree --write-tree` 比對前一 delivery HEAD 與
 
 人工退回使用專用分類、修正、驗證與審查階段，詳見 [Human Acceptance](human-acceptance.md)。局部且影響明確才可原任務修正；操作流程改變、較大邏輯調整或修正中影響擴大轉 RP。混合回饋預設整批走 RP，只有使用者明確要求分批才拆開。每輪使用新的 Amendment／task，重跑正式 post-integration checks 及獨立 review，包含 Maintenance。未表明驗收完成時先修再等待；只有本批明確授權「其餘接受、修好即可」且內容／證據相符才可進 finalizing。第三輪仍未通過就停止並回報失敗分析，不能以新回饋或恢復重設額度。
 
-## Finalizing
-
-啟用階段提交的 run 先執行 `delivery-summary --run-id <ID>`，將輸出原樣存入 Result 的 `delivery_summary`。摘要由事件產生，涵蓋準備、各次實作與修正、實際整合、checks、獨立審查及人工驗收；缺項、過期或與事件不符都拒絕結案。Gate 另確認準備與已提交 amendment 的 commit 都是 final commit 的祖先。先前 blocked／失敗的 Agent Result 仍是歷史，不要求未採用的工作版本被整合。完整操作見 [Stage Commits](stage-commits.md)。
-
-以一個 final commit 原子保存 Result、Project Graph 最終 disposition、清除 `active_run_id` 及當時已知的 commit/amendment 摘要。只有該 run 的 canonical Result 與 Project Graph 可以不同於最後驗證的 `content_tree`；必要 Spec/Plan 更新必須先完成再執行最後驗證。Feature／Change／Correction 的 final commit 也只能改這兩份結案紀錄。Maintenance／documentation 可提交已驗證的工作樹內容，但不能夾帶驗證後的修改或漏交檔案。缺少 `content_tree` 或其 Git object 時必須重跑 checks，不改寫既有 evidence。Result 不能內嵌包含自身的 final commit ID；commit 成功後，Gate 將實際 ID 追加到 event history 並用於結案報告，然後才能 `accepted`。失敗不可先報結案，應進入既有 blocked／修正流程。
-
-所有 Package kind 結案時都再次檢查 Start Gate HEAD 到 final commit 的完整交付範圍，套用上述精確控制文件規則，再驗證 Result／Project Graph 結案內容。已通過 integration、post checks 或符合 verified content tree，都不能取代核准範圍檢查。
-
-Maintenance 的 `single_commit` 指從 Start Gate HEAD 到 final commit 只有一個新 commit。實作與 checks 在目前 checkout 的 working-tree snapshot 上完成，Agent Result 可使用相同 base/head 並以實際 dirty/untracked path 回報；integration milestone 記錄該 Start HEAD 作為尚未提交的整合檢查點。最後才把產品變更、Result 與 Project Graph 一次提交。不得先提交產品變更再另做 metadata commit。
+## Maintenance 任務回報與修正
 
 Maintenance Agent Result 的 `changed_paths` 必須完整列出 staged、unstaged 與 untracked 的產品路徑，不能因 base/head 相同或內容已 staged 而省略；rename 按原路徑刪除與新路徑新增一起檢查。Gate 讀取 staging 狀態但不改動 index。結案另外比對 Start HEAD 到 final commit 的全部差異，除上述精確控制文件例外外，都必須在核准路徑內；通過 checks 或與 verified content tree 相同不代表可以擴張範圍。
 
 Maintenance 的 technical correction、review-fix 與 post-integration correction 也維持此規則：completion 命令的 `--commit-id` 使用不變的 Start Gate HEAD，Gate 記錄修正工作樹的 `content_tree` 與 `completion_mode: working-tree`，不要求先建立修正 commit。新增任務仍須完成 lease／Implementer Result；完成後依原流程重跑 controlled checks 與適用的獨立審查，快照本身不代表驗證通過。Result 的對應 amendment 使用 `{id, base_commit, content_tree}`，三者必須與 completion event 一致；不填尚未存在的 final commit ID。唯一 final commit 必須以 Start HEAD 為唯一 parent，並帶齊各 amendment 的 `Cogito-Amendment: <ID>` trailer。Gate 驗證結案後，僅在衍生結案報告補上這些 amendment 的實際 final commit ID，不改寫 Result。其他 kind 仍使用原本先建立修正 commit 的流程。
+
+## 結案
+
+Gate 進入 `finalizing` 後，依 [Finalization](finalization.md) 完成最後內容核對、Result／Graph、final commit 與結案登記。Maintenance 從 Start Gate HEAD 起只建立一個交付 commit，任務及修正先保留工作樹快照。

@@ -59,8 +59,6 @@ Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task
 
 Maintenance 的新 lease 由 Gate 記錄 working tree 與 index 兩份起始快照；Implementer Result 的 `changed_paths` 只列本次任務相對這兩份快照的增量。Gate 另驗整個 checkout 的累積修改是否仍在 Package 範圍內，且不更動使用者 index。請在取得 lease 後才修改或 stage 任務負責的檔案，不要替其他 task stage；一般執行階段的任務間隙若出現未登錄修改，下一個 lease 會拒絕。獨立 Reviewer 使用 Gate 保存的該任務完成快照判定責任，並確認目前內容仍是本輪正式驗證的內容。舊 lease 完全沒有快照時，維持原本保守的 baseline 全範圍驗證，不從目前檔案倒填起始快照；因此舊版多 task run 可能仍需另外處理，不能自動套用新的增量規則。不完整或 Git object 遺失的快照會拒絕操作。
 
-Finalization 先產生不含自身 final commit ID 的 Result 與 Project Graph，以單一 commit 寫入。Gate 比對 final commit 與最後驗證 evidence 的 `worktree_binding.content_tree`，僅允許該 run 的 canonical Result 與 Project Graph 不同；Spec／Plan 必須在最後驗證前更新。舊 evidence 沒有此 tree 或其 Git object 不可用時，需重跑 controlled checks。Commit 成功且內容驗證通過後，Gate 才把實際 ID 追加到 event history 與結案報告並轉為 `accepted`；不得為了讓 Result 記錄自身 commit 而 amend 或重寫該 commit。
-
 Maintenance 修正使用未提交快照：`correction-complete`／`review-fix-complete` 的 `--commit-id` 指定 Start Gate HEAD，checkout 必須仍在原 delivery branch 與相同 HEAD。Gate 追加的 completion payload 包含 `completion_mode: working-tree`、`commit_id`（基線檢查點）與 `content_tree`。Result amendment 將後兩者記為 `base_commit`、`content_tree`，不含 `commit_id`；final commit 帶齊 trailers，結案報告再補實際 amendment commit ID。不可把此格式套用到其他 kind，或跳過修正後的正式 checks；詳見 Execution Policy。
 
 Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證據遺失、hash 不符、DAG 有環、超出允許路徑或 action 無法對帳時，Coordinator 必須停止推進並依上述方式處理。命令報錯不等於已寫入 `block` 事件；提交後的快取或權限錯誤也可能發生在事件已落盤之後，應先查詢事件還原的狀態。若 Gate 不可用、歷史無法驗證、Package 漂移或儲存故障使 `block` 本身也被拒絕，保留現場並回報無法登錄阻塞，不編輯 `state.json`，也不宣稱 run 已變為 `blocked`。
@@ -86,15 +84,8 @@ RP 內的 `toolchain-propose`、`toolchain-review`、`toolchain-approve`、`tool
 
 ## 階段提交
 
-在 `finalizing` 使用 `delivery-summary --run-id <ID>` 取得 Result 的 `delivery_summary` 欄位，查詢不建立 commit 或追加事件。Gate 從同一份事件快照產生摘要，`finalize` 再與已提交 Result 逐項核對。啟用階段提交的 run 必填，舊 run 可省略；若提供也須與事件相符。`report` 讀取 final commit 內的摘要，並另外提供 final commit ID，不從目前工作副本重建或改寫 Result。
-
 一般 run 的 `init` 預設啟用 `stage_commits`，有效 RP successor 保留既有 frozen-delivery 協定。Shared Understanding confirmation、Boundary complete 與 Package approval 後，`next` 先回傳 `commit-stage-artifacts`；未登記對應 commit 前拒絕推進。`checkpoint prepare` 產生精確路徑清單與不可變階段紀錄，Coordinator 建立本地 commit，再以 `checkpoint record --commit-id ... --action-id ...` 交給 Gate 驗證。操作與相容性詳見 [Stage Commits](stage-commits.md)。
 
+## 結案與清理
 
-## 結案後 worktree 清理
-
-`finalize` 成功寫入 `accepted` 後，自動嘗試回收本次 Run 已不再使用的 Cogito worktree。只有核准 Package、Task lease（或 RP adoption）與 Git 登記一致、Task 已整合、HEAD 已完整包含於 final commit，且沒有執行中的 Worker／check、其他 Run 引用或進行中的 RP／DP，才會移除。只處理 `.cogito/worktrees/` 內的實際受管目錄；目前工作目錄、符號連結、locked worktree、未提交或未追蹤內容、隱藏修改的索引旗標都會使清理保留該目錄。
-
-已忽略的 `node_modules`、`__pycache__`、`.pytest_cache`、`.mypy_cache` 可隨 worktree 移除；其他 ignored 資料（例如 `.env`、本地資料庫）會阻止清理。使用一般 `git worktree remove` 一併移除該 worktree 的 Git 登記，不使用 force 或全域 prune；branch 與 `.cogito/runs/<run-id>` 全部保留。清理前以 `refs/cogito/cleanup/<run-id>/` 保護事件與 evidence 引用的 Git 物件，避免後續 Git GC 破壞稽核內容。
-
-`finalize` 回應的 `cleanup.removed`／`cleanup.retained` 列出移除項目與保留原因；清理故障不會撤回 `accepted`。排除保留原因後，重送原本相同參數與 `--action-id` 的 `finalize` 即可重試，不重做驗收或追加結案事件。已清理的 worktree 直接略過。Run 內的 `cleanup.json` 留存與 accepted 事件綁定的清理憑據，供中斷恢復及後續 RP／DP 辨識已清理的歷史 worktree；不改寫原事件、evidence、Result 或結案報告。沒有額外清理命令、branch 刪除或 runtime 到期刪除政策。
+進入 `finalizing` 後依 [Finalization](finalization.md) 產生摘要、提交 Result／Graph、登記 final commit 並回報清理結果。commit 已成功而登記失敗時，先核對既有結果，沿用原 action ID 與參數重送，不再次 commit。

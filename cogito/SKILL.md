@@ -70,7 +70,8 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
 | Package 類型判斷（`assess-mini-package-eligibility`）、Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
 | 階段文件提交與登記 | [stage-commits.md](references/stage-commits.md) |
-| Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
+| Start Gate、Worker、驗證、審查、整合或修正 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
+| 結案（`write-result-and-finalize`）、結案回報與 worktree 清理 | [finalization.md](references/finalization.md) |
 | 首次在舊專案處理能力 | [project-bootstrap.md](references/project-bootstrap.md) |
 
 不要預載其他 reference。Python executable contracts 是資料驗證規則的唯一來源，workflow JSON 定義狀態轉移；Markdown reference 解釋 Agent 應遵守的語意。JSON 是實際資料，不另維護手寫 JSON Schema。
@@ -99,6 +100,4 @@ Maintenance 修正先記錄未提交的工作樹快照並重跑 checks，直到�
 
 ## 最終化
 
-啟用階段提交的 run 先執行 `delivery-summary --run-id <ID>`，將 Gate 產生的事件摘要原樣放入 Result 的 `delivery_summary`。缺少摘要或摘要與實際準備、實作、整合、驗證、審查及人工接受紀錄不符時，不得結案。Feature／Change／Correction 每個 Task 的實作、相關測試及必要文件必須獨立 commit，targeted checks 通過並記錄 Result 後才繼續；本地只跑變更及相關檢查，完整 regression 交給 CI。整合可 fast-forward，檢查本身不建立空 commit。詳見 [Stage Commits](references/stage-commits.md)。
-
-進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗先停止操作、查明事件是否已提交，再依 Runtime Interface 處理阻塞與復原。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。 `accepted` 寫入後由 Gate 自動安全回收已整合且閒置的受管 worktree，保留 branch、runtime 與稽核 Git 物件；清理失敗只回報保留原因，不改變結案狀態。需要重試時重送相同 `finalize` 參數與 action ID，詳見 Runtime Interface。
+只有 Gate 進入 `finalizing` 後才依 [Finalization](references/finalization.md) 結案。Result 不包含自身的 final commit ID；提交與 Gate 驗證完成後才回報 `accepted`。清理失敗只回報保留原因，不撤回已完成的驗收。

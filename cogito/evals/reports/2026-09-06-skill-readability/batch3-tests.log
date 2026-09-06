@@ -1,0 +1,10 @@
+test_only_exact_metadata_paths_are_exempt (test_finalization_content.FinalizationContentTests.test_only_exact_metadata_paths_are_exempt) ... ok
+test_omitting_verified_untracked_content_is_rejected (test_finalization_content.FinalizationContentTests.test_omitting_verified_untracked_content_is_rejected) ... ok
+test_legacy_evidence_requires_rerun_without_rewriting_it (test_finalization_content.FinalizationContentTests.test_legacy_evidence_requires_rerun_without_rewriting_it) ... ok
+test_unknown_ignored_and_untracked_data_and_changes_are_retained (test_cleanup.CleanupTests.test_unknown_ignored_and_untracked_data_and_changes_are_retained) ... ok
+test_remove_failure_retains_accepted_and_prepared_proof_is_retryable (test_cleanup.CleanupTests.test_remove_failure_retains_accepted_and_prepared_proof_is_retryable) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.668s
+
+OK
