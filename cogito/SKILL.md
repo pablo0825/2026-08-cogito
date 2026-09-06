@@ -23,6 +23,10 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 
 訊息含 `$cogito` 時啟動或恢復。沒有 invocation 時，只有直接回答上一個未決 Grilling 問題、摘要確認、Package approval 或 human gate 才可續接；其他訊息依一般對話處理。`$cogito` 本身不是核准。
 
+## 選擇 Package 類型
+
+準備文件前，先讀 [Package Authoring 的類型選擇](references/package-authoring.md#選擇-package-類型)。Feature／Change／Correction 使用完整 Package；符合條件的 Maintenance／Documentation 使用 Mini Package，不建立 Slice、Spec 或 Plan。Documentation 仍需獨立審查；Maintenance 的一般審查豁免不適用人工驗收退回修正。
+
 ## 執行協定
 
 1. 執行 `cogito/scripts/cogito_gate.py` 查詢或建立 run；一般 run 的 `init` 預設啟用階段提交，不關閉此檢查；有效 RP successor 依既有凍結交接流程初始化。未確認草稿保存在 `.cogito/runs/DEV-*/drafts/`。
@@ -31,7 +35,7 @@ description: Use when a user explicitly invokes $cogito, or directly answers the
 4. 每次轉移後再次查詢 Gate。`commit-stage-artifacts` 時依 [Stage Commits](references/stage-commits.md) 提交並登記該階段的精確文件，完成後才前進。計數器跨 resume 與 Agent 更換保留；不得用對話記憶代替 event history。
 5. 一般 `blocked` 經 Resume Gate 回到合法狀態；核准前修訂可依 planning Gate 的合法來源檢查開啟規劃輪次；`cancelled`、`accepted` 與 `superseded` 是終態。
 
-狀態主路徑為：
+完整 Development Package 的狀態主路徑為：
 
 ```text
 preparing -> awaiting-shared-confirmation -> boundary-analysis
@@ -39,6 +43,8 @@ preparing -> awaiting-shared-confirmation -> boundary-analysis
 -> executing -> verifying -> reviewing -> integrating -> executing (下一個 DAG wave)
 -> post-integration-verification -> awaiting-human | finalizing -> accepted
 ```
+
+Mini Package 從 `preparing` 準備候選後進入 `awaiting-package-approval`，完成 Package checkpoint 與 Start Gate，再進入相同執行引擎；不經摘要與 Boundary 階段。
 
 允許的受控循環：`verifying -> technical-correction -> verifying`，總計最多三輪；`reviewing -> review-fix -> verifying -> reviewing`，最多三輪；`post-integration-verification -> post-integration-correction -> post-integration-verification` 共用前者 correction 預算，修正後不重複 integration。Transient retry 最多兩次。任何超限、契約漂移或不可恢復衝突，Coordinator 都須停止推進並依 Runtime Interface 登錄 `block`；命令報錯不代表狀態已自動改變。
 
@@ -62,7 +68,7 @@ Package 核准前候選需變更時，先讀 [Planning Revisions](references/pla
 | 已核准契約變更、重新規劃、承接與恢復 | [replanning.md](references/replanning.md) |
 | RP 途中更新專案內 Cogito、工具版本接軌 | [replan-toolchain.md](references/replan-toolchain.md) |
 | Grilling、摘要確認 | [grilling-workflow.md](references/grilling-workflow.md)、[shared-understanding-contract.md](references/shared-understanding-contract.md) |
-| Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
+| Package 類型判斷（`assess-mini-package-eligibility`）、Boundary 分析、Package 草擬或核准 | [package-authoring.md](references/package-authoring.md)，產出時再讀 Spec／Plan template |
 | 階段文件提交與登記 | [stage-commits.md](references/stage-commits.md) |
 | Start Gate、Worker、驗證、審查、整合、修正或結案 | [execution-policy.md](references/execution-policy.md)、[runtime-interface.md](references/runtime-interface.md) |
 | 首次在舊專案處理能力 | [project-bootstrap.md](references/project-bootstrap.md) |
@@ -96,5 +102,3 @@ Maintenance 修正先記錄未提交的工作樹快照並重跑 checks，直到�
 啟用階段提交的 run 先執行 `delivery-summary --run-id <ID>`，將 Gate 產生的事件摘要原樣放入 Result 的 `delivery_summary`。缺少摘要或摘要與實際準備、實作、整合、驗證、審查及人工接受紀錄不符時，不得結案。Feature／Change／Correction 每個 Task 的實作、相關測試及必要文件必須獨立 commit，targeted checks 通過並記錄 Result 後才繼續；本地只跑變更及相關檢查，完整 regression 交給 CI。整合可 fast-forward，檢查本身不建立空 commit。詳見 [Stage Commits](references/stage-commits.md)。
 
 進入 `finalizing` 後，以單一 final commit 原子保存 Result JSON、Project Graph disposition、清除 `active_run_id` 及已知 amendment/commit 摘要。結案內容必須符合最後驗證的 `content_tree`，僅該 run 的 Result 與 Project Graph 可以在驗證後更新；必要且合法的 Spec／Plan 更新須在最後驗證前完成。舊 evidence 缺少此 tree 時重跑 checks，不補寫證據。Result 不記錄包含自身的 final commit ID；commit 成功且內容驗證通過後才把該 ID 寫入 append-only event 與結案報告，再標記 `accepted`。任一步失敗先停止操作、查明事件是否已提交，再依 Runtime Interface 處理阻塞與復原。結案報告至少列出結果、checks、review、commit IDs、amendments、是否經 human gate 及剩餘風險。 `accepted` 寫入後由 Gate 自動安全回收已整合且閒置的受管 worktree，保留 branch、runtime 與稽核 Git 物件；清理失敗只回報保留原因，不改變結案狀態。需要重試時重送相同 `finalize` 參數與 action ID，詳見 Runtime Interface。
-
-`kind` 為 `maintenance` 或 `documentation` 時，使用同一引擎的 Mini Package，不建立 Slice、Spec 或 Plan。Package 類型與審查規則由 Python Gate 實作；只有符合條件的 Maintenance 可免獨立 Reviewer，documentation 仍須獨立審查。Maintenance 還必須不改產品行為或契約、不改依賴/安全/資料邊界、路徑固定、可以 deterministic checks 覆蓋並以目前 checkout 單一 commit 完成；documentation-only 還必須只整理或引用既有語意。Coordinator 依來源、diff 與行為相關 checks 提出證據，供 Package 核准時確認；Gate 驗證凍結的 guard 與正式 evidence，不能自行證明語意等價。任一條缺乏足夠證據即回到 Grilling／完整 Package。

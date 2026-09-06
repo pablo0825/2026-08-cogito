@@ -1,0 +1,15 @@
+test_maintenance_uses_same_engine_with_skipped_nodes (test_runtime_contract.DagAndProfileContractTests.test_maintenance_uses_same_engine_with_skipped_nodes) ... ok
+test_mini_package_has_no_slices_but_feature_requires_spec_and_plan (test_v3_safety_regressions.GateSafetyTests.test_mini_package_has_no_slices_but_feature_requires_spec_and_plan) ... ok
+test_mini_package_checkpoint_precedes_single_commit_baseline (test_stage_commits.StageCommitTests.test_mini_package_checkpoint_precedes_single_commit_baseline) ... ok
+test_decision_is_sorted_and_detached_from_its_unchanged_inputs (test_review_decision.ReviewDecisionTests.test_decision_is_sorted_and_detached_from_its_unchanged_inputs) ... ok
+test_every_verified_task_needs_a_review_but_other_task_states_do_not (test_review_decision.ReviewDecisionTests.test_every_verified_task_needs_a_review_but_other_task_states_do_not) ... ok
+test_feature_documentation_and_unguarded_maintenance_cannot_claim_exemption (test_review_decision.ReviewDecisionTests.test_feature_documentation_and_unguarded_maintenance_cannot_claim_exemption) ... ok
+test_invalid_latest_review_cannot_fall_back_to_an_older_approval (test_review_decision.ReviewDecisionTests.test_invalid_latest_review_cannot_fall_back_to_an_older_approval) ... ok
+test_latest_reviewer_result_for_each_task_supersedes_older_findings (test_review_decision.ReviewDecisionTests.test_latest_reviewer_result_for_each_task_supersedes_older_findings) ... ok
+test_maintenance_exemption_returns_only_verified_tasks_without_reviews (test_review_decision.ReviewDecisionTests.test_maintenance_exemption_returns_only_verified_tasks_without_reviews) ... ok
+test_regular_review_requires_a_nonempty_verified_wave (test_review_decision.ReviewDecisionTests.test_regular_review_requires_a_nonempty_verified_wave) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.246s
+
+OK

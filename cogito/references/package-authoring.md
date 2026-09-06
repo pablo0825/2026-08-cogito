@@ -1,5 +1,26 @@
 # Package Authoring
 
+## 選擇 Package 類型
+
+準備文件前，先依本次工作的行為與範圍選擇 `kind`。檔案數少或修改容易，不代表符合 Mini Package 條件。
+
+| `kind` | Package 與準備流程 | 獨立審查 |
+|---|---|---|
+| `feature`、`change`、`correction` | 完整 Development Package：確認需求、Boundary、Slice／Spec／Plan，再核准 Package | 必須 |
+| `maintenance` | 符合下列條件的 Mini Package；不建立 Slice／Spec／Plan | 只有符合條件且 Gate 通過時可豁免一般開發審查 |
+| `documentation` | 只整理既有語意的 Mini Package；不建立 Slice／Spec／Plan | 必須 |
+
+Mini Package 不建立 Slice、Spec 或 Plan，只適用於以下兩種 `kind`，且必須有符合各項條件的證據：
+
+- Maintenance：不改產品行為、Acceptance、公開契約、資料模型、安全邊界、依賴或 Slice 責任；允許路徑是有限清單，deterministic checks 可覆蓋變更，並在目前 checkout 以 Start Gate HEAD 之後的單一交付 commit 完成。
+- Documentation-only adoption：只封存、索引或重組已有來源，不新增或修改產品語意，且 reference/hash checks 能客觀驗證。
+
+Coordinator 在提出 Mini Package 前，需以來源、diff 與行為相關 checks 支持各項不變條件，供 Package 核准時確認。`maintenance_guards` 保存凍結的宣告；Gate 驗證必填 guard 為 true、路徑限制與正式 check evidence，並對 Maintenance 驗證單一提交等可機械檢查的條件，不會證明任意程式變更的語意等價。證據不足或有語意歧義時，先釐清需求並改按完整 Development Package 準備；已建立的 Mini run 不可直接改 kind，依 [Planning Revisions](planning-revisions.md) 處理原 run 與新 run。
+
+Package 類型由 `cogito_contracts.validate_package()` 依 `kind` 判定：`feature`、`change`、`correction` 使用 Development Package，`maintenance`、`documentation` 使用 Mini Package。獨立審查豁免由 `cogito_gate_validation.derive_review_decision()` 檢查，只適用於符合條件的 `maintenance`；`documentation` 仍須獨立審查。`workflows/cogito-v3.json` 定義狀態轉移、guard 名稱與執行上限，沒有可調整 Package 類型或審查豁免的 `profiles` 設定。
+
+Mini Package 使用同一 Gate 引擎，準備階段只建立 Package checkpoint，不經摘要與 Boundary checkpoint；核准後仍須通過 Start Gate。完整 Package 依下列 Boundary 與文件準備流程進行。階段提交操作見 [Stage Commits](stage-commits.md)。人工驗收退回修正不適用 Maintenance 的一般審查豁免。
+
 ## Boundary Gate
 
 AI 以 Shared Understanding 與專案證據提出結構化判斷：`single-slice`、`split-required` 或 `blocked`。Gate 驗證必要欄位、證據、DAG 無環與路徑邊界；AI 不得自行宣告 guard 通過。
@@ -43,12 +64,3 @@ Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗
 Package approval 後先依 [Stage Commits](stage-commits.md) 獨立提交 Package、Spec／Plan、採納來源與 Project Graph；Gate 登記成功後才執行 Start Gate。候選尚未核准時不提交 Spec／Plan 或候選 Package。
 
 Start Gate 在最新的授權本地主線重新驗證 baseline、hashes、working tree、Project Graph、DAG、政策與 worktree 可建立性。Start Gate 只驗證本地 Git 狀態，不會執行 fetch。`fetch_allowed` 是凍結的授權政策，Gate 檢查其不超過 Project Policy；Coordinator 另行確認授權並執行需要的 fetch。此旗標不提供網路隔離，也不攔截 checks 的網路存取。驗證失敗時停止推進，依 Runtime Interface 登錄阻塞，不得沿用過期推論。
-
-Mini Package 不建立 Slice、Spec 或 Plan，只適用於以下兩種 `kind`，且必須有符合各項條件的證據：
-
-- Maintenance：不改產品行為、Acceptance、公開契約、資料模型、安全邊界、依賴或 Slice 責任；允許路徑是有限清單，deterministic checks 可覆蓋變更，並在目前 checkout 以單一 commit 完成。
-- Documentation-only adoption：只封存、索引或重組已有來源，不新增或修改產品語意，且 reference/hash checks 能客觀驗證。
-
-Coordinator 在提出 Mini Package 前，需以來源、diff 與行為相關 checks 支持各項不變條件，供 Package 核准時確認。`maintenance_guards` 保存凍結的宣告；Gate 驗證必填 guard 為 true、路徑限制與正式 check evidence，並對 Maintenance 驗證單一提交等可機械檢查的條件，不會證明任意程式變更的語意等價。證據不足或有語意歧義時，回到 Grilling 並升級為完整 Development Package。
-
-Package 類型由 `cogito_contracts.validate_package()` 依 `kind` 判定：`feature`、`change`、`correction` 使用 Development Package，`maintenance`、`documentation` 使用 Mini Package。獨立審查豁免由 `cogito_gate_validation.derive_review_decision()` 檢查，只適用於符合條件的 `maintenance`；`documentation` 仍須獨立審查。`workflows/cogito-v3.json` 定義狀態轉移、guard 名稱與執行上限，沒有可調整 Package 類型或審查豁免的 `profiles` 設定。

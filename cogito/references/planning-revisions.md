@@ -16,7 +16,7 @@
 
 每次 impact 必須涵蓋 `requirements`、`boundary`、`spec`、`plan`、`dag`、`acceptance` 六項，逐項記錄 `reuse`／`redo` 及理由。無法確定不受影響時重新檢查，不能直接宣告沿用。程式會比對部分結構與 hash 是否符合 reuse 宣告；內容是否符合使用者意思、API 或驗收語意是否改變，仍由 Coordinator 與獨立 Reviewer 判斷。hash 只證明版本身分，不會判讀文字意義。
 
-Mini Package 本版只支援 `plan` 層級且範圍不變的修訂。若 Maintenance／Documentation 發現需要改產品需求或邊界，不可在原 `kind` 下冒充完整 Feature 流程；停止並明確處理原 run 的取消與建立正確類型的新 run。尚未提供 same-run Mini 升級為 Feature 的操作。
+Mini Package 本版只支援 `plan` 層級且範圍不變的修訂。若 Maintenance／Documentation 發現需要改產品需求或邊界，不可在原 `kind` 下冒充完整 Feature 流程；停止並依 [成果處置](dispositions.md) 明確處理原 run 的取消，再建立正確類型的新 run。尚未提供 same-run Mini 升級為 Feature 的操作。
 
 ## 建立新一輪
 
