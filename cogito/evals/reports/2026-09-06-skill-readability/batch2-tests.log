@@ -1,0 +1,116 @@
+test_carryover_is_rejected_before_approval_and_omit_preserves_source (test_atomic_replan.AtomicReplanTests.test_carryover_is_rejected_before_approval_and_omit_preserves_source) ... ERROR
+test_action_cannot_be_reused_for_a_different_operation (test_replan_toolchain.ToolchainEntryRoutingTests.test_action_cannot_be_reused_for_a_different_operation) ... ok
+test_cli_exposes_only_the_unified_tool_commands (test_replan_toolchain.ToolchainEntryRoutingTests.test_cli_exposes_only_the_unified_tool_commands) ... ok
+test_current_phase_selects_its_tool_rules (test_replan_toolchain.ToolchainEntryRoutingTests.test_current_phase_selects_its_tool_rules) ... ok
+test_historical_action_keeps_its_family_after_phase_changes (test_replan_toolchain.ToolchainEntryRoutingTests.test_historical_action_keeps_its_family_after_phase_changes) ... ok
+test_invalid_phase_wrong_hash_and_cross_family_pending_are_rejected (test_replan_toolchain.ToolchainEntryRoutingTests.test_invalid_phase_wrong_hash_and_cross_family_pending_are_rejected) ... ok
+test_committed_gate_only_repair_preserves_handoff_and_replays (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_committed_gate_only_repair_preserves_handoff_and_replays) ... ERROR
+test_graph_cancellation_update_survives_release (test_disposition_archive.ArchiveTests.test_graph_cancellation_update_survives_release) ... ok
+test_drift_refused_without_overwriting (test_disposition_archive.ArchiveTests.test_drift_refused_without_overwriting) ... ok
+test_completed_release_does_not_overwrite_new_work (test_disposition_archive.ArchiveTests.test_completed_release_does_not_overwrite_new_work) ... ok
+
+======================================================================
+ERROR: test_carryover_is_rejected_before_approval_and_omit_preserves_source (test_atomic_replan.AtomicReplanTests.test_carryover_is_rejected_before_approval_and_omit_preserves_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 96, in _ps
+    return subprocess.run(["ps", *args], capture_output=True, text=True, timeout=5,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 1] Operation not permitted: 'ps'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_atomic_replan.py", line 22, in test_carryover_is_rejected_before_approval_and_omit_preserves_source
+    self.implement(source, worker)
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_atomic_task_execution.py", line 106, in implement
+    evidence = self.check(store, worker, f'C-{name}', f'check-{name}')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_atomic_task_execution.py", line 81, in check
+    store.run_controlled_check(check, worker, action)
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_run_store.py", line 722, in run_controlled_check
+    return self._capture_controlled_check(check_id, supplied_worktree, action_id, request_hash, started_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_run_store.py", line 770, in _capture_controlled_check
+    evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_runner.py", line 76, in run_check
+    capture = run_bounded_process(
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_process_capture.py", line 200, in run_bounded_process
+    register_process(*registration, process.pid)
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 150, in register_process
+    identity = process_identity(pid)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 105, in process_identity
+    result = _ps("-p", str(pid), "-o", "pid=,pgid=,lstart=,command=")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 99, in _ps
+    raise CogitoError(f"cannot inspect executor processes: {exc}") from exc
+cogito_common.CogitoError: cannot inspect executor processes: [Errno 1] Operation not permitted: 'ps'
+
+======================================================================
+ERROR: test_committed_gate_only_repair_preserves_handoff_and_replays (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_committed_gate_only_repair_preserves_handoff_and_replays)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 96, in _ps
+    return subprocess.run(["ps", *args], capture_output=True, text=True, timeout=5,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 1] Operation not permitted: 'ps'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_replan_handoff_tool_repair.py", line 75, in test_committed_gate_only_repair_preserves_handoff_and_replays
+    repo, source, successor, store, protected = self.handing_off()
+                                                ^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_replan_handoff_tool_repair.py", line 23, in handing_off
+    repo, worker, source, _ = tool_support.ReplanToolchainTests.fixture(self)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_replan_toolchain.py", line 89, in fixture
+    result = feature_support.FeatureMultitaskTests.fixture(self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_feature_multitask.py", line 99, in fixture
+    evidence = corrections.MaintenanceCorrectionTests.check(store, worktree, "pre")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/tests/test_maintenance_corrections.py", line 285, in check
+    store.run_controlled_check("C-1", repo, action_id)
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_run_store.py", line 722, in run_controlled_check
+    return self._capture_controlled_check(check_id, supplied_worktree, action_id, request_hash, started_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_run_store.py", line 770, in _capture_controlled_check
+    evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_runner.py", line 76, in run_check
+    capture = run_bounded_process(
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_process_capture.py", line 200, in run_bounded_process
+    register_process(*registration, process.pid)
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 150, in register_process
+    identity = process_identity(pid)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 105, in process_identity
+    result = _ps("-p", str(pid), "-o", "pid=,pgid=,lstart=,command=")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/pablo/Documents/project/2026-08-cogito/cogito/scripts/cogito_execution_registry.py", line 99, in _ps
+    raise CogitoError(f"cannot inspect executor processes: {exc}") from exc
+cogito_common.CogitoError: cannot inspect executor processes: [Errno 1] Operation not permitted: 'ps'
+
+----------------------------------------------------------------------
+Ran 10 tests in 1.453s
+
+FAILED (errors=2)

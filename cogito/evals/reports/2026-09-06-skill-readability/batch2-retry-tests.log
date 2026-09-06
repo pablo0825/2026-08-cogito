@@ -1,0 +1,7 @@
+test_carryover_is_rejected_before_approval_and_omit_preserves_source (test_atomic_replan.AtomicReplanTests.test_carryover_is_rejected_before_approval_and_omit_preserves_source) ... ok
+test_committed_gate_only_repair_preserves_handoff_and_replays (test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_committed_gate_only_repair_preserves_handoff_and_replays) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 10.300s
+
+OK

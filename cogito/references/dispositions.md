@@ -29,7 +29,7 @@ DP 快照保留原始 HEAD、index、content trees，並以 `runtime.version: 1`
 
 原 run、已放棄的 successor、被新方案取代的 follow-up 不能藉普通 `resume` 繼續。恢復原契約由專用 DP Gate 驗證；原 run 已取消時必須另開任務。恢復不重設任何修正額度。
 
-## 操作
+## 停止與保存
 
 下列 `--authorized`／`--human-accepted` 僅能在使用者實際授權或驗收後提交。使用者只說停止，不代表核准 Agent 尚未提出的移除方案。
 
@@ -43,7 +43,22 @@ python3 cogito/scripts/cogito_gate.py --repo <root> disposition stop \
 
 RP 撤回在 `begin` 增加 `--replan-id RP-export`。既有一般 `transition --event cancel` 會建立可查詢的 DP；`replan abandon --disposition cancel-source` 也走同一停止與保存機制。
 
-移除、補修或恢復先用正常的 preparation Gates 準備新 run 的 Package，再提出方案：
+## 準備方案前：確認是否需要釋放 checkout
+
+快照在取消前釘選到 `refs/cogito/dispositions/<DP>/<snapshot_hash>/...`，分別保存 HEAD、index、content tree；可用 `git archive <ref>` 匯出，或 `git show <ref>:<path>` 查看。manifest 與逐路徑釋放紀錄在 `.cogito/dispositions/<DP>/archives/`。
+
+Maintenance 等流程可能在 delivery checkout 留有未提交產品修改。停止保存後、準備及核准後續方案前，可執行 `disposition release --disposition-id ... --action-id ...`，將已保存且屬於處置範圍的 dirty 路徑還原至保存的 HEAD。此操作保留 archive、原 worker worktrees、Graph 更新及範圍外修改；不移動 HEAD。存在未知漂移即拒絕覆寫。已整合內容仍留在 HEAD，必須由審核後的移除／恢復任務修改。
+
+## 選擇處置並提出方案
+
+| `action` | 目的與後續工作 |
+|---|---|
+| `remove` | 移除已交付內容，由新的正式 run 實作與驗收 |
+| `retain` | 保留成果；需要補修時建立 follow-up，不需修改時依下文的無修改／無成果證據處理 |
+| `restore` | 以新的正式 run 恢復指定內容，再驗證與驗收 |
+| `resume` | 使用者明確撤回變更要求，且原暫停契約可恢復；由專用 Gate 驗證，不恢復已取消 run |
+
+需要 follow-up 的移除、補修或恢復，先完成上述保存與必要 release，再用正常的 preparation Gates 準備新 run 的 Package。以下為移除方案：
 
 ```json
 {
@@ -93,11 +108,7 @@ Gate 在核准前檢查恢復可行性。人工來源若原契約／內容已改
 
 尚未開始實作、沒有 Implementer Result／Amendment／RP 成果時，可以提出 `retain` 的無成果處置方案：`no_change_evidence` 額外包含 `no_work: true`，`evidence_paths` 為空，HEAD／tree 必須符合保存的原 baseline。Gate 比對所有保存及當前的產品內容與 index；任何未登錄修改或新 commit 都拒絕。經獨立覆核、方案審核與 `complete --human-accepted` 才完成，無須捏造修正任務。
 
-## 保存、釋放與重送
-
-快照在取消前釘選到 `refs/cogito/dispositions/<DP>/<snapshot_hash>/...`，分別保存 HEAD、index、content tree；可用 `git archive <ref>` 匯出，或 `git show <ref>:<path>` 查看。manifest 與逐路徑釋放紀錄在 `.cogito/dispositions/<DP>/archives/`。
-
-Maintenance 等流程可能在 delivery checkout 留有未提交產品修改。停止保存後、準備及核准後續方案前，可執行 `disposition release --disposition-id ... --action-id ...`，將已保存且屬於處置範圍的 dirty 路徑還原至保存的 HEAD。此操作保留 archive、原 worker worktrees、Graph 更新及範圍外修改；不移動 HEAD。存在未知漂移即拒絕覆寫。已整合內容仍留在 HEAD，必須由審核後的移除／恢復任務修改。
+## 狀態查詢與重送
 
 狀態與歷史使用 `disposition status`、`disposition history`。中斷重送保持相同 action ID 與輸入；變更決定先走合法 pause／修訂，不能改寫舊決定或刪除 marker。`run next` 顯示關聯 DP 與待辦事項。
 

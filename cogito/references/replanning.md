@@ -4,6 +4,17 @@
 
 Package 尚未核准的修訂使用 [Planning Revisions](planning-revisions.md)：在同一 run 保留多輪規劃，不需建立 RP 或 successor。若已存在 RP，其 successor 在核准前仍可使用 planning 修訂；完成 planning 獨立覆核後，必須將最新候選重新送入 RP propose／review／approve。RP status 的 `proposal_stale` 表示舊提案已不對應目前候選，舊 RP 提案不能核准；普通 approve 也不能繞過 RP。
 
+## 先確認承接方式
+
+先依已核准 Package 的 `task_delivery` 選擇適用規則，再準備 successor 與 RP 提案。新的 Feature／Change／Correction 使用 Atomic Task；不要先規劃成果移植，最後才檢查是否支援。
+
+| Package | `work` 提案與來源成果 | 原驗證證據 |
+|---|---|---|
+| Atomic | 每筆 source task 都列 `omit`、target 為 null；已整合內容留在 delivery baseline，未整合內容保留在 source，後續工作另建新 Task | 不跨 run 採用 |
+| 受支援的非 Atomic／既有凍結交接 | 依下文選擇 `retain`、`adapt` 或 `omit` | 僅符合採認條件才可 `reuse`，其他情況 `rerun` |
+
+Atomic 開發 Package 的 successor 仍須保留 `task_delivery: "atomic"`。本版不把先於 lease 建立的 RP carryover commits 當成新 Task 的獨立交付，也不跨 run 採用 atomic Task 的舊 evidence。核准前的 RP proposal 會拒絕這類承接；將未整合來源標記 `omit`、保留來源快照，另在 successor 規劃與執行新的 Task。已在保存 delivery baseline 的內容仍是 successor 起點，不需重做已整合行為。`omit` 不刪除 source 成果。舊的非 atomic Package／已凍結交接與事件維持原協定，不改寫舊 hash 或 evidence。
+
 ## 核准與流程單位
 
 每次重新規劃建立獨立 `RP-*` 單，保存在 `.cogito/replans/<ID>/events.jsonl`。它連結原 run 與全新 successor run。事件歷史包含停止快照、提案各版本、獨立覆核、明確核准、逐項承接與交接完成紀錄；`state.json` 只是可重建快取。
@@ -41,13 +52,13 @@ Controlled check 的 subprocess 由 runner 登錄；啟動與 replan fence 使�
 - `differences`：`requirements`、`api`、`boundary`、`acceptance`、`cost`、`revalidation`，每項說明具體新舊差異；沒有變更也明寫原因。
 - `work`：每一筆 source task 恰好出現一次，包含 `source_task_id`、`target_task_id`、`disposition`、`validation` 與 `reason`。
 
-`disposition` 為 retain（保留）、adapt（承接後修改）、omit（新方案不採用但保留原成果）。`validation` 為 reuse 或 rerun；adapt 一律 rerun。omit 的 target 必須為 null，不能沿用證據。新 run 可有額外工作，所有承接 target 必須存在且不得重複。
+Atomic 提案依前述規則使用 `omit`。非 Atomic 承接的 `disposition` 為 retain（保留）、adapt（承接後修改）、omit（新方案不採用但保留原成果）。`validation` 為 reuse 或 rerun；adapt 一律 rerun。omit 的 target 必須為 null，不能沿用證據。新 run 可有額外工作，所有承接 target 必須存在且不得重複。
 
 Gate 在提案階段使用暫存 Git index 預演每項承接，將預期內容樹綁入 proposal hash；無法乾淨移植時先修改方案，不等使用者核准後才發現固定衝突。
 
 successor 使用新的 Slice ID，`lineage` 明確指向原 Slice。不得直接重用原 ID 或覆寫 `introduced_by`。初始 baseline 綁定保存的 delivery HEAD；原 worktree 保持原樣。更新 Spec／Plan 時使用新文件路徑，避免改動仍被原契約引用的文件。
 
-第一次版本採用保守的機械採認條件：原 task 已 reviewed/integrated、有完整的原受控 evidence 與獨立 review、原與目標完整 content tree 相同，且相關 task、Spec／Plan、checks、policy、Shared Understanding 等均未變。已有 amendments、相依 task、內容或相關契約改動時要求重驗。同一個沿用 worktree 不混入需要修改或新增的 task；需要混用時先拆 Slice 或整組重驗。此限制可以減少無法證明不受影響時的錯誤沿用；程式仍可承接。
+非 Atomic 成果沿用目前採用以下機械採認條件：原 task 已 reviewed/integrated、有完整的原受控 evidence 與獨立 review、原與目標完整 content tree 相同，且相關 task、Spec／Plan、checks、policy、Shared Understanding 等均未變。已有 amendments、相依 task、內容或相關契約改動時要求重驗。同一個沿用 worktree 不混入需要修改或新增的 task；需要混用時先拆 Slice 或整組重驗。此限制可以減少無法證明不受影響時的錯誤沿用；程式仍可承接。
 
 ## 獨立覆核與使用者核准
 
@@ -91,12 +102,8 @@ python3 cogito/scripts/cogito_gate.py --repo <repo> replan handoff --replan-id R
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan status --replan-id RP-001
 ```
 
-本輪主要驗收對象是具專用 Slice worktree 的 Feature／Change／Correction 承接。Mini Package 如有未提交的 delivery 修改，不能略過 Start Gate；無法建立可核准的精確 artifact 時維持阻塞，不自動清理使用者工作目錄。
+成果移植支援具專用 Slice worktree 的非 Atomic Feature／Change／Correction 承接。Mini Package 如有未提交的 delivery 修改，不能略過 Start Gate；無法建立可核准的精確 artifact 時維持阻塞，不自動清理使用者工作目錄。
 
 ## 階段提交相容性
 
 RP successor 保留 frozen delivery 與既有 handoff 協定；在有效 RP 內初始化 successor 時，不啟用一般 run 的階段提交。這項相容性保留撤回後恢復 source 的能力，不移動停止時的 delivery HEAD。一般 run 與同一 run 的規劃修訂依 [Stage Commits](stage-commits.md) 保存各階段。
-
-## Atomic Task 相容性
-
-Atomic 開發 Package 的 successor 仍須保留 `task_delivery: "atomic"`。本版不把先於 lease 建立的 RP carryover commits 當成新 Task 的獨立交付，也不跨 run 採用 atomic Task 的舊 evidence。核准前的 RP proposal 會拒絕這類承接；將未整合來源標記 `omit`、保留來源快照，另在 successor 規劃與執行新的 Task。已在保存 delivery baseline 的內容仍是 successor 起點，不需重做已整合行為。`omit` 不刪除 source 成果。舊的非 atomic Package／已凍結交接與事件維持原協定，不改寫舊 hash 或 evidence。
