@@ -21,14 +21,34 @@ Grilling 只取得足以形成正確契約的共同理解，不要求使用者�
 3. 回答後更新決策樹，重排或移除剩餘題目；本輪 frontier 處理完才公布下一輪，不將依賴本輪新答案的問題插入本輪。資訊已足夠時直接形成摘要，不為完成題單而繼續追問。
 4. 依 [shared-understanding-contract.md](shared-understanding-contract.md) 判斷 readiness。`ready` 才產出摘要；`blocked` 說明缺少的決策或證據。
 
-## 集中保存與摘要確認
+## 保存問答進度
 
 決策樹更新不要求逐題寫檔。不得因單題回答而建立或重寫完整 intake、摘要或來源清冊；每輪結束或明確暫停時，集中保存精簡問答進度，記錄已確認決策、必要事實與來源、未決問題及下一步。優先沿用 `.cogito/runs/<run-id>/drafts/` 內既有的問答進度檔，沒有時只建立一份，不拆成多份配套文件。單純切換話題不觸發保存；本輪結束且已可產出摘要時，直接保存摘要，不另寫一份重複進度。
 
 問答進度是未確認草稿，不是正式階段 checkpoint；保存進度本身不新增 Gate event 或 Git commit，也不取代 Gate event history、核准或 evidence。恢復執行或更換 Agent 時先查詢 Gate、讀取適用政策與 Git 狀態，再對照已保存進度與可用對話補齊尚未保存的答案；缺失決策仍視為未決，不自行猜測。正式 `source_registry` 與所需 hashes 在 Package 準備時整理；Gate、摘要與階段提交當下要求的文件、hash 或基線仍須即時提供。
 
-`ready` 後，未確認摘要保存在 `.cogito/runs/<run-id>/drafts/shared-understanding.md`。準備呈現摘要時，將相同 bytes 放到 `docs/cogito/shared-understanding/<run-id>-r<round>.md`；`shared-understanding-ready` 帶此文件的 `document: {"path": "...", "hash": "..."}` 及相同的 `shared_understanding_hash`。使用者確認後提交 confirmation，立即依 [Stage Commits](stage-commits.md) 建立摘要 commit。只提交確認的版本，不提交整個 drafts 目錄。
+## 呈現與確認摘要
 
-摘要已呈現、等待確認時，使用者要求修訂仍依 Shared Understanding Contract 更新文件、重新計算 hash 並提交新的 `shared-understanding-ready`；不得以集中保存規則略過候選版本更新。
+資訊已足夠、readiness 為 `ready` 時，依 [Shared Understanding Contract](shared-understanding-contract.md) 的固定格式產出摘要，再完成以下順序：
 
-摘要確認表示內容正確，並授權保存此版摘要及階段紀錄的本地 Git commit。Gate 進入 Boundary analysis 前的下一步先要求完成摘要 checkpoint；此確認不授權實作。若後續發現會改變 Scope、Acceptance、公開契約、資料模型、安全邊界或 Slice 責任的差異，回到 Grilling；純技術缺口則走 Technical Amendment 或 correction loop。
+1. 未確認摘要放在 `.cogito/runs/<run-id>/drafts/shared-understanding.md`。
+2. 準備呈現時，將相同 bytes 放到 `docs/cogito/shared-understanding/<run-id>-r<round>.md`。
+3. 提交 `shared-understanding-ready`，帶 `document: {"path": "...", "hash": "..."}` 與相同的 `shared_understanding_hash`，向使用者呈現此版本。
+4. 收到確認後，登錄 `shared-understanding-confirmed`，指定目前摘要 hash；有 planning 輪次時也指定本輪。
+5. 依 [Stage Commits](stage-commits.md) 建立摘要 checkpoint；只提交確認版本，不提交整個 drafts。Gate 登記成功後才進入 Boundary。
+
+等待確認時明說：「確認表示摘要內容正確，並會立即將此版摘要 commit；之後準備並保存 Boundary Gate、Slice／Spec／Plan 與 Development Package。Package Approval 與 Start Gate 通過前不會實作。」使用者修正摘要不等於核准；更新後繼續等待確認。
+
+新 run 即使是第一輪也必須提供可驗證的摘要文件，確認後依 [Stage Commits](stage-commits.md) 完成獨立 commit。Package 的 `shared_understanding` 引用同一 `path` 與 `hash`；摘要確認不改寫已凍結 bytes，確認狀態由事件及 checkpoint 表達。
+
+## 等待確認時收到修訂
+
+等待確認期間修訂摘要後，重新計算 hash，以新的 `action_id` 提交 `shared-understanding-ready`。Gate 追加候選版本並維持 `awaiting-shared-confirmation`，`next` 回傳目前的 `shared_understanding_hash`。再次向使用者呈現此版本；收到確認後，以 `shared-understanding-confirmed` 提交 `{"confirmed":true,"shared_understanding_hash":"<目前摘要hash>"}`。曾修訂摘要的 run 必須明確帶最新 hash，缺少或沿用舊 hash 都會被拒絕；未曾修訂的歷史操作仍相容原本僅有 `confirmed` 的 payload。摘要確認後不接受此自循環，不以修訂摘要偷偷改動後續契約。
+
+集中保存問答的規則不適用已呈現候選的版本更新。修改摘要後必須重新發布與確認，不能沿用舊 hash。
+
+## 已確認後需求改變
+
+Package 尚未核准而需求已改變時，使用 [Planning Revisions](planning-revisions.md) 的 `requirements` 輪次重新進入摘要準備，不在已確認摘要上偷做自循環。`shared-understanding-ready` 需帶目前 `planning_round`、新的 `shared_understanding_hash` 與 `document: {"path": "...", "hash": "..."}`，讓 Gate 保存確認對象的精確內容；confirmation 同時指定本輪及最新 hash。未改需求的 `plan`／`boundary` 輪次沿用已確認共識；影響不明時先 Grilling，不能以較低層級略過必要確認。歷史只有 hash 的摘要不假造原文，但新 requirements 輪次必須提供可驗證文件。
+
+需求、Scope、Acceptance、公開契約、資料模型、安全邊界或 Slice 責任改變時，先重新釐清，再依核准階段走 planning 或 [Replanning](replanning.md)。Package 已核准後，只有未改變上述邊界的純技術缺口才依 [Execution Policy](execution-policy.md#自動修正) 的 Technical Amendment／correction 處理。

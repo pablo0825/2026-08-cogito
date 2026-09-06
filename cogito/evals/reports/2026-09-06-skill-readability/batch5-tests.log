@@ -1,0 +1,14 @@
+test_block_and_resume_preserve_ability_to_revise (test_shared_revisions.SharedRevisionTests.test_block_and_resume_preserve_ability_to_revise) ... ok
+test_latest_revision_is_visible_and_binds_package_preparation (test_shared_revisions.SharedRevisionTests.test_latest_revision_is_visible_and_binds_package_preparation) ... ok
+test_replaying_old_revision_cannot_restore_hash_or_append_events (test_shared_revisions.SharedRevisionTests.test_replaying_old_revision_cannot_restore_hash_or_append_events) ... ok
+test_revision_requires_explicit_confirmation_of_latest_hash (test_shared_revisions.SharedRevisionTests.test_revision_requires_explicit_confirmation_of_latest_hash) ... ok
+test_unrevised_legacy_confirmation_is_compatible_and_freezes_hash (test_shared_revisions.SharedRevisionTests.test_unrevised_legacy_confirmation_is_compatible_and_freezes_hash) ... ok
+test_feedback_during_repair_revokes_closure_and_is_processed_without_reasking (test_human_completion.HumanCompletionTests.test_feedback_during_repair_revokes_closure_and_is_processed_without_reasking) ... ok
+test_declared_document_adjustment_preserves_contract_and_closes (test_human_completion.HumanCompletionTests.test_declared_document_adjustment_preserves_contract_and_closes) ... ok
+test_conditional_acceptance_and_unknown_acceptance_are_distinct (test_human_acceptance.HumanAcceptanceTests.test_conditional_acceptance_and_unknown_acceptance_are_distinct) ... ok
+test_scope_expansion_stops_repairs_before_review_or_closure (test_human_acceptance.HumanAcceptanceTests.test_scope_expansion_stops_repairs_before_review_or_closure) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 14.203s
+
+OK

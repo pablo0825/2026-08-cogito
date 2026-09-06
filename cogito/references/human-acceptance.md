@@ -13,11 +13,9 @@
 | 「其餘都接受，這些修好即可」 | 保存本批條件式結案授權；修正、驗證及獨立審查通過後直接 finalizing |
 | 只說「這裡改一下」，或明確尚未驗完 | 先修正，通過後回 awaiting-human，不推定其餘已接受 |
 
-局部與變更的分類由 Coordinator 根據修改目的、影響及既有契約作成可追溯判斷；Gate 驗證完整分類與合法路由，不提供語意安全證明。修改行數或是否修改文件都不是唯一分界。已核准邊界內的 UI 局部調整，可同步更新合法 Spec／Plan；不得改寫 immutable Package、擴大路徑或藉此變更 Acceptance、公開行為契約、安全、資料或 DAG 邊界。位置調整即使需要同步更新畫面規格，也可依已確認的局部修正處理：保留原 Package，另存本輪文件新舊內容；超出局部呈現調整的產品契約變更仍走 RP。
+局部與變更的分類由 Coordinator 根據修改目的、影響及既有契約作成可追溯判斷；Gate 驗證完整分類與合法路由，不提供語意安全證明。修改行數或是否修改文件都不是唯一分界。
 
 `acceptance_complete` 與 `close_after_fixes` 都預設 false。兩者只能依使用者明確表達記錄；後者不能在前者為 false 時成立。授權綁定當時交付 HEAD、content tree、effective contract hash 及本批回饋 hash，只涵蓋本批有效項目。新增回饋使用新批次與新授權；轉 RP 後不得沿用舊授權結案。
-
-修正進行中收到新回饋，也以 `human feedback` 保存新的批次。Gate 暫存該批並立即撤銷本輪自動結案授權；既有局部修正完成後回到 awaiting-human，`next` 提供待處理的原始回饋，Coordinator 依序用相同內容登錄與分類，不重問已說明的內容。尚有待處理回饋時，普通 human-approve 也不能結案。新增回饋若已明確涉及變更或影響擴大，Coordinator 立即升級 RP，不等原修正做完。
 
 ## 狀態與三輪額度
 
@@ -32,15 +30,21 @@ awaiting-human
 
 `triage` 逐項分類為 `local`、`change` 或 `clarify`。未延後項目包含 change 時整批走 RP；需要釐清時先釐清修改目標並更新分類，不開始修正。不要為了判斷使用者是否驗完而停止已明確的局部修正：未表態就保留等待人工驗收的預設。
 
-人工修正使用獨立 `human_corrections` 額度，同一 run 累計最多三輪，與開發 correction、review/fix 分開。每次成功 `human start` 開始實際修正時計一輪；登錄回饋、分類、相同 action 重送都不計次。分批回饋、換 Agent、resume 或重建快取不重設計數。驗證或審查未通過，仍留在對應階段；下一輪須先追加新的 Amendment 及明確修正 task，再重新 start，不能沿用已消耗的 Amendment。每輪重新完成 Implementer Result、正式 checks 與本輪獨立 Reviewer Result，不重用上一輪通過資料；人工退回即使是 Maintenance 也需要獨立審查。
+人工修正使用獨立 `human_corrections` 額度，同一 run 累計最多三輪，與開發 correction、review/fix 分開。每次成功 `human start` 開始實際修正時計一輪；登錄回饋、分類、相同 action 重送都不計次。分批回饋、換 Agent、resume 或重建快取不重設計數。
+
+驗證或審查未通過，仍留在對應階段；下一輪須先追加新的 Amendment 及明確修正 task，再重新 start，不能沿用已消耗的 Amendment。每輪重新完成 Implementer Result、正式 checks 與本輪獨立 Reviewer Result，不重用上一輪通過資料；人工退回即使是 Maintenance 也需要獨立審查。
 
 三輪仍未通過時，停止自動修正並整理失敗原因、嘗試紀錄及下一步建議，交使用者決定。第三輪 verify 收到本輪正式失敗 evidence，或 review 有本輪未解決 findings 時，Gate 記錄 exhausted 並進 blocked；超額 start 也會阻擋。資料格式／綁定錯誤仍回報錯誤，不假造正式檢查失敗。Coordinator 不再繼續派工。普通 resume 不提供新額度。若額度已用完而使用者再提出局部回饋，也必須停止並回報，不能換批次取得三輪。
 
-## CLI 範例
+## 完成一輪人工修正
 
 `human feedback|triage|start|complete|verify|review|escalate --run-id <ID> --action-id <action>` 管理同一 run 的專用人工退回流程。除 `verify` 使用可重複的 `--evidence <path>`、`review` 不接輸入外，其餘操作使用 `--input <JSON-file>`。不得以通用 transition 偽造 `human-*` 敏感事件。以下範例說明各步驟的 payload。
 
-下例假設已在 `awaiting-human`，交付內容仍與正式 post-integration evidence 一致。每個 JSON 存成對應 UTF-8 檔案；每個有副作用的操作使用穩定 action ID，相同請求重送沿用原 ID。實際 task、Amendment、check 與 reviewer 輸入沿用 [Runtime Interface](runtime-interface.md) 及其 executable contracts。
+下例假設已在 `awaiting-human`，交付內容仍與正式 post-integration evidence 一致。每個 JSON 存成對應 UTF-8 檔案；每個有副作用的操作使用穩定 action ID，相同請求重送沿用原 ID。實際 task、Amendment、check 與 reviewer 輸入沿用 [Runtime Interface](runtime-interface.md) 及 [Execution Policy](execution-policy.md) 的任務與 Result 規則。
+
+開始本輪前先確認提交方式：一般 kind 使用帶 Amendment trailer 的合法修正 commit；Maintenance 保持 Start Gate HEAD，以未提交快照完成，最後才一次交付。若需要同步修改 Spec／Plan，先讀本檔「同步更新文件」，將合法文件更新納入本輪 completion 與驗證。
+
+### 1. 保存回饋
 
 使用者說：「其餘都接受，日期少算最後一天修好就結案。」`feedback.json`：
 
@@ -58,6 +62,8 @@ awaiting-human
 python3 cogito/scripts/cogito_gate.py --repo <root> human feedback \
   --run-id <ID> --input feedback.json --action-id human-feedback-001
 ```
+
+### 2. 分類影響
 
 確認只是局部比較運算子問題後，`triage.json`：
 
@@ -77,6 +83,8 @@ python3 cogito/scripts/cogito_gate.py --repo <root> human triage \
   --run-id <ID> --input triage.json --action-id human-triage-001
 ```
 
+### 3. 開始修正
+
 先用既有 `amend` 追加 `TA-001` 的修正任務及必要 checks，再以 `start.json` 開始：
 
 ```json
@@ -87,6 +95,8 @@ python3 cogito/scripts/cogito_gate.py --repo <root> human triage \
 python3 cogito/scripts/cogito_gate.py --repo <root> human start \
   --run-id <ID> --input start.json --action-id human-start-001
 ```
+
+### 4. 完成任務並記錄結果
 
 修正任務在 delivery checkout 串行執行，完成派工及 Implementer Result 後，`complete.json`：
 
@@ -107,7 +117,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> human complete \
   --run-id <ID> --input complete.json --action-id human-complete-001
 ```
 
-若本輪需要同步更新 Package 引用的 Spec／Plan，可在 completion 加入 `document_updates: [{"path": "docs/spec.md", "reason": "配合已確認的按鈕位置調整"}]`。Gate 保存各文件新舊 bytes/hash；不能改 Package 或宣告其他路徑。若文件在最後 Implementer Result 之後提交，中間 commit 只能修改已宣告文件，最後修正 commit 仍需 Amendment trailer。所有文件更新都必須在本輪驗證前完成，Reviewer 需檢查文件與局部調整相符。
+### 5. 驗證本輪內容
 
 在當前 delivery 內容上使用 `run-check` 執行全部適用 post-integration checks；以每份 evidence 的實際路徑重複傳入 `--evidence`：
 
@@ -116,6 +126,8 @@ python3 cogito/scripts/cogito_gate.py --repo <root> human verify \
   --run-id <ID> --evidence <evidence-path> --action-id human-verify-001
 ```
 
+### 6. 獨立審查
+
 驗證後指派不同 Agent 逐修正 task 審查，登錄本輪 Reviewer Results，再讓 Gate 推導結果：
 
 ```sh
@@ -123,7 +135,19 @@ python3 cogito/scripts/cogito_gate.py --repo <root> human review \
   --run-id <ID> --action-id human-review-001
 ```
 
-上述授權、內容、checks 與 review 都有效時進 `finalizing`，仍須完成既有 final commit／`finalize` 才算 accepted。若 feedback 未指定兩個結案欄位，完全相同的修正流程會回 `awaiting-human`。明確接受目前版本時使用 `human-approve`；不能拿歷史核准代替本次有效授權。
+### 7. 依授權回到驗收或結案
+
+上述授權、內容、checks 與 review 都有效時進 `finalizing`，仍須依 [Finalization](finalization.md) 完成 final commit／`finalize` 才算 accepted。若 feedback 未指定兩個結案欄位，完全相同的修正流程會回 `awaiting-human`。明確接受目前版本時使用 `human-approve`；不能拿歷史核准代替本次有效授權。
+
+## 同步更新文件
+
+已核准邊界內的 UI 局部調整，可同步更新合法 Spec／Plan；不得改寫 immutable Package、擴大路徑或藉此變更 Acceptance、公開行為契約、安全、資料或 DAG 邊界。位置調整即使需要同步更新畫面規格，也可依已確認的局部修正處理：保留原 Package，另存本輪文件新舊內容；超出局部呈現調整的產品契約變更仍走 RP。
+
+若本輪需要同步更新 Package 引用的 Spec／Plan，可在 completion 加入 `document_updates: [{"path": "docs/spec.md", "reason": "配合已確認的按鈕位置調整"}]`。Gate 保存各文件新舊 bytes/hash；不能改 Package 或宣告其他路徑。若文件在最後 Implementer Result 之後提交，中間 commit 只能修改已宣告文件，最後修正 commit 仍需 Amendment trailer。所有文件更新都必須在本輪驗證前完成，Reviewer 需檢查文件與局部調整相符。
+
+## 修正中收到新回饋
+
+修正進行中收到新回饋，也以 `human feedback` 保存新的批次。Gate 暫存該批並立即撤銷本輪自動結案授權；既有局部修正完成後回到 awaiting-human，`next` 提供待處理的原始回饋，Coordinator 依序用相同內容登錄與分類，不重問已說明的內容。尚有待處理回饋時，普通 human-approve 也不能結案。新增回饋若已明確涉及變更或影響擴大，Coordinator 立即升級 RP，不等原修正做完。
 
 ## 混合回饋與升級
 
