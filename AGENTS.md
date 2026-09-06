@@ -16,12 +16,12 @@ Implementation lives under `cogito/`:
 - `scripts/cogito_*_rules.py`, `cogito_projection.py`, and `cogito_runner_evidence.py`: pure decisions, event projection, and evidence assembly. `cogito_ports.py` defines adapter interfaces; dedicated modules handle Git, event storage, and subprocess operations.
 - `scripts/cogito_state_types.py` and `cogito_event_types.py`: internal state and event types, which do not replace runtime validation.
 - `workflows/cogito-v3.json`: legal states, transitions, guards, and retry limits.
-- `references/`: operating rules and templates for Atomic Tasks, stage commits, preparation revisions, RP replanning, human acceptance feedback, and DP dispositions.
+- `references/`: operating procedures and templates, routed from `SKILL.md`. [Runtime internals](cogito/references/runtime-internals.md) explains runner and evidence implementation details for maintainers.
 - `tests/`: standard-library `unittest` tests; `tests/typing/` holds static type examples, and `mypy.ini` defines the checked scope.
-- `evals/evals.json`: agent behavioral scenarios; `evals/reports/` contains individual simulation, acceptance, and test reports. Interpret each report within its recorded scope.
+- `evals/reports/`: recorded simulations, acceptance exercises, and test reports. Some reports include runnable scripts; interpret each result within its recorded scope.
 - `RP-SUBTRACTIVE-REDESIGN.md`: phased design and implementation history, not an active runtime contract or authorization to implement deferred phases.
 
-In projects using Cogito, `docs/cogito/` stores Packages, the Project Graph, Results, and stage artifacts. `.cogito/runs/<run-id>/events.jsonl` is append-only history; `state.json` is a rebuildable cache. `.cogito/worktrees/` contains managed checkouts. Do not repair state by editing the cache or commit runtime scratch files as formal control artifacts.
+For target-project artifact locations and operating rules, use [SKILL.md](cogito/SKILL.md). Repository maintenance follows this guide; reading the skill as source material does not activate it.
 
 ## Development Commands
 
@@ -52,16 +52,19 @@ The user authorizes sub-agent assistance for analysis, evaluation, simulation, a
 
 The primary agent must verify findings, resolve disagreements, and own the final result. Delegation does not replace required tests or Gate review evidence.
 
-## Implementation Invariants
+## Coding and Architecture
 
-- Use four-space indentation, `snake_case` functions and variables, `PascalCase` classes, and `UPPER_CASE` constants. Follow neighboring imports, type annotations, and docstrings. No shared formatter or linter configuration is checked in.
-- Separate pure validation and decisions from filesystem, Git, and process operations. Pure entry points explicitly receive workflow or limits rather than reading files implicitly; keep I/O convenience wrappers and adapters distinct.
-- Validation must not coerce types, populate fields, sort data, or strip extensions in ways that change approved JSON or hashes. Preserve each contract's optional defaults and unknown-field policy.
-- Preserve Packages, append-only amendments and events, and immutable evidence. Materialize the effective contract from the base Package and ordered amendments. Agent assertions cannot replace Gate-derived approval, check, or review verdicts.
-- Preserve `action_id` / `request_hash` idempotency and conflict checks. Recovery first reconciles history and existing results. Do not blindly repeat external operations with unknown outcomes or backfill historical evidence.
-- Controlled runner evidence binds content snapshots, checks, and the effective contract. Snapshots use an independent temporary Git index without changing user staging. Follow supported recovery paths for missing evidence or Git objects; do not fabricate compatibility data.
-- Keep Atomic Task leases, targeted checks, single-task commits, Agent Results, and completion registration bound together. Final content must match the last verified `content_tree`; only that run's Result and Project Graph may change afterward. Record the final commit ID in subsequent events and reports to avoid Result self-reference.
-- `init` installs runtime exclusions in Git's local `info/exclude`, preserving user rules. Cleanup after acceptance removes only managed worktrees that pass safety checks, retaining branches, runtime data, and audit Git objects. Do not substitute forced removal or global pruning for these checks.
+Use four-space indentation, `snake_case` functions and variables, `PascalCase` classes, and `UPPER_CASE` constants. Follow neighboring imports, type annotations, and docstrings. No shared formatter or linter configuration is checked in.
+
+Separate pure validation and decisions from filesystem, Git, and process operations. Pure entry points explicitly receive workflow or limits; adapters handle I/O. Python validators remain the contract authority, and internal type declarations do not replace runtime checks.
+
+Preserve approved JSON and hashes, append-only events and amendments, immutable evidence, and user staging. Validation must not coerce, populate, sort, or strip input data; preserve each contract's defaults and unknown-field policy. When changing runtime behavior, consult its owning procedure and related tests rather than duplicating detailed workflow rules here.
+
+## Maintaining Skill Documentation
+
+Give each rule one complete explanation in its owning procedure. Other locations may retain a short reminder and a direct link when needed for safe local understanding. Place prerequisites before actions, keep each normal procedure in execution order, and separate conditional exceptions and maintainer internals from the main path.
+
+Make one bounded documentation change at a time. For changes affecting workflow instructions, run relevant checks and a focused reading simulation before proceeding; distinguish synthetic agent decisions from actual Gate execution and user acceptance. Preserve operating semantics unless the user explicitly requests a behavior change.
 
 ## Versioning
 

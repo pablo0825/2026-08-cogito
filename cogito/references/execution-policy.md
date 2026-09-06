@@ -37,7 +37,9 @@ Agent Result 至少回報 run/task/agent/role、status、base/head commit、chan
 
 ### Task 中斷或檢查失敗
 
-下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙混入未登錄修改。正式檢查失敗時留在該 Task 修正並以新 action ID 重跑，不能先宣告完成。一般 run 的 block／resume 保留原 lease 與證據歷史。Task 本身走 `blocked → pending → leased` 時保留原 base，允許原 paths 內未完成的修改或尚未登錄的一個 commit，但須在新 lease 後重新執行 targeted checks；已登錄的完成 commit 不得改寫，也不能吸收其他 Task 的變更。
+尚未發布且尚未登錄完成的 Atomic Task 暫存 commit 若檢查失敗，可在原 lease base 與 paths 內整理成一個 commit；保留舊 evidence 並重跑相關檢查。已發布或已登錄完成的 commits 不得改寫。
+
+Atomic 下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙混入未登錄修改。正式檢查失敗時留在該 Task 修正並以新 action ID 重跑，不能先宣告完成。一般 run 的 block／resume 保留原 lease 與證據歷史。Task 本身走 `blocked → pending → leased` 時保留原 base，允許原 paths 內未完成的修改或尚未登錄的一個 commit，但須在新 lease 後重新執行 targeted checks；已登錄的完成 commit 不得改寫，也不能吸收其他 Task 的變更。
 
 ### 舊 Maintenance lease
 
@@ -58,7 +60,9 @@ runner 只保存有界 head/tail 輸出。合計輸出超過凍結的 `max_check
 
 ### 本波驗證與整合後驗證
 
-本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後再執行 `post-verify`。兩者核對的內容不同：
+先確認 `task_delivery`。以下表格與跨狀態證據沿用規則只適用 `task_delivery: "atomic"`。非 Atomic（包含目前的 Maintenance／Documentation Mini Package）依本輪完成事件與驗證階段檢查全部 required checks；不能只因 HEAD／內容／契約相同，就沿用完成事件之前的 evidence。歷史 Package 也保留其原驗證規則。
+
+Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後再執行 `post-verify`。兩者核對的內容不同：
 
 | 操作 | evidence 對象 |
 |---|---|
@@ -106,13 +110,22 @@ Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停�
 
 測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash；commit 加上 `Cogito-Amendment: <ID>` trailer。
 
-Amendment 只能單調增加或加強工作，不能刪除/降級 required check、擴張路徑、要求 Package policy snapshot 未核准的環境變數，或改變產品契約。超出邊界時依 [Replanning](replanning.md) 建立重新規劃單，先限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
+Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
+
+Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanning](replanning.md) 限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
 
 Atomic 的產品 correction 必須使用新增 Task；只增加檢查可直接重新 verify，不開啟無任務的產品修正。新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
 
 ### 修正與重試額度
 
-開發 correction 最多三輪，review/fix 最多三輪，transient retry 最多兩次；人工驗收修正另外使用同一 run 累計三輪額度，每次 start 計次，分批回饋也不重設。所有計數器不得因 resume 或換 Agent 重設。
+| 流程 | 合法循環與額度 |
+|---|---|
+| 開發 correction | `verifying → technical-correction → verifying`，最多三輪 |
+| 整合後 correction | `post-integration-verification → post-integration-correction → post-integration-verification`，共用開發 correction 預算，不重做 integration |
+| Review fix | `reviewing → review-fix → verifying → reviewing`，最多三輪 |
+| Transient retry | 最多兩次 |
+
+人工驗收修正使用獨立的三輪額度，計次與處理見 [Human Acceptance](human-acceptance.md#狀態與三輪額度)。所有計數器跨 resume 與 Agent 更換保留；超限、契約漂移或不可恢復衝突時，停止推進並依 Runtime Interface 登錄 block。
 
 ### Maintenance 修正完成
 

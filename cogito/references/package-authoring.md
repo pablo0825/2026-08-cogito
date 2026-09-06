@@ -21,6 +21,12 @@ Package 類型由 `cogito_contracts.validate_package()` 依 `kind` 判定：`fea
 
 Mini Package 使用同一 Gate 引擎，準備階段只建立 Package checkpoint，不經摘要與 Boundary checkpoint；核准後仍須通過 Start Gate。完整 Package 依下列 Boundary 與文件準備流程進行。階段提交操作見 [Stage Commits](stage-commits.md)。人工驗收退回修正不適用 Maintenance 的一般審查豁免。
 
+## 政策與文件位置
+
+適用邊界由 global defaults、可選 project policy 與 Package snapshot 疊加，較嚴格者優先；缺少 project policy 不阻塞。永久放寬或修改 project policy 需另行取得 project-level approval。
+
+Feature Slice ID 使用穩定的 `FS-001` 格式。Spec 路徑為 `docs/specs/<ID>/<ID>-<name>-spec.md`；Plan 路徑為 `docs/plans/<ID>/<ID>-<name>-plan.md`。新的正式控制文件放在 `docs/cogito/`。
+
 ## Boundary Gate
 
 AI 以 Shared Understanding 與專案證據提出結構化判斷：`single-slice`、`split-required` 或 `blocked`。Gate 驗證必要欄位、證據、DAG 無環與路徑邊界；AI 不得自行宣告 guard 通過。

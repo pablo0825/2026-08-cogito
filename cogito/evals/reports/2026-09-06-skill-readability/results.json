@@ -1,0 +1,277 @@
+{
+  "recorded_at": "2026-09-06T14:14:58.171314+00:00",
+  "source_commit": "625c841a0858c16557c4e9d6fdfcbb737de73d03",
+  "version": "3.3.0",
+  "method": "Sequential documentation batches; fresh isolated-context subagents read scenario inputs and current routed docs without parent conclusions, history, code or prior reports. Primary agent checked decisions. A separate reviewer compared baseline/current rules and inspected verification code for one scope ambiguity. Existing unittest/Gate simulations run independently; no product acceptance is claimed.",
+  "batches": [
+    {
+      "id": 1,
+      "problem": "Package 類型的前提後置",
+      "changed_documents": [
+        "cogito/SKILL.md",
+        "cogito/references/execution-policy.md",
+        "cogito/references/package-authoring.md",
+        "cogito/references/planning-revisions.md",
+        "cogito/references/runtime-interface.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "5a455ae645a46241478969aeb334f5abfe963e99b69fa6cb13e9f9a7a92b9e51",
+        "cogito/SKILL.md": "a4b167fed68fbc8a8f5514ead887f9868d45da02615d7f2a4fff2e014deecd5a",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "aa1801b5961828f741726bd12d20b9ce9acbfe8108ddd9b7263b6fb97a5a0345",
+        "cogito/references/execution-policy.md": "b049e36ea8606b433fa8efebbc46c3630e61c7ee00cb1aee140d8218f679b540",
+        "cogito/references/grilling-workflow.md": "8f96b86b91153c3d49e8ba20757f48d2fa3a79b3084d4f8953b9273f370d2e2c",
+        "cogito/references/human-acceptance.md": "7d29da27dbba734c3f2dbb377cc9d77bfdffa569835ae21f6971d17b2139aa37",
+        "cogito/references/package-authoring.md": "27b17bb87bf636e8c4b960ec372216670ae615c3e7684372401ae3d7bb5dde67",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "21892f28021046e54fe70be1315c1a71d38a17f333a00c80879946d0b989cf59",
+        "cogito/references/replan-snapshots.md": "544c734694e4b5b03a96ec3b0d4cc91cec2c8eed0ed32a7bcb0dc5100f475bef",
+        "cogito/references/replan-toolchain.md": "3980471736c406c658550315607204272f79f9750b402fa5afc636eb11dc073d",
+        "cogito/references/replanning.md": "8ea71b62b3702a550c134bc80c58619bff8bab0ec80fe9fc0ffc03cee9837970",
+        "cogito/references/runtime-interface.md": "afd5d4d64b35da819b361df20860fa4f592b579e3ce99072ee61eaa2d89b9e4f",
+        "cogito/references/shared-understanding-contract.md": "8272f5af469822e13de32a0da3ed3bb10b37bcf6d37ed475902a770bc25543ab",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "1afb86608b5b17a3aeab00cb403c4499bf02f193f6aed118db06abc74291ddce"
+      },
+      "reading_scenarios": [
+        "整理既有 API 文件的連結與索引，不改產品規格或程式。",
+        "改寫內部 helper 結構，有相關 deterministic tests；產品行為、依賴、安全、資料與公開契約不變，範圍固定。",
+        "修正篩選日期漏掉最後一天。",
+        "maintenance run 在 preparing，next_action=assess-mini-package-eligibility，此時要求新增 CSV export。",
+        "Maintenance 收到人工驗收退回，要求核准範圍內的局部修正。"
+      ],
+      "reading_result": "batch1-agent.md",
+      "automated_unique_tests": 10,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_runtime_contract.DagAndProfileContractTests.test_maintenance_uses_same_engine_with_skipped_nodes test_v3_safety_regressions.GateSafetyTests.test_mini_package_has_no_slices_but_feature_requires_spec_and_plan test_stage_commits.StageCommitTests.test_mini_package_checkpoint_precedes_single_commit_baseline test_review_decision",
+      "test_log": "batch1-tests.log"
+    },
+    {
+      "id": 2,
+      "problem": "RP／工具接軌／DP 的前置条件後置",
+      "changed_documents": [
+        "cogito/references/dispositions.md",
+        "cogito/references/replan-toolchain.md",
+        "cogito/references/replanning.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "5a455ae645a46241478969aeb334f5abfe963e99b69fa6cb13e9f9a7a92b9e51",
+        "cogito/SKILL.md": "a4b167fed68fbc8a8f5514ead887f9868d45da02615d7f2a4fff2e014deecd5a",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "adda663a8cfad747e29ca4c0dc47009dc28dcec3cd73a37b6e840a7ca82f7fe5",
+        "cogito/references/execution-policy.md": "b049e36ea8606b433fa8efebbc46c3630e61c7ee00cb1aee140d8218f679b540",
+        "cogito/references/grilling-workflow.md": "8f96b86b91153c3d49e8ba20757f48d2fa3a79b3084d4f8953b9273f370d2e2c",
+        "cogito/references/human-acceptance.md": "7d29da27dbba734c3f2dbb377cc9d77bfdffa569835ae21f6971d17b2139aa37",
+        "cogito/references/package-authoring.md": "27b17bb87bf636e8c4b960ec372216670ae615c3e7684372401ae3d7bb5dde67",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "21892f28021046e54fe70be1315c1a71d38a17f333a00c80879946d0b989cf59",
+        "cogito/references/replan-snapshots.md": "544c734694e4b5b03a96ec3b0d4cc91cec2c8eed0ed32a7bcb0dc5100f475bef",
+        "cogito/references/replan-toolchain.md": "6fda352a525a7eb81829df66a51e051c952882ba5de6135969326baa17cc713c",
+        "cogito/references/replanning.md": "ce0ede139a9c412f51f2d1d8ef2a8b31fa78fa558fd051dcc03c7d092bdd4364",
+        "cogito/references/runtime-interface.md": "afd5d4d64b35da819b361df20860fa4f592b579e3ce99072ee61eaa2d89b9e4f",
+        "cogito/references/shared-understanding-contract.md": "8272f5af469822e13de32a0da3ed3bb10b37bcf6d37ed475902a770bc25543ab",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "1afb86608b5b17a3aeab00cb403c4499bf02f193f6aed118db06abc74291ddce"
+      },
+      "reading_scenarios": [
+        "Atomic source 有已整合 Task 與未整合但已完成 Task，API 要變更並承接成果。",
+        "對比 analyzing 中未提交工具更新，與 handing-off／successor start-gate／沒有 transfer／source 未 superseded 的已提交工具修復。",
+        "Maintenance 已取消並保存 dirty delivery 修改，另有範圍外使用者修改，接著要準備移除方案。"
+      ],
+      "reading_result": "batch2-agent.md",
+      "automated_unique_tests": 10,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_atomic_replan test_replan_toolchain.ToolchainEntryRoutingTests test_replan_handoff_tool_repair.ReplanHandoffToolRepairTests.test_committed_gate_only_repair_preserves_handoff_and_replays test_disposition_archive.ArchiveTests.test_graph_cancellation_update_survives_release test_disposition_archive.ArchiveTests.test_drift_refused_without_overwriting test_disposition_archive.ArchiveTests.test_completed_release_does_not_overwrite_new_work",
+      "test_log": "batch2-tests.log"
+    },
+    {
+      "id": 3,
+      "problem": "結案流程重複與分散",
+      "changed_documents": [
+        "cogito/SKILL.md",
+        "cogito/references/execution-policy.md",
+        "cogito/references/finalization.md",
+        "cogito/references/runtime-interface.md",
+        "cogito/references/stage-commits.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "5a455ae645a46241478969aeb334f5abfe963e99b69fa6cb13e9f9a7a92b9e51",
+        "cogito/SKILL.md": "f532e1621b7141a603eea63202f929eb76fc52b13a5e503336609f7ee923c5c6",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "adda663a8cfad747e29ca4c0dc47009dc28dcec3cd73a37b6e840a7ca82f7fe5",
+        "cogito/references/execution-policy.md": "59d21ce2c3ef798734f84728e05e914790fbdd8ad5fc6675b2c2b622c2435b0b",
+        "cogito/references/finalization.md": "b0e79437e66d95d2b75c81f242ffa4420fdf502edb5e97637198090c075ee3d4",
+        "cogito/references/grilling-workflow.md": "8f96b86b91153c3d49e8ba20757f48d2fa3a79b3084d4f8953b9273f370d2e2c",
+        "cogito/references/human-acceptance.md": "7d29da27dbba734c3f2dbb377cc9d77bfdffa569835ae21f6971d17b2139aa37",
+        "cogito/references/package-authoring.md": "27b17bb87bf636e8c4b960ec372216670ae615c3e7684372401ae3d7bb5dde67",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "21892f28021046e54fe70be1315c1a71d38a17f333a00c80879946d0b989cf59",
+        "cogito/references/replan-snapshots.md": "544c734694e4b5b03a96ec3b0d4cc91cec2c8eed0ed32a7bcb0dc5100f475bef",
+        "cogito/references/replan-toolchain.md": "6fda352a525a7eb81829df66a51e051c952882ba5de6135969326baa17cc713c",
+        "cogito/references/replanning.md": "ce0ede139a9c412f51f2d1d8ef2a8b31fa78fa558fd051dcc03c7d092bdd4364",
+        "cogito/references/runtime-interface.md": "6d7b56e5b286573ee01bd0c4d88568c752d6d3f7a1c3e0af70c5a4fe4533b730",
+        "cogito/references/shared-understanding-contract.md": "8272f5af469822e13de32a0da3ed3bb10b37bcf6d37ed475902a770bc25543ab",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "00290f78899fc5b7f10ca38ec3864ff4e345cba49c070c87fc63b54cb6884805"
+      },
+      "reading_scenarios": [
+        "Feature 已 finalizing，想再改 Spec 並在 Result 填自身 final commit ID。",
+        "Maintenance 已 finalizing，兩個完成 Task 與一個 Amendment，產品內容仍是已驗證 dirty tree。",
+        "final commit 已存在但 finalize 報錯；對比已 accepted 但含 ignored .env 的 worktree 被保留。"
+      ],
+      "reading_result": "batch3-agent.md",
+      "automated_unique_tests": 5,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_finalization_content.FinalizationContentTests.test_only_exact_metadata_paths_are_exempt test_finalization_content.FinalizationContentTests.test_omitting_verified_untracked_content_is_rejected test_finalization_content.FinalizationContentTests.test_legacy_evidence_requires_rerun_without_rewriting_it test_cleanup.CleanupTests.test_unknown_ignored_and_untracked_data_and_changes_are_retained test_cleanup.CleanupTests.test_remove_failure_retains_accepted_and_prepared_proof_is_retryable",
+      "test_log": "batch3-tests.log"
+    },
+    {
+      "id": 4,
+      "problem": "操作流程混入共通介面與底層實作",
+      "changed_documents": [
+        "cogito/references/execution-policy.md",
+        "cogito/references/human-acceptance.md",
+        "cogito/references/package-authoring.md",
+        "cogito/references/replan-snapshots.md",
+        "cogito/references/replanning.md",
+        "cogito/references/runtime-interface.md",
+        "cogito/references/runtime-internals.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "5a455ae645a46241478969aeb334f5abfe963e99b69fa6cb13e9f9a7a92b9e51",
+        "cogito/SKILL.md": "f532e1621b7141a603eea63202f929eb76fc52b13a5e503336609f7ee923c5c6",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "adda663a8cfad747e29ca4c0dc47009dc28dcec3cd73a37b6e840a7ca82f7fe5",
+        "cogito/references/execution-policy.md": "4e8fc89bbec808234e045568c77dc48680ffe7b19f13cf44614aa9fbab2d7b53",
+        "cogito/references/finalization.md": "b0e79437e66d95d2b75c81f242ffa4420fdf502edb5e97637198090c075ee3d4",
+        "cogito/references/grilling-workflow.md": "8f96b86b91153c3d49e8ba20757f48d2fa3a79b3084d4f8953b9273f370d2e2c",
+        "cogito/references/human-acceptance.md": "6ec2fbce28d86d2fe14e2fc2f244a0a212e745f26bd5da9292b7d792c9fb5f6a",
+        "cogito/references/package-authoring.md": "babf810640f2916868d05e2fba00ea9e461225a41d6102cacb4809f5fe83007a",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "21892f28021046e54fe70be1315c1a71d38a17f333a00c80879946d0b989cf59",
+        "cogito/references/replan-snapshots.md": "0d5e747cd1cc9e1aee124e734a46f4b807da0c063dd7fcdd8545502488694586",
+        "cogito/references/replan-toolchain.md": "6fda352a525a7eb81829df66a51e051c952882ba5de6135969326baa17cc713c",
+        "cogito/references/replanning.md": "9205489380d7e28fcaffe70b808bf555075c341ca059750ac30a191f75f65cbc",
+        "cogito/references/runtime-interface.md": "09ece32668423dced2012bc76987de2ecc53707b8faf999c38746e06982fb324",
+        "cogito/references/runtime-internals.md": "943cdbab5727e7fb32fff63ae171be45ead345b6053b907495d2db9d17a044c5",
+        "cogito/references/shared-understanding-contract.md": "8272f5af469822e13de32a0da3ed3bb10b37bcf6d37ed475902a770bc25543ab",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "00290f78899fc5b7f10ca38ec3864ff4e345cba49c070c87fc63b54cb6884805"
+      },
+      "reading_scenarios": [
+        "同 Slice 的 Atomic T1/T2 相依；T1 precommit checks 通過但無 commit/Result，推演至整合。",
+        "Maintenance T1 已改 a；T2 lease 後 stage b、新增 c、d rename e；對比舊 lease 無快照。",
+        "Controlled attempt 已開始、沒有完整 evidence，操作者提議刪 marker 重送。"
+      ],
+      "reading_result": "batch4-agent.md",
+      "automated_unique_tests": 8,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_atomic_task_execution.AtomicTaskTests.test_completion_and_next_task_require_recorded_result test_atomic_task_execution.AtomicTaskTests.test_interrupted_task_retains_original_base_and_requires_fresh_evidence test_atomic_task_verification.AtomicVerificationTests.test_early_task_evidence_cannot_replace_current_content_evidence test_atomic_task_verification.AtomicVerificationTests.test_changed_checkout_after_verification_blocks_review test_maintenance_multitask.MaintenanceMultitaskTests.test_two_serial_tasks_accept_one_final_commit_via_cli test_maintenance_multitask.MaintenanceMultitaskTests.test_second_task_cannot_hide_staged_change_by_restoring_worktree test_maintenance_multitask.MaintenanceMultitaskTests.test_legacy_single_task_without_snapshots_preserves_safe_result_submission test_maintenance_multitask.MaintenanceMultitaskTests.test_legacy_multitask_without_snapshots_cannot_omit_prior_changes",
+      "test_log": "batch4-tests.log"
+    },
+    {
+      "id": 5,
+      "problem": "問答／人工修正的正常流程被例外打斷",
+      "changed_documents": [
+        "cogito/references/grilling-workflow.md",
+        "cogito/references/human-acceptance.md",
+        "cogito/references/shared-understanding-contract.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "5a455ae645a46241478969aeb334f5abfe963e99b69fa6cb13e9f9a7a92b9e51",
+        "cogito/SKILL.md": "f532e1621b7141a603eea63202f929eb76fc52b13a5e503336609f7ee923c5c6",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "adda663a8cfad747e29ca4c0dc47009dc28dcec3cd73a37b6e840a7ca82f7fe5",
+        "cogito/references/execution-policy.md": "4e8fc89bbec808234e045568c77dc48680ffe7b19f13cf44614aa9fbab2d7b53",
+        "cogito/references/finalization.md": "b0e79437e66d95d2b75c81f242ffa4420fdf502edb5e97637198090c075ee3d4",
+        "cogito/references/grilling-workflow.md": "c006eda59b4111ab420292b296eadb2e8e08051745624b6b064d1fa854d24e55",
+        "cogito/references/human-acceptance.md": "bbd34ec5a4f937c2df0caa567b3b892fc2e23d37e2130885358846052305cd75",
+        "cogito/references/package-authoring.md": "babf810640f2916868d05e2fba00ea9e461225a41d6102cacb4809f5fe83007a",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "21892f28021046e54fe70be1315c1a71d38a17f333a00c80879946d0b989cf59",
+        "cogito/references/replan-snapshots.md": "0d5e747cd1cc9e1aee124e734a46f4b807da0c063dd7fcdd8545502488694586",
+        "cogito/references/replan-toolchain.md": "6fda352a525a7eb81829df66a51e051c952882ba5de6135969326baa17cc713c",
+        "cogito/references/replanning.md": "9205489380d7e28fcaffe70b808bf555075c341ca059750ac30a191f75f65cbc",
+        "cogito/references/runtime-interface.md": "09ece32668423dced2012bc76987de2ecc53707b8faf999c38746e06982fb324",
+        "cogito/references/runtime-internals.md": "943cdbab5727e7fb32fff63ae171be45ead345b6053b907495d2db9d17a044c5",
+        "cogito/references/shared-understanding-contract.md": "e4a4e7b4615461ddc2c1f4ad28a361dedfb6708d28bd18008477ed3d6c494c6b",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "00290f78899fc5b7f10ca38ec3864ff4e345cba49c070c87fc63b54cb6884805"
+      },
+      "reading_scenarios": [
+        "同 Grilling action 連續回答三個必要決策；ready 後呈現摘要，使用者在確認前修訂。",
+        "只要求修日期錯誤、未完成驗收；修正途中增加另一項局部回饋。",
+        "核准邊界內 UI 位置調整需同步 Spec；稍後發現影響多頁共用邏輯。"
+      ],
+      "reading_result": "batch5-agent.md",
+      "automated_unique_tests": 9,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_shared_revisions test_human_completion.HumanCompletionTests.test_feedback_during_repair_revokes_closure_and_is_processed_without_reasking test_human_completion.HumanCompletionTests.test_declared_document_adjustment_preserves_contract_and_closes test_human_acceptance.HumanAcceptanceTests.test_conditional_acceptance_and_unknown_acceptance_are_distinct test_human_acceptance.HumanAcceptanceTests.test_scope_expansion_stops_repairs_before_review_or_closure",
+      "test_log": "batch5-tests.log"
+    },
+    {
+      "id": 6,
+      "problem": "入口責任過多與重述操作規則",
+      "changed_documents": [
+        "AGENTS.md",
+        "cogito/SKILL.md",
+        "cogito/references/execution-policy.md",
+        "cogito/references/package-authoring.md",
+        "cogito/references/project-bootstrap.md"
+      ],
+      "document_hashes": {
+        "AGENTS.md": "bff8eefa4cd40a0bd286dd86ae4afe13eee22af40fef8d2777b2973563ad7f9c",
+        "cogito/SKILL.md": "45d88dae853617fb4b6a21aa19e9867c8ca9cea6de575ea451c9ce7a9e7dc6b6",
+        "cogito/agents/openai.yaml": "840712f68a493e8d6f9f44482dbb6b1c87bfdf8365c688bb7167b94fab450685",
+        "cogito/VERSION": "5eee6c0c5c6901f5e523f0a434bca4106e1ff7136deb451f982b0bb1a7b13716",
+        "cogito/references/dispositions.md": "adda663a8cfad747e29ca4c0dc47009dc28dcec3cd73a37b6e840a7ca82f7fe5",
+        "cogito/references/execution-policy.md": "5f3a95d47c7e6d45374518305442a9a29c90fad1e9d44714e37cd7cba26d7120",
+        "cogito/references/finalization.md": "b0e79437e66d95d2b75c81f242ffa4420fdf502edb5e97637198090c075ee3d4",
+        "cogito/references/grilling-workflow.md": "c006eda59b4111ab420292b296eadb2e8e08051745624b6b064d1fa854d24e55",
+        "cogito/references/human-acceptance.md": "bbd34ec5a4f937c2df0caa567b3b892fc2e23d37e2130885358846052305cd75",
+        "cogito/references/package-authoring.md": "a124a9871ab1f5245289c734446bc6cf1e482b73f811eb7aed75d18865848d2e",
+        "cogito/references/plan-template.md": "1d48e358fa3032a8eee49fee106abdd33c5965bb0b9c96311be5e9bc93ee2f51",
+        "cogito/references/planning-revisions.md": "8498f36f6b1ef625113c3786ab1894da3ffda97c4e2939a8a963141ff790c073",
+        "cogito/references/project-bootstrap.md": "f479a8fe3047cd1135e463dd7b844a6249e2adee90071428926d96883ac2752b",
+        "cogito/references/replan-snapshots.md": "0d5e747cd1cc9e1aee124e734a46f4b807da0c063dd7fcdd8545502488694586",
+        "cogito/references/replan-toolchain.md": "6fda352a525a7eb81829df66a51e051c952882ba5de6135969326baa17cc713c",
+        "cogito/references/replanning.md": "9205489380d7e28fcaffe70b808bf555075c341ca059750ac30a191f75f65cbc",
+        "cogito/references/runtime-interface.md": "09ece32668423dced2012bc76987de2ecc53707b8faf999c38746e06982fb324",
+        "cogito/references/runtime-internals.md": "943cdbab5727e7fb32fff63ae171be45ead345b6053b907495d2db9d17a044c5",
+        "cogito/references/shared-understanding-contract.md": "e4a4e7b4615461ddc2c1f4ad28a361dedfb6708d28bd18008477ed3d6c494c6b",
+        "cogito/references/spec-template.md": "456b0c5f220dd92204b35ecd6ac5e3873b42dfdf267709e277fff99c83fa2227",
+        "cogito/references/stage-commits.md": "00290f78899fc5b7f10ca38ec3864ff4e345cba49c070c87fc63b54cb6884805"
+      },
+      "reading_scenarios": [
+        "沒有 invocation／active Cogito prompt 的一般程式註解改寫，是否啟動 run／升版／完整測試。",
+        "新 API 功能在 Package 核准前改 Acceptance，再核准精確的新候選。",
+        "Maintenance finalizing，兩個 Task、一個 Amendment 與已驗證 tree。",
+        "handoff-started 後、successor Start 前、transfer 前的已提交 tool-only repair。"
+      ],
+      "reading_result": "batch6-agent.md",
+      "automated_unique_tests": 5,
+      "test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_run_queries.RunQueryTests.test_preparation_distinguishes_mini_packages_and_rejects_unknown_states test_run_queries.RunQueryTests.test_execution_answer_respects_occupied_slices_dependencies_and_capacity test_planning_rounds.PlanningRoundTests.test_three_features_to_one_reaches_start_with_history_preserved test_planning_rounds.PlanningRoundTests.test_independent_review_and_exact_proposal_are_required test_planning_rounds.PlanningRoundTests.test_restart_after_confirmation_does_not_repeat_user_decision",
+      "test_log": "batch6-tests.log"
+    }
+  ],
+  "reading_scenarios_total": 22,
+  "automated_unique_tests_total": 49,
+  "runtime_journeys": 2,
+  "extra_scope_scenario": "Current Maintenance with pre-completion evidence and unchanged HEAD/tree/contract compared to Atomic verification; determine required checks and evidence freshness.",
+  "extra_scope_output": "batch6-scope-agent.md",
+  "extra_scope_test_command": "PYTHONPATH=cogito/tests python3 -m unittest -v test_gate_evidence_rules.GateEvidenceRulesTests.test_every_required_check_must_be_supplied test_gate_evidence_rules.GateEvidenceRulesTests.test_each_phase_uses_its_latest_cycle_anchor",
+  "runtime_simulation_command": "python3 cogito/evals/reports/2026-09-03-stage-delivery/simulate.py --output /tmp/cogito-skill-readability-simulation.json",
+  "runtime_result": "batch3-runtime-simulation.json",
+  "limitations": [
+    "Reading simulations are qualitative agent decisions, not real mutations, natural-language accuracy benchmarks, or user acceptance.",
+    "Gate journeys use synthetic human/reviewer inputs and temporary repositories; they exercise the unchanged runtime, not autonomous execution of the rewritten prose.",
+    "Batch 2 initially had 8 passes and 2 ps sandbox errors; only the 2 blocked tests were rerun with required process inspection and passed.",
+    "Full regression, CI and mypy were not run: changes are documentation-only.",
+    "Skill validator required PyYAML installed only into a temporary directory; no project dependencies were changed."
+  ]
+}

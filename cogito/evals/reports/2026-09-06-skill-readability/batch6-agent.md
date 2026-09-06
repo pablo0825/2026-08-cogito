@@ -1,0 +1,25 @@
+# Batch 6 focused forward-reading simulation
+
+Synthetic decisions only. No Gate execution, implementation, approval, commit, or repository mutation occurred. This report is not actual user acceptance or passing runtime evidence.
+
+First-read sequence: `AGENTS.md` → `cogito/SKILL.md` → `references/runtime-interface.md` → `references/package-authoring.md` → `references/grilling-workflow.md` → `references/planning-revisions.md` → `references/stage-commits.md` → `references/finalization.md` → `references/replan-toolchain.md`. All reference paths are under `cogito/`.
+
+## A — Ordinary comment rewording
+
+Do not initialize or resume Cogito: neither explicit invocation nor a direct answer to an active unresolved Cogito prompt exists. `AGENTS.md` Project Scope and `SKILL.md` activation rules agree. Treat the request as ordinary repository maintenance, inspect applicable policy/Git state and the diff, and preserve comment semantics. No version bump for wording alone (`AGENTS.md`, Versioning). No default full-suite run: verify content, references/commands if affected, and diff; behavioral tests become relevant only if executable behavior changes (`AGENTS.md`, Testing Scope). Merely reading the skill for this simulation does not activate a run.
+
+## B — API feature and pre-approval Acceptance change
+
+Read Runtime Interface, inspect policies/Git, initialize with default stage commits, select `feature`, then follow `next`. Grilling yields a hash-bound summary; actual confirmation permits its independent checkpoint. Boundary passes, gets its own checkpoint, then Slice/Spec/Plan and atomic Package are prepared. Before editing a published candidate, use `planning begin` at `requirements` level: preserve source bytes/hash, disable old approval, assess all six impact dimensions. Reconfirm the new round/hash summary, checkpoint it, redo Boundary and checkpoint, update affected documents and prepare the same-round candidate. Independent Agent reads old/new snapshots, reviews consistency/impact/reuse bound to proposal hash; present differences. Only the hypothetical exact new-candidate approval permits `approve`. Commit/register Package checkpoint before Start Gate. Follow `next` after every transition. Sources: Grilling, Package Authoring, Planning Revisions, Stage Commits. No actual authorization is inferred here.
+
+## C — Maintenance finalization with two completed tasks and one amendment
+
+Use Finalization §§1–5. Confirm `finalizing`/`write-result-and-finalize` and the last validated `content_tree`; after validation only canonical Result and Project Graph may change. Two completed tasks do not imply two commits: Maintenance work stays uncommitted, with Start HEAD as integration checkpoint. Query `delivery-summary`; copy JSON unchanged into Result. Record checks/reviews/risks and amendment `{id, base_commit, content_tree}` matching completion event; omit the nonexistent final commit ID. Update Graph disposition and clear this run’s `active_run_id`. Commit validated product content, Result, and Graph together, with `Cogito-Amendment: <ID>` trailer. Start Gate HEAD must be its sole parent and this the sole new commit since Start. Obtain actual ID, call `finalize` with Result/Graph/ID and stable action ID, confirm `accepted`, then `report`. Package checkpoint predates Start and does not violate the single-delivery-commit rule.
+
+## D — Tool-only repair after handoff-started
+
+`SKILL.md` routes to RP Toolchain; its stage table and “Handoff 中斷後的工具修復” govern. Check `handing-off`, successor `start-gate`, empty transfer plan/receipt, source not superseded, Graph stopped/approved. Repair must already be fully committed as a linear tool-only chain under `.codex/skills/cogito/`; HEAD/index/content manifests agree. Use fresh matching Gate CLI: `toolchain-propose` → independent `toolchain-review` → actual user approval of exact proposal hash → `toolchain-approve`. Pending repair forbids successor Start, transfer, and handoff completion. Approval appends only runtime-toolchain binding, preserving original product proposal/review/approval and handoff intent; RP remains `handing-off`. Next, resend `handoff` with the original action ID. Gate revalidates immutable Start artifact; successor reruns required checks. Do not apply general toolchain routing that clears product approval.
+
+## Reading-load observation
+
+A needed no reference beyond AGENTS/SKILL. B’s normal route was directly discoverable, including checkpoint timing and the separate planning-revision route. Full-reading its operation documents also exposed conditional Mini, historical-data, RP-successor, withdrawal, and recovery exceptions; these were not prerequisites for the normal journey. C’s single procedure supplied all requested ordering without Execution Policy or runtime internals. D’s appropriate operation document included the general toolchain case, but the early stage table clearly selected the handoff exception and prevented applying the general reset behavior. No unrelated exception document, Replanning procedure, code, workflow JSON, design/history/report, or `runtime-internals.md` was needed/read.

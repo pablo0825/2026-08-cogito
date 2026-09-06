@@ -1,0 +1,10 @@
+test_preparation_distinguishes_mini_packages_and_rejects_unknown_states (test_run_queries.RunQueryTests.test_preparation_distinguishes_mini_packages_and_rejects_unknown_states) ... ok
+test_execution_answer_respects_occupied_slices_dependencies_and_capacity (test_run_queries.RunQueryTests.test_execution_answer_respects_occupied_slices_dependencies_and_capacity) ... ok
+test_three_features_to_one_reaches_start_with_history_preserved (test_planning_rounds.PlanningRoundTests.test_three_features_to_one_reaches_start_with_history_preserved) ... ok
+test_independent_review_and_exact_proposal_are_required (test_planning_rounds.PlanningRoundTests.test_independent_review_and_exact_proposal_are_required) ... ok
+test_restart_after_confirmation_does_not_repeat_user_decision (test_planning_rounds.PlanningRoundTests.test_restart_after_confirmation_does_not_repeat_user_decision) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.742s
+
+OK

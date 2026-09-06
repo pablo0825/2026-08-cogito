@@ -2,6 +2,8 @@
 
 Cogito 3.0 不遷移舊版進行中的工作，也不讀取 Blueprint 作為狀態。既有 `docs/project/`、舊 Slice/Spec/Plan/Verification 與其他文件保持原位，不批次搬移、不重寫、不刪除。
 
+不再新建 `Blueprint`、`Slice Brief`、Verification Markdown、Commit Plan 或文件內 approval/status metadata。既有文件只作來源，不作目前 run 的狀態。
+
 第一次觸及既有能力時：
 
 1. 在 run draft 建立 source registry，列出與本次能力直接相關的舊文件、程式、測試及 Git 證據，並記錄每項內容 hash、關聯性與 disposition。

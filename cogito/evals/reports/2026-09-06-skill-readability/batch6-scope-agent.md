@@ -1,0 +1,7 @@
+Synthetic forward reading only; no Gate execution or real evidence validation.
+
+Maintenance Mini Package cannot reuse evidence produced before this round’s implementation completion merely because HEAD, content, and effective contract match. Non-Atomic verification must check all required checks against the current round’s completion event and verification phase. Therefore rerun controlled checks after completion in the applicable verification phase; post-verify cannot be narrowed to only phase:integration checks using Atomic’s rule. Its evidence must satisfy the applicable post-integration phase and all required checks.
+
+For task_delivery:atomic, completed Task Results preserve evidence precisely covering each Task’s check_ids; early Task checks need not be rerun at later HEADs. Verify must cover each checkout’s latest complete content. Matching final Task pre-commit evidence may serve verify and that Task Result’s review when complete content remains identical. Evidence matching HEAD, complete content tree, effective contract, and check definition can be reused across states. Post-verify needs required integration checks on the latest delivery HEAD, with at least one as the final-content anchor. Changed bindings require the necessary relevant checks to run again. Historical Packages retain their original rules.
+
+Reading path: cogito/SKILL.md → cogito/references/execution-policy.md (entire operation reference; particularly 正式驗證 → 本波驗證與整合後驗證).

@@ -1,0 +1,24 @@
+# Operating-rule preservation review
+
+Read-only comparison of baseline and current AGENTS.md, SKILL.md and all changed references, including the two new documents. No real Cogito run, Git-history review, behavioral test execution, or document edits were performed. Current verification code was inspected only to resolve a scope ambiguity.
+
+## Actionable finding
+
+**[P2] Restore the Atomic applicability boundary before the verification table.** `cogito/references/execution-policy.md:63-73` turns the baseline explicitly Atomic paragraph (and Atomic runtime-interface paragraph) into apparently general instructions. In particular, line 71 now says evidence with identical HEAD/content/effective contract can be reused across states without an Atomic qualifier. The heading and table also imply all Task Results exactly cover `check_ids` and that earlier required Task checks need no rerun. New Maintenance and Documentation Packages are not Atomic, and “舊 Package 維持原驗證規則” at line 73 does not describe those current Mini runs. For non-Atomic verification, `cogito/scripts/cogito_gate_validation.py:134-149` selects every required check, rather than the Atomic task/integration split; lines 195-214 retain a completion-event anchor, whereas Atomic verification removes it. An agent applying the common instructions to Mini verification can submit evidence from before the completion event and get rejected despite unchanged content. Scope this table/reuse paragraph explicitly to `task_delivery: "atomic"`, with a short non-Atomic rule or direct applicable reference before the table. This is an applicability clarification restoring baseline semantics, not a request to repeat the rule across files.
+
+## Preserved and discoverable
+
+- Approval boundaries remain in SKILL, Package Authoring, Grilling, Stage Commits and the specialized RP/DP/human owners. Summary corrections are not approvals; candidate hashes remain exact; tool approval does not authorize products; DP stop authorization does not approve removal.
+- Runtime Interface retains same-action/same-input retry, request fingerprints, unknown-attempt handling, prohibition on deleting check markers, and reconciliation of already-created integration/final commits. Execution Policy offers an appropriate short reminder.
+- Finalization preserves exact post-verification exceptions (canonical Result and Project Graph), pre-verification Spec/Plan updates, whole-delivery approved-path validation, kind-specific commit rules, no Result self-reference, ancestry checks, summary provenance, and safe cleanup/retry. Routing exists from SKILL, Execution Policy, Runtime Interface, Stage Commits and Human Acceptance.
+- Human Acceptance preserves conditional authorization, local UI/Spec/Plan exceptions, fresh amendments/tasks/reviews, Maintenance review requirement, queued feedback revocation, three-round limits, and escalation. Moving document-update detail below the normal steps is accompanied by a prerequisite pointer before work begins.
+- RP Atomic omission/retain boundaries and frozen historical compatibility are brought earlier, with exact StartArtifact details preserved under linked RP Snapshots. Toolchain recovery distinctions are clearer.
+- Runner internals are retained in Runtime Internals and linked both from the operator procedure and maintainer AGENTS. Moving these implementation details out of the ordinary execution path does not remove operating obligations.
+
+## Readability and responsibility assessment
+
+The refactor substantially improves ownership and sequence: SKILL is an entry/routing document, Runtime Interface owns shared invocation/recovery, Execution Policy owns Task-to-integration work, and Finalization owns commit/report/cleanup. Most duplicate content is now a short safety reminder or prerequisite, and the remaining Maintenance repetitions explain genuinely different preparation, execution and final-commit contexts. No other actionable rule loss was found in this review. The applicability issue above is the main remaining cognitive-load risk because readers must infer a missing scope boundary while following a generic table.
+
+## Follow-up resolution
+
+Re-read the revised `execution-policy.md:38-75`. The P2 applicability finding is resolved: line 63 explicitly scopes the following table and reuse rule to `task_delivery: "atomic"`, names current Maintenance/Documentation as non-Atomic, and states their all-required-check and current completion-event freshness obligations before the Atomic procedure. Line 42 also explicitly labels the Atomic recovery paragraph. These additions preserve the code distinction identified in the initial review without duplicating a whole procedure. No open findings remain from this preservation review. This follow-up is a focused document re-read, not a real Gate execution or automated behavioral test.
