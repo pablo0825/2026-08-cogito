@@ -1,0 +1,13 @@
+test_completion_and_next_task_require_recorded_result (test_atomic_task_execution.AtomicTaskTests.test_completion_and_next_task_require_recorded_result) ... ok
+test_interrupted_task_retains_original_base_and_requires_fresh_evidence (test_atomic_task_execution.AtomicTaskTests.test_interrupted_task_retains_original_base_and_requires_fresh_evidence) ... ok
+test_early_task_evidence_cannot_replace_current_content_evidence (test_atomic_task_verification.AtomicVerificationTests.test_early_task_evidence_cannot_replace_current_content_evidence) ... ok
+test_changed_checkout_after_verification_blocks_review (test_atomic_task_verification.AtomicVerificationTests.test_changed_checkout_after_verification_blocks_review) ... ok
+test_two_serial_tasks_accept_one_final_commit_via_cli (test_maintenance_multitask.MaintenanceMultitaskTests.test_two_serial_tasks_accept_one_final_commit_via_cli) ... ok
+test_second_task_cannot_hide_staged_change_by_restoring_worktree (test_maintenance_multitask.MaintenanceMultitaskTests.test_second_task_cannot_hide_staged_change_by_restoring_worktree) ... ok
+test_legacy_single_task_without_snapshots_preserves_safe_result_submission (test_maintenance_multitask.MaintenanceMultitaskTests.test_legacy_single_task_without_snapshots_preserves_safe_result_submission) ... ok
+test_legacy_multitask_without_snapshots_cannot_omit_prior_changes (test_maintenance_multitask.MaintenanceMultitaskTests.test_legacy_multitask_without_snapshots_cannot_omit_prior_changes) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 8.170s
+
+OK

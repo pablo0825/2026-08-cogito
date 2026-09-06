@@ -35,6 +35,10 @@ runtime 檔案不得透過 symlink 或 gitlink 冒充事件、快取、鎖或草
 
 缺少 `runtime`、版本未知、缺少來源、內容不一致或不能建立完整性證明的快照一律拒絕推進。
 
+## Start artifact 與交接驗證
+
+新的 RP proposal 在獨立審查前建立 `StartArtifactManifest`：以保存的 delivery commit/tree 為 baseline，將 successor candidate snapshot 內的 Package、Project Graph、Spec／Plan、Shared Understanding 與 source registry 位元組形成精確的 Git tree，並以 content-addressed create-only ref 保持 objects 可達。proposal 綁 manifest hash，review 綁 proposal hash，approval 再綁同一個 manifest。handoff 的 successor Start Gate 只讀取並重算這些 commit/tree/blob、核對已發布的 live Package／Graph、Policy、Workflow、tool 與 verifier binding，再以 event-tip CAS 追加既有 `start-gate-passed`；不建立 worktree、不複製或 chmod 控制文件，也不寫 validation checkpoint。停止快照內既有且未變的 dirty 檔案不會進入 artifact tree。一般 Start Gate 仍使用原 checkout 規則。
+
 ## 已卡住的 RP 如何續接
 
 1. 更新專案實際使用的 Gate 程式後，先執行 `replan status`，確認原 RP 的狀態與下一步。若更新改變專案內 `.codex/skills/cogito/` 或其提交造成 HEAD 變化，先完成 [RP 工具接軌](replan-toolchain.md)，不能直接重試或放寬基線檢查。

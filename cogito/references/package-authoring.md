@@ -64,3 +64,7 @@ Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗
 Package approval 後先依 [Stage Commits](stage-commits.md) 獨立提交 Package、Spec／Plan、採納來源與 Project Graph；Gate 登記成功後才執行 Start Gate。候選尚未核准時不提交 Spec／Plan 或候選 Package。
 
 Start Gate 在最新的授權本地主線重新驗證 baseline、hashes、working tree、Project Graph、DAG、政策與 worktree 可建立性。Start Gate 只驗證本地 Git 狀態，不會執行 fetch。`fetch_allowed` 是凍結的授權政策，Gate 檢查其不超過 Project Policy；Coordinator 另行確認授權並執行需要的 fetch。此旗標不提供網路隔離，也不攔截 checks 的網路存取。驗證失敗時停止推進，依 Runtime Interface 登錄阻塞，不得沿用過期推論。
+
+## 輸入錯誤與舊資料
+
+`shared-understanding-ready` 與 `boundary-complete` 在寫入前使用與 Package 相同的驗證：摘要 hash 為 64 位小寫十六進位字串；Boundary decision 是 `single-slice`／`split-required`，evidence 是非空字串陣列。錯型輸入不追加事件、不推進狀態，修正資料後可沿用尚未成功寫入的 action ID。歷史事件不自動改寫；舊 run 的錯誤摘要若仍未確認，可重新發布合法摘要後確認，新 confirmation 不會接受已存的非法 hash。若錯誤 Boundary 已在舊版本完成，尚未核准且已有候選時依規劃輪次重做；其他情況依合法停止／取消與重建決策處理，不手改權威事件。

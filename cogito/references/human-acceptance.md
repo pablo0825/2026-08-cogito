@@ -38,6 +38,8 @@ awaiting-human
 
 ## CLI 範例
 
+`human feedback|triage|start|complete|verify|review|escalate --run-id <ID> --action-id <action>` 管理同一 run 的專用人工退回流程。除 `verify` 使用可重複的 `--evidence <path>`、`review` 不接輸入外，其餘操作使用 `--input <JSON-file>`。不得以通用 transition 偽造 `human-*` 敏感事件。以下範例說明各步驟的 payload。
+
 下例假設已在 `awaiting-human`，交付內容仍與正式 post-integration evidence 一致。每個 JSON 存成對應 UTF-8 檔案；每個有副作用的操作使用穩定 action ID，相同請求重送沿用原 ID。實際 task、Amendment、check 與 reviewer 輸入沿用 [Runtime Interface](runtime-interface.md) 及其 executable contracts。
 
 使用者說：「其餘都接受，日期少算最後一天修好就結案。」`feedback.json`：

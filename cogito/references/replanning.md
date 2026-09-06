@@ -74,7 +74,7 @@ successor 使用新的 Slice ID，`lineage` 明確指向原 Slice。不得直接
 
 `handoff` 將核准的來源 task 路徑內容移入專用的新 branch/worktree，以新 commit 保留來自原 run 的來源說明。未提交內容來自已保存的 Git content tree，原 index、檔案與 commits 不改寫；omit 也不刪原成果。已整合內容自然包含在新 baseline，仍按影響分析決定是否重驗。
 
-新的 RP proposal 在獨立審查前建立 `StartArtifactManifest`：以保存的 delivery commit/tree 為 baseline，將 successor candidate snapshot 內的 Package、Project Graph、Spec／Plan、Shared Understanding 與 source registry 位元組形成精確的 Git tree，並以 content-addressed create-only ref 保持 objects 可達。proposal 綁 manifest hash，review 綁 proposal hash，approval 再綁同一個 manifest。handoff 的 successor Start Gate 只讀取並重算這些 commit/tree/blob、核對已發布的 live Package／Graph、Policy、Workflow、tool 與 verifier binding，再以 event-tip CAS 追加既有 `start-gate-passed`；不建立 worktree、不複製或 chmod 控制文件，也不寫 validation checkpoint。停止快照內既有且未變的 dirty 檔案不會進入 artifact tree。一般 Start Gate 仍使用原 checkout 規則。
+新的 RP proposal 在獨立審查前保存不可變的 `StartArtifactManifest`，將 successor 的精確文件與 Git tree 綁定到 proposal、review 與 approval。handoff 的 Start Gate 只驗證同一份 artifact，不建立驗證用 worktree 或 checkpoint。artifact 不符即停止；完整綁定與驗證模型見 [RP Snapshots](replan-snapshots.md#start-artifact-與交接驗證)。
 
 所有 RP proposal 都必須包含 `start_artifact` 與 `start_artifact_hash`。缺少 immutable Start artifact 的舊 proposal 不再受支援，也不能投影、核准或執行 handoff。
 
