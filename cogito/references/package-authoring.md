@@ -55,6 +55,8 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分，無法拆分的理由寫在既有 Plan。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
 
+核准前，Coordinator 沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試；只檢查實際適用的層次。確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Policy](execution-policy.md#實作中補列必要路徑) 判斷是否符合輕量補正。
+
 新 `init` 的開發 run 會要求 atomic Package；歷史 run 與已凍結的 RP successor 保留原契約，沒有標記的舊 Package 不補寫、不改 hash。Maintenance／Documentation 維持原流程。
 
 `stop_conditions` 是隨 Package hash 凍結的停止政策。每筆可為非空文字，或包含 `id`、`condition`、`outcome` 的物件；`outcome` 可為 `blocked`、`awaiting-human`、`cancelled`。應寫明可觀察的情況、所需證據與預期處理方式，供 Coordinator 判讀。`cogito_contracts._validate_stop_conditions()` 只驗證格式，runtime 不解析條件文字、不持續監看，也不因 `outcome` 自動跳轉或取得取消授權。執行方式見 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。

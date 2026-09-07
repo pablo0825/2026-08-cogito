@@ -25,6 +25,46 @@ Atomic Task 依下列順序完成，才能開始下一項 Task：
 
 也可先 commit 再檢查；提交前 evidence 只有在提交後內容完全相同時才有效。Result 的 `evidence` 精確列出 Task `check_ids` 的 controlled evidence 路徑。Gate 驗證非空、單一 parent 的 commit，parent 必須是 lease base；拒絕未提交產品內容、過期或不完整證據。
 
+### 實作中補列必要路徑
+
+僅限 `executing` 中的 Atomic Development Package：原規格所需的 mapper、response contract 或測試檔漏列時，可在同一 Run、Slice、branch 與已存在的 worktree 追加精確檔案路徑。這是修改授權的補正，不新增需求、不建立 successor，也不新增 Task 或改 DAG。若變更 Acceptance、公開 API 語意、資料模型、安全邊界或 Slice 責任，依 [Replanning](replanning.md) 處理；不能只靠檔名判斷是否改變契約。
+
+只可補入同一 Slice 未完成 Task 的路徑；已登錄完成的 Implementer Result 也不可改寫。不得以目錄或 glob 放寬範圍、跨用其他 Task／Slice 的責任路徑，或加入 symlink、控制文件、凍結來源及高風險 hotspot。新增檔案可以尚不存在，但所屬 worktree 必須已建立。不得先修改未授權路徑再申請補正。
+
+1. 停妥受影響 Slice 的實際 Worker 與所有 controlled checks。沿用 [Replanning 的 executor 登錄與停止證據](replanning.md#停止與保存) 介面 `replan register-executor`／`replan executor-receipt`，不執行 `replan begin`。登錄身分須對應 lease 的 agent ID；外部停止 receipt 必須來自真正 executor 回應，不能自行宣告。只更新 Task status 不代表程序已停。保留目前原授權範圍內的未完成內容。
+2. Coordinator 建立 proposal JSON：
+
+   ```json
+   {
+     "author_id": "coordinator-1",
+     "amendment": {
+       "id": "AM-path-1",
+       "reason": "原核准查詢流程漏列 mapper 與相關測試",
+       "path_additions": [{
+         "task_id": "T-002",
+         "paths": ["src/query_mapper.py", "tests/test_query_mapper.py"],
+         "reason": "輸出 Spec 已核准的欄位並驗證轉換",
+         "check_ids": ["C-query-mapper"]
+       }],
+       "added_checks": [{
+         "id": "C-query-mapper",
+         "argv": ["python3", "-m", "unittest", "tests.test_query_mapper"],
+         "required": true,
+         "phase": "task"
+       }]
+     }
+   }
+   ```
+
+   `check_ids` 引用既有或本次新增的 required checks；已有適用檢查時省略 `added_checks`。新增檢查仍受凍結環境政策限制。此類 amendment 不混用 `added_tasks`、`path_fixes` 或 `commit_id`。
+3. 執行 `amend-paths propose --run-id <ID> --input <proposal.json> --action-id <ID>`。Gate 綁定 effective contract、受影響 Task、checkout 內容及 executor 身分，回傳 `proposal_hash`。等待覆核期間，受影響 Slice 與 controlled checks 不可繼續；其他 Slice 可繼續不受影響的 Task 操作。
+4. 由不同於 proposal 作者及受影響 Implementer 的 Reviewer 閱讀核准規格、必要依賴、目前 diff、完整 proposal 與檢查定義，產生 review JSON：`proposal_hash`、`reviewer_id`、`decision: "within-approved-scope"`、`assessment` 與 `findings: []`。`assessment` 必須含 `requirements`、`api`、`data_model`、`security`、`slice`、`checks`，各自用具體非空說明支持邊界不變及選測充分。存在問題時不提交通過判定；修訂 proposal 並重新覆核，或撤回後走 RP。
+5. 執行 `amend-paths review --run-id <ID> --input <review.json> --action-id <ID>`。通過即追加 Technical Amendment，同步擴充有效 Package、Worker、Task 路徑與 Task checks，不再請使用者核准。原 Package 與歷史紀錄不改寫。Gate 封存已停止 executor 的 registry 紀錄後，原 leased／running Task 可重新登錄 executor 並繼續實作、相關檢查與獨立 commit。
+
+Proposal 或其綁定內容改變，必須重新 propose 並取得新的獨立覆核；不要沿用舊 `proposal_hash`。撤回使用 `amend-paths withdraw --run-id <ID> --input <withdraw.json> --action-id <ID>`，輸入為 `{ "proposal_hash": "<hash>", "reason": "<撤回原因>" }`。撤回也會封存已停止的 executor，完成後可依原授權範圍重新登錄；改提另一 Slice 的補正前先撤回目前提案。操作部分失敗時，以相同輸入及 action ID 重送；review 或 withdraw 事件已寫入但 executor 封存尚未完成時，`next` 回傳 `retry-path-amendment` 與原操作輸入、action ID；保持 Worker 停止並完成原操作重送，不另建新 amendment。
+
+已完成 Task 的 commit、Result 與歷史 evidence 保留，不要求重新交付；若需改變已完成行為，使用新增修正 Task。補正後目前所需的檢查必須取得綁定新 effective contract 的 evidence，歷史通過不能代替目前驗證。此處只補授權，沒有獨立的產品修正 commit；Result 的記錄方式見 [Finalization](finalization.md)。
+
 ### Maintenance 任務快照
 
 Maintenance 的新 lease 由 Gate 記錄 working tree 與 index 兩份起始快照；Implementer Result 的 `changed_paths` 完整列出本次任務相對這兩份快照的產品增量，包括 staged、unstaged 與 untracked 路徑。不能因 base/head 相同或已 staged 而省略；rename 同時列原路徑刪除與新路徑新增。Gate 另驗整個 checkout 的累積修改是否仍在 Package 範圍內，且不更動使用者 index。請在取得 lease 後才修改或 stage 任務負責的檔案，不要替其他 task stage；一般執行階段的任務間隙若出現未登錄修改，下一個 lease 會拒絕。獨立 Reviewer 使用 Gate 保存的該任務完成快照判定責任，並確認目前內容仍是本輪正式驗證的內容。
@@ -110,7 +150,7 @@ Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停�
 
 測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash；commit 加上 `Cogito-Amendment: <ID>` trailer。
 
-Technical Amendment 只能在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。不得刪除或降級 required checks、擴張路徑、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
+一般 Technical Amendment 在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。只有[實作中補列必要路徑](#實作中補列必要路徑)可經獨立覆核擴充精確路徑；一般修正不得藉此擴張範圍。不得刪除或降級 required checks、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
 
 Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanning](replanning.md) 限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
 

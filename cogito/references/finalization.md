@@ -18,7 +18,7 @@
 
 Maintenance 的任務與修正不提前建立產品 commit。Implementer Result 可使用相同 base/head，integration milestone 記錄 Start Gate HEAD 作為未提交成果的檢查點；最後才提交產品與結案紀錄。不要先提交產品，再補一個 metadata commit。
 
-所有 kind 都會再次核對 Start Gate HEAD 到 final commit 的完整交付範圍。產品修改必須在 Package 的核准路徑內；控制文件只接受既有精確例外，不能因位於 `docs/` 就取得豁免。凍結 Package 須內容相符，採納來源依凍結 bytes/hash 或已核准路徑處理，Spec／Plan 依既有政策且先於最後驗證更新。通過 integration 或 content-tree 比對都不能取代範圍檢查。
+所有 kind 都會再次核對 Start Gate HEAD 到 final commit 的完整交付範圍。產品修改必須在 Package 或有效 Amendment 的核准路徑內；控制文件只接受既有精確例外，不能因位於 `docs/` 就取得豁免。凍結 Package 須內容相符，採納來源依凍結 bytes/hash 或已核准路徑處理，Spec／Plan 依既有政策且先於最後驗證更新。通過 integration 或 content-tree 比對都不能取代範圍檢查。
 
 ## 2. 取得交付摘要
 
@@ -34,7 +34,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> delivery-summary --run-id <I
 
 Result 保存 checks、reviews、已知 commit/amendment 摘要與剩餘風險；Project Graph 保存最終 disposition 並清除該 run 的 `active_run_id`。兩者由同一 final commit 原子保存。
 
-Result 不內嵌包含自身的 final commit ID。Maintenance 的 amendment 使用 `{id, base_commit, content_tree}`，必須符合 completion event；不填尚未存在的 final commit ID。其他 kind 依其已登錄的合法修正 commits 記錄。
+Result 不內嵌包含自身的 final commit ID。Maintenance 的 amendment 使用 `{id, base_commit, content_tree}`，必須符合 completion event；不填尚未存在的 final commit ID。經獨立覆核的路徑補正使用 `{id, proposal_hash}`，必須對應已生效的 proposal；它只追加授權，不填 `commit_id` 或要求獨立 amendment commit。實際產品內容仍由各 Atomic Task commit 交付。其他修正依其已登錄的合法修正 commits 記錄。
 
 Git 保存交付摘要與證據引用；完整檢查資料與回饋原文仍在本地 `.cogito`，不提供從 Git 摘要還原完整事件的能力，也不另建 audit branch。
 

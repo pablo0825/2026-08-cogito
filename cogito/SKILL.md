@@ -49,7 +49,7 @@ Coordinator 按依賴派發工作並串行整合。Feature／Change／Correction
 | 需求問答、`draft-shared-understanding`、摘要呈現／確認／修訂 | [Grilling Workflow](references/grilling-workflow.md)；產出時讀其摘要格式 |
 | `assess-mini-package-eligibility`、Boundary、Package 草擬／核准 | [Package Authoring](references/package-authoring.md)；需要 Spec／Plan 時讀對應 template |
 | `commit-stage-artifacts` | [Stage Commits](references/stage-commits.md) |
-| Start Gate、派工、Task、checks、review、integration、範圍內修正 | [Execution Policy](references/execution-policy.md) |
+| Start Gate、派工、Task、checks、review、integration、範圍內修正、`review-path-amendment`、`retry-path-amendment`、實作中漏列必要路徑 | [Execution Policy](references/execution-policy.md) |
 | Package 核准前的規劃輪次、比較、覆核或撤回 | [Planning Revisions](references/planning-revisions.md) |
 | 超出 Amendment 的已核准契約變更、`prepare-human-feedback-replan` | [Replanning](references/replanning.md) |
 | RP 途中更新 Cogito 工具 | [RP Toolchain](references/replan-toolchain.md) |
