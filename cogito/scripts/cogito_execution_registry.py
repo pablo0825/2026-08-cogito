@@ -145,6 +145,8 @@ def _group_alive(pgid: int) -> bool:
 def register_process(root: str | Path, run_id: str, identifier: str, pid: int) -> dict[str, Any]:
     _safe_id(identifier)
     with _locked(root, run_id) as (path, data):
+        from cogito_actions import guard_fixed_action
+        guard_fixed_action(root, run_id, 'register-executor')
         from cogito_path_amendment import guard_executor_admission
         guard_executor_admission(root, run_id, identifier)
         if data["stop_request"] is not None:
@@ -172,6 +174,8 @@ def register_external(root: str | Path, run_id: str, identifier: str, handle: st
     if not isinstance(handle, str) or not handle.strip():
         raise CogitoError("external executor requires a handle")
     with _locked(root, run_id) as (path, data):
+        from cogito_actions import guard_fixed_action
+        guard_fixed_action(root, run_id, 'register-executor')
         from cogito_path_amendment import guard_executor_admission
         guard_executor_admission(root, run_id, identifier)
         if data["stop_request"] is not None:

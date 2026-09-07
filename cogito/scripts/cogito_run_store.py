@@ -16,6 +16,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from cogito_path_amendment import PathAmendmentMixin
 from cogito_result_metadata import ResultMetadataMixin
+from cogito_task_finish import TaskFinishMixin
 from cogito_path_amendment_state import EVENTS as PATH_EVENTS, guard_pending
 from cogito_checkpoints import CheckpointMixin, guard_checkpoint
 from cogito_disposition_run import DispositionRunMixin
@@ -67,7 +68,7 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
+class RunStore(TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
         *PATH_EVENTS, *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
@@ -1582,6 +1583,12 @@ class RunStore(ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, Plannin
         pending_effect = pending_from_events(self.root, self.run_id)
         if pending_effect and pending_effect.get('recovery'):
             return dict(state=projection['state'], next_action='retry-path-amendment', **pending_effect['recovery'])
+        from cogito_actions import pending_fixed_action
+        pending_operation = pending_fixed_action(self.root, self.run_id)
+        if pending_operation and projection['state'] not in {'blocked', 'cancelled', 'superseded'}:
+            return {'state': projection['state'], 'next_action': 'retry-fixed-action',
+                    'operation': pending_operation['operation'], 'action_id': pending_operation['action_id'],
+                    'request': pending_operation['request']}
         output = derive_next_action(projection)
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)

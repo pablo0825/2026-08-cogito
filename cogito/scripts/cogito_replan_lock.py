@@ -48,7 +48,9 @@ def replans(root):
     for path in sorted((Path(root) / '.cogito' / 'replans').glob('RP-*/events.jsonl')):
         yield project_replan(read_events(path))
 
-def check_run_fence(root, run_id, operation):
+def check_run_fence(root, run_id, operation, *, stopping=False):
+    from cogito_actions import guard_fixed_action
+    guard_fixed_action(root, run_id, operation, stopping=stopping or operation == 'resume_gate')
     if operation == 'run_controlled_check':
         from cogito_path_amendment import pending_from_events
         if pending_from_events(root, run_id):
@@ -90,6 +92,7 @@ def run_mutation(method: F) -> F:
         with project_lock(self.root):
             operation = method.__name__
             event = args[0] if args else kwargs.get('event', kwargs.get('event_type'))
+            stopping = operation in {'record', 'transition'} and event in {'block', 'cancel', 'resume'}
             if operation in {'transition', 'record'} and event in {
                 'shared-understanding-ready', 'shared-understanding-confirmed', 'boundary-complete',
                 'package-ready', 'mini-package-ready',
@@ -99,6 +102,6 @@ def run_mutation(method: F) -> F:
                 operation = 'planning-record'
             from cogito_disposition_lock import check_disposition_fence
             check_disposition_fence(self, operation, args, kwargs)
-            check_run_fence(self.root, self.run_id, operation)
+            check_run_fence(self.root, self.run_id, operation, stopping=stopping)
             return method(self, *args, **kwargs)
     return cast(F, wrapped)

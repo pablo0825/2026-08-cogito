@@ -4,10 +4,68 @@ from __future__ import annotations
 
 import fcntl
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from cogito_common import CogitoError, atomic_create_json, hash_json, load_json
+
+_fixed_authority: ContextVar[tuple[str, str, str] | None] = ContextVar('fixed_action', default=None)
+
+
+def fixed_action_path(root, run_id, action_id):
+    return Path(root) / '.cogito' / 'runs' / run_id / 'fixed-actions' / (hash_json(action_id) + '.json')
+
+
+def fixed_steps_done(binding, events):
+    """Completion comes from receipts, never a mutable 'done' marker."""
+    for step in binding['steps']:
+        matches = [e for e in events if e.get('action_id') == step['action_id']]
+        if not matches:
+            return False
+        if len(matches) != 1 or any(matches[0].get(k) != step.get(k)
+                                    for k in ('type', 'payload', 'request_hash')):
+            raise CogitoError('fixed action receipt differs from its frozen input')
+    return True
+
+
+def pending_fixed_action(root, run_id):
+    from cogito_events import read_events
+    directory = Path(root) / '.cogito' / 'runs' / run_id
+    pending = []
+    files = sorted((directory / 'fixed-actions').glob('*.json'))
+    if not files:
+        return None
+    events = read_events(directory / 'events.jsonl')
+    for path in files:
+        binding = load_json(path)
+        if binding.get('operation') not in {'task-finish', 'review-fix-start'} or not binding.get('steps'):
+            raise CogitoError('invalid fixed action binding')
+        if not fixed_steps_done(binding, events):
+            pending.append(binding)
+    if len(pending) > 1:
+        raise CogitoError('multiple unfinished fixed actions require inspection')
+    return pending[0] if pending else None
+
+
+def guard_fixed_action(root, run_id, operation, *, stopping=False):
+    pending = pending_fixed_action(root, run_id)
+    if not pending or stopping:
+        return
+    if _fixed_authority.get() == (str(Path(root).resolve()), run_id, pending['action_id']):
+        return
+    if operation in {'finish_task', 'start_review_fix_with_amendment'}:
+        return  # The entry point must match the exact pending action before writing.
+    raise CogitoError('retry unfinished ' + pending['operation'] + ' with its original input and action_id')
+
+
+@contextmanager
+def fixed_action_authority(root, run_id, action_id):
+    token = _fixed_authority.set((str(Path(root).resolve()), run_id, action_id))
+    try:
+        yield
+    finally:
+        _fixed_authority.reset(token)
 
 
 def request_fingerprint(command: str, **arguments: Any) -> str:
