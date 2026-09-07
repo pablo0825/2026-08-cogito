@@ -1,6 +1,6 @@
 # Cogito Runtime 效率減法計畫
 
-日期：2026-09-07。基準：Cogito 3.6.1。狀態：實作中；第一版獨立審查後修正 receipt 邊界，待模擬驗收。
+日期：2026-09-07。基準：Cogito 3.6.1。狀態：已完成；交付版本：Cogito 4.0.0。
 
 本文件記錄 repository maintenance 的修改計畫與實作邊界，不是 Cogito Run、Package 或 Gate 授權。本案不修改後端產品、DEV-002 ledger 或既有歷史事件。
 
@@ -153,8 +153,40 @@ T-001 先跑直接相關的純 formatter 與黑箱 CLI tests，至少涵蓋：
 - 不增加自動派工、上下文摘要、模型選擇、reasoning effort 或 Agent memory。
 - 不宣稱可以從 Cogito bytes 精確推算模型 Token、cache 或 compaction。
 
-## 11. 停止條件與待確認事項
+## 11. 已確認事項與實際決定
 
-實作前只需要確認一件事：是否接受 mutation CLI stdout 的不相容精簡，並將完成版本升為 `4.0.0`。
+使用者已確認接受 mutation CLI stdout 的不相容精簡，並同意完成版本升為 `4.0.0`。實作依 T-001 → T-002 進行，沒有加入 3.x fallback、output mode 或其他已刪除／延後項目。
 
-若答案是否定，保留本計畫的問題定義與驗收資料，但停止 T-001／T-002；另擬最小 3.x 過渡方案。若答案是肯定，依 T-001 → T-002 執行，不把已刪除或延後項目帶回本次交付。
+第一版獨立審查發現通用 `next`、`run-check` evidence 定位與 `finalize` cleanup 三個必要邊界；最終決定是通用 receipt 只保留四欄，路由另查既有 `next`，並只為 `run-check` 與 `finalize` 保留各自無法安全省略的有界結果。這些修正沒有改動 event、projection、evidence 或 workflow contract。
+
+## 12. 實作與驗收紀錄
+
+### 12.1 實作提交
+
+- `bd89c98 docs(cogito): plan subtractive runtime efficiency`
+- `3ea5cbf feat(cogito): return compact mutation receipts`
+- `cc9add0 docs(cogito): document compact mutation output`
+- `990ea36 test(cogito): read full state after mutation receipt`
+- `6422b73 fix(cogito): preserve specialized mutation receipts`
+
+### 12.2 自動驗證
+
+- Receipt formatter、真 CLI、action replay、cleanup、planning revisions、shared revisions、stage commits、fixed receipts、check retry、event shape、integration scope 與 multitask 的 targeted tests 通過。
+- mypy 1.20.2：24 個 configured source files 無問題。
+- Skill format validation：通過。
+- `git diff --check`：通過。
+- 第二次完整 `unittest` suite 共執行 817 tests，結果為 5 errors，不可視為全過。五個 errors 都來自同一個既有 `test_finalization_scope_rechecks_historical_delivery_for_every_kind` 的五種 kind subtests；fixture 的 `effective_contract` 缺少 `approved_paths`，本次 receipt 相關 tests 沒有新增失敗。
+
+### 12.3 獨立真 CLI 模擬
+
+獨立驗收子代理使用 disposable repository 執行真 CLI 模擬；這是本次輸出契約的前向驗收，不是正式 Gate review evidence，也沒有讀寫後端 DEV-002 artifacts。
+
+- 大型 fixture 包含 31 份 planning files，完整 `status` state 為 952,129 bytes。
+- 舊式完整 `prepare-package` 等價輸出為 949,652 bytes；Cogito 4.0.0 的實際 receipt 為 228 bytes。
+- `run-check` 專用 receipt 為 633 bytes，且舊 action replay 保持原 evidence path，可直接交給 `verify`。
+- `finalize` 的 removed、retained 與 error cleanup 情境 receipt 分別為 320、484 與 374 bytes，transient cleanup 結果均可觀察。
+- 該獨立模擬執行的 56 個 tests 通過。
+
+### 12.4 交付狀態
+
+`cogito/VERSION` 為 `4.0.0`。本次沒有 push 或建立 tag。
