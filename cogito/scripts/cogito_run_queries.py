@@ -106,6 +106,17 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
     return output
 
 
+def build_mutation_receipt(projection: RunState) -> dict[str, Any]:
+    """Return the bounded CLI receipt for an already-projected Run mutation."""
+    return {
+        "run_id": projection["run_id"],
+        "state": projection["state"],
+        "sequence": projection["sequence"],
+        "last_event_hash": projection["last_event_hash"],
+        "next": derive_next_action(projection),
+    }
+
+
 def build_completion_report(run_id: str, final_commit: str, result: Mapping[str, Any]) -> dict[str, Any]:
     """Present a validated committed Result without sharing its mutable fields."""
     validate_result(result)

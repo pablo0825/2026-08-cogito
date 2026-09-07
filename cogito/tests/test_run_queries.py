@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -11,10 +12,44 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from cogito_common import CogitoError
-from cogito_run_queries import build_completion_report, derive_next_action
+from cogito_run_queries import build_completion_report, build_mutation_receipt, derive_next_action
 
 
 class RunQueryTests(unittest.TestCase):
+    def test_mutation_receipt_is_bounded_detached_and_uses_the_projection(self) -> None:
+        projection = {
+            "run_id": "DEV-receipt", "state": "awaiting-package-approval",
+            "sequence": 12, "last_event_hash": "a" * 64, "kind": "feature",
+            "candidate_package_hash": "b" * 64,
+            "planning": {
+                "round": 1, "proposal_hash": "c" * 64, "revision": None,
+                "candidate": {"files": {
+                    f"docs/plan-{index:02d}.md": {"content_base64": "eA==" * 10_000}
+                    for index in range(30)
+                }},
+            },
+            "tasks": {"T-1": {"id": "T-1", "status": "pending"}},
+            "agent_results": [{"large": "result" * 10_000}],
+            "evidence": {"large": "evidence" * 10_000},
+        }
+        before = copy.deepcopy(projection)
+        receipt = build_mutation_receipt(projection)
+        self.assertEqual(receipt, {
+            "run_id": "DEV-receipt", "state": "awaiting-package-approval",
+            "sequence": 12, "last_event_hash": "a" * 64,
+            "next": {
+                "state": "awaiting-package-approval",
+                "next_action": "request-package-approval",
+                "planning_round": 1,
+                "candidate_package_hash": "b" * 64,
+                "proposal_hash": "c" * 64,
+            },
+        })
+        self.assertLess(len(json.dumps({"ok": True, "data": receipt}).encode()), 2 * 1024)
+        self.assertNotIn("files", json.dumps(receipt))
+        receipt["next"]["next_action"] = "changed"
+        self.assertEqual(projection, before)
+
     def test_preparation_distinguishes_mini_packages_and_rejects_unknown_states(self) -> None:
         for kind, action in (
             ("feature", "draft-shared-understanding"),

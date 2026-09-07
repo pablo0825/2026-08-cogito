@@ -79,8 +79,8 @@ class EventJsonShapeTests(GitTestCase):
         )
         blocked = self.gate(*arguments)
         self.assertEqual(blocked.returncode, 0, blocked.stderr)
-        expected = json.loads(blocked.stdout)["data"]
-        self.assertEqual(expected["state"], "blocked")
+        receipt = json.loads(blocked.stdout)["data"]
+        self.assertEqual(receipt["state"], "blocked")
         events_before = self.events.read_bytes()
         decoded = read_events(self.events)
         self.assertEqual(len(decoded), 2)
@@ -88,14 +88,15 @@ class EventJsonShapeTests(GitTestCase):
         self.cache.unlink()
         restored = self.gate("status", "--run-id", self.run_id)
         self.assertEqual(restored.returncode, 0, restored.stderr)
-        self.assertEqual(json.loads(restored.stdout)["data"], expected)
+        expected = json.loads(restored.stdout)["data"]
+        self.assertEqual(expected["blocked_from"], "preparing")
         self.assertEqual(json.loads(self.cache.read_text(encoding="utf-8")), expected)
         next_action = self.gate("next", "--run-id", self.run_id)
         self.assertEqual(next_action.returncode, 0, next_action.stderr)
         self.assertEqual(json.loads(next_action.stdout)["data"]["state"], "blocked")
         replayed = self.gate(*arguments)
         self.assertEqual(replayed.returncode, 0, replayed.stderr)
-        self.assertEqual(json.loads(replayed.stdout)["data"], expected)
+        self.assertEqual(json.loads(replayed.stdout)["data"], receipt)
         self.assertEqual(self.events.read_bytes(), events_before)
         self.assertEqual(self.index.read_bytes(), self.initial_index)
 

@@ -222,7 +222,8 @@ class StageCommitTests(GitTestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             return json.loads(result.stdout)['data']
         state = invoke('init', '--run-id', run_id, '--kind', 'feature')
-        self.assertTrue(state['stage_commits'])
+        self.assertEqual(state['state'], 'preparing')
+        self.assertTrue(invoke('status', '--run-id', run_id)['stage_commits'])
         shared = self.value['shared_understanding']
         for event, payload in (
             ('shared-understanding-ready', {'shared_understanding_hash': shared['hash'], 'document': shared}),
@@ -234,7 +235,8 @@ class StageCommitTests(GitTestCase):
         git(self.repo, 'commit', '-qm', info['commit_message'], '--only', '--', *info['paths'])
         state = invoke('checkpoint', 'record', '--run-id', run_id,
                        '--commit-id', git(self.repo, 'rev-parse', 'HEAD'), '--action-id', 'receipt')
-        self.assertIsNone(state['pending_checkpoint'])
+        self.assertEqual(state['next']['next_action'], 'run-boundary-gate')
+        self.assertIsNone(invoke('status', '--run-id', run_id)['pending_checkpoint'])
 
 
 class ReplanStageCompatibilityTests(GitTestCase):
@@ -256,5 +258,10 @@ class ReplanStageCompatibilityTests(GitTestCase):
         self.assertIn('frozen-delivery', rejected.stderr)
         initialized = subprocess.run(command, text=True, capture_output=True)
         self.assertEqual(initialized.returncode, 0, initialized.stderr)
-        self.assertFalse(json.loads(initialized.stdout)['data'].get('stage_commits', False))
+        receipt = json.loads(initialized.stdout)['data']
+        self.assertEqual(receipt['state'], 'preparing')
+        status = subprocess.run([*command[:4], 'status', '--run-id', 'DEV-frozen-successor'],
+                                text=True, capture_output=True)
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertFalse(json.loads(status.stdout)['data'].get('stage_commits', False))
         self.assertEqual(git(repo, 'rev-parse', 'HEAD'), before)

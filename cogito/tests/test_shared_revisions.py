@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from cogito_test_support import COGITO, GitTestCase, git, init_repo, package, atomic_package
+from cogito_contracts import package_hash
 
 
 GATE = COGITO / "scripts/cogito_gate.py"
@@ -69,7 +70,7 @@ class SharedRevisionTests(GitTestCase):
         self.ready(HASH_A, "ready-a")
         revised = json.loads(self.ready(HASH_B, "ready-b").stdout)["data"]
         self.assertEqual(revised["state"], "awaiting-shared-confirmation")
-        self.assertEqual(revised["shared_understanding_hash"], HASH_B)
+        self.assertEqual(revised["next"]["shared_understanding_hash"], HASH_B)
         guidance = json.loads(self.invoke("next", "--run-id", self.run_id).stdout)["data"]
         self.assertEqual(guidance["next_action"], "request-shared-confirmation")
         self.assertEqual(guidance["shared_understanding_hash"], HASH_B)
@@ -88,6 +89,7 @@ class SharedRevisionTests(GitTestCase):
         latest_path.write_text(json.dumps(self.draft))
         prepared = json.loads(self.invoke("prepare-package", "--run-id", self.run_id, "--package", str(latest_path), "--action-id", "prepare-b").stdout)["data"]
         self.assertEqual(prepared["state"], "awaiting-package-approval")
+        self.assertEqual(prepared["next"]["candidate_package_hash"], package_hash(self.draft))
 
     def test_replaying_old_revision_cannot_restore_hash_or_append_events(self) -> None:
         self.ready(HASH_A, "ready-a")
@@ -117,14 +119,14 @@ class SharedRevisionTests(GitTestCase):
                 self.assertEqual(self.status()["state"], "awaiting-shared-confirmation")
         confirmed = json.loads(self.transition("shared-understanding-confirmed", {"confirmed": True, "shared_understanding_hash": HASH_B}, "confirm-b").stdout)["data"]
         self.assertEqual(confirmed["state"], "boundary-analysis")
-        self.assertEqual(confirmed["shared_understanding_hash"], HASH_B)
+        self.assertEqual(self.status()["shared_understanding_hash"], HASH_B)
 
     def test_block_and_resume_preserve_ability_to_revise(self) -> None:
         self.ready(HASH_A, "ready-a")
         self.transition("block", {"reason": "clarify Shared Understanding"}, "block")
         resumed = json.loads(self.invoke("resume", "--run-id", self.run_id, "--action-id", "resume").stdout)["data"]
         self.assertEqual(resumed["state"], "awaiting-shared-confirmation")
-        self.assertEqual(resumed["shared_understanding_hash"], HASH_A)
+        self.assertEqual(resumed["next"]["shared_understanding_hash"], HASH_A)
         self.ready(HASH_B, "ready-b")
         self.transition("shared-understanding-confirmed", {"confirmed": True, "shared_understanding_hash": HASH_B}, "confirm-b")
         self.assertEqual(self.status()["state"], "boundary-analysis")

@@ -128,7 +128,9 @@ class IntegrationScopeTests(GitTestCase):
         git(repo, 'commit', '-qm', 'integration correction within package scope')
         response = self.invoke_integrate(repo, store)
         self.assertEqual(response.returncode, 0, response.stderr)
-        self.assertEqual(json.loads(response.stdout)['data']['tasks']['T-A']['status'], 'integrated')
+        receipt = json.loads(response.stdout)['data']
+        self.assertEqual(receipt['state'], 'executing')
+        self.assertEqual(store.load()['tasks']['T-A']['status'], 'integrated')
 
     def test_rename_cannot_hide_unapproved_source_or_destination(self):
         for source, destination in (
@@ -152,9 +154,9 @@ class IntegrationScopeTests(GitTestCase):
         git(repo, 'commit', '-qm', 'integrate reviewed unicode rename')
         response = self.invoke_integrate(repo, store)
         self.assertEqual(response.returncode, 0, response.stderr)
-        state = json.loads(response.stdout)['data']
-        self.assertEqual(state['state'], 'executing')
-        self.assertEqual(state['tasks']['T-A']['status'], 'integrated')
+        receipt = json.loads(response.stdout)['data']
+        self.assertEqual(receipt['state'], 'executing')
+        self.assertEqual(store.load()['tasks']['T-A']['status'], 'integrated')
         self.assertEqual((repo / 'src/a/中文\n新檔.txt').read_text(), 'rename me\n')
 
     def test_finalization_scope_rechecks_historical_delivery_for_every_kind(self):

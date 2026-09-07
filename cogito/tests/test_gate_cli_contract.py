@@ -48,6 +48,36 @@ class GateCliContractTests(GitTestCase):
             self.fail(result.stderr)
         return result
 
+    def test_large_mutation_returns_a_bounded_receipt_and_preserves_the_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            run_id = "DEV-large-receipt"
+            self.invoke(repo, "init", "--no-stage-commits", "--run-id", run_id, "--kind", "feature")
+            reason = "large-state-marker:" + "x" * 900_000
+            payload = repo / "block.json"
+            payload.write_text(json.dumps({"reason": reason}))
+            arguments = (
+                "transition", "--run-id", run_id, "--event", "block",
+                "--payload-json", str(payload), "--action-id", "large-block",
+            )
+            first = self.invoke(repo, *arguments)
+            receipt = json.loads(first.stdout)["data"]
+            self.assertLess(len(first.stdout.encode()), 2 * 1024)
+            self.assertEqual(set(receipt), {"run_id", "state", "sequence", "last_event_hash", "next"})
+            self.assertNotIn("tasks", receipt)
+            self.assertNotIn("planning", receipt)
+            events = repo / ".cogito/runs" / run_id / "events.jsonl"
+            authoritative = events.read_bytes()
+            self.assertGreater(len(authoritative), 900_000)
+            self.assertEqual(json.loads(authoritative.splitlines()[-1])["payload"]["reason"], reason)
+            status = self.invoke(repo, "status", "--run-id", run_id)
+            full_state = json.loads(status.stdout)["data"]
+            self.assertEqual(full_state["state"], "blocked")
+            self.assertIn("tasks", full_state)
+            replayed = self.invoke(repo, *arguments)
+            self.assertEqual(json.loads(replayed.stdout)["data"], receipt)
+            self.assertEqual(events.read_bytes(), authoritative)
+
     def test_canonical_approval_start_and_resume_cannot_skip_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -133,17 +163,23 @@ class GateCliContractTests(GitTestCase):
             additional_block = ("transition", "--run-id", run_id, "--event", "block",
                                 "--payload-json", '{"reason":"another finding"}', "--action-id", "block-2")
             blocked = json.loads(self.invoke(repo, *additional_block).stdout)["data"]
-            self.assertEqual(blocked["blocked_from"], "executing")
+            self.assertEqual(set(blocked), {"run_id", "state", "sequence", "last_event_hash", "next"})
+            self.assertEqual(blocked["state"], "blocked")
+            self.assertEqual(blocked["next"], {
+                "state": "blocked", "next_action": "resolve-and-run-resume-gate",
+            })
             events_path = repo / ".cogito/runs" / run_id / "events.jsonl"
             events_before = events_path.read_bytes()
             self.assertEqual(json.loads(self.invoke(repo, *additional_block).stdout)["data"], blocked)
             self.assertEqual(events_path.read_bytes(), events_before)
+            blocked_state = json.loads(self.invoke(repo, "status", "--run-id", run_id).stdout)["data"]
+            self.assertEqual(blocked_state["blocked_from"], "executing")
             # Older versions cached the second block as the origin. Only repair
             # this disposable cache; both historical reasons must stay intact.
             state_path = events_path.with_name("state.json")
-            state_path.write_text(json.dumps({**blocked, "blocked_from": "blocked"}))
+            state_path.write_text(json.dumps({**blocked_state, "blocked_from": "blocked"}))
             restored = json.loads(self.invoke(repo, "status", "--run-id", run_id).stdout)["data"]
-            self.assertEqual(restored["blocked_from"], "executing")
+            self.assertEqual(restored, blocked_state)
             self.assertEqual(json.loads(state_path.read_text()), restored)
             self.assertEqual(events_path.read_bytes(), events_before)
             block_reasons = [event["payload"]["reason"] for event in map(json.loads, events_before.splitlines()) if event["type"] == "block"]

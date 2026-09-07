@@ -93,7 +93,7 @@ class PlanningCliTests(GitTestCase):
         result = self.invoke('approve', '--run-id', self.run_id, '--package',
                              self.input_file(third), '--action-id', 'cli-approve3')
         self.assertEqual(result['state'], 'start-gate')
-        self.assertEqual(result['package_hash'], package_hash(third))
+        self.assertEqual(self.store.load()['package_hash'], package_hash(third))
         history = self.planning('history')
         self.assertEqual(history['planning']['round'], 3)
         entries = history['history']
@@ -111,11 +111,11 @@ class PlanningCliTests(GitTestCase):
         self.store.state_path.unlink()
         restored = self.planning('withdraw', request, 'cli-withdraw')
         self.assertEqual(restored['state'], 'awaiting-package-approval')
-        self.assertEqual(restored['candidate_package_hash'], package_hash(self.fixture.old))
+        self.assertEqual(restored['next']['candidate_package_hash'], package_hash(self.fixture.old))
         recorded = self.store.events_path.read_bytes()
         self.store.state_path.unlink()
         replayed = self.planning('withdraw', request, 'cli-withdraw')
-        self.assertEqual(replayed['candidate_package_hash'], package_hash(self.fixture.old))
+        self.assertEqual(replayed, restored)
         self.assertEqual(self.store.events_path.read_bytes(), recorded)
         history = self.planning('history')
         self.assertEqual(sum(e['type'] == 'planning-withdrawn' for e in history['history']), 1)
@@ -156,7 +156,7 @@ class PlanningCliTests(GitTestCase):
             restored = self.planning(operation, request, action)
             self.assertEqual(restored['state'], expected_state)
             self.assertEqual(self.store.events_path.read_bytes(), durable)
-            self.assertEqual(json.loads(self.store.state_path.read_text()), restored)
+            self.assertEqual(json.loads(self.store.state_path.read_text()), self.store.load())
 
         fail_cache_then_retry('begin', self.fixture.request(), 'durable-begin', 'preparing')
         self.prepare_second_round(begin=False)

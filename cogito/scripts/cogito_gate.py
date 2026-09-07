@@ -44,6 +44,29 @@ if __name__ == '__main__' and 'replan' in sys.argv[1:]:
     sys.meta_path.insert(0, _CogitoSourceFinder())
 
 from cogito_runtime import CogitoError, RunStore, effective_contract_hash, package_hash, render_project_graph_mermaid, render_workflow_mermaid, validate_agent_result, validate_package
+from cogito_run_queries import build_mutation_receipt
+
+
+_RUN_MUTATION_COMMANDS = {
+    "amend", "amend-paths", "agent-result", "approve", "correct-result-metadata",
+    "correction-complete", "correction-start", "finalize", "human", "human-approve",
+    "init", "integrate", "post-verify", "prepare-package", "resume", "retry",
+    "review-fix-complete", "review-fix-start", "run-check", "start", "task",
+    "transition", "verify",
+}
+
+
+def _uses_run_mutation_receipt(args: argparse.Namespace, output: Any) -> bool:
+    """Identify full Run projections at the CLI boundary, not query/special receipts."""
+    if args.command == "planning":
+        mutation = args.operation in {"begin", "review", "withdraw"}
+    elif args.command == "checkpoint":
+        mutation = args.operation == "record"
+    else:
+        mutation = args.command in _RUN_MUTATION_COMMANDS
+    return mutation and isinstance(output, dict) and {
+        "run_id", "state", "sequence", "last_event_hash",
+    }.issubset(output)
 
 
 def _json_arg(value: str | None) -> dict[str, Any]:
@@ -373,6 +396,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({'ok': False, 'error': f'storage failed: {exc}; inspect next and retry the original input/action_id',
                           'action_id': args.action_id}, ensure_ascii=False), file=sys.stderr)
         return 2
+    if _uses_run_mutation_receipt(args, output):
+        output = build_mutation_receipt(output)
     print(json.dumps({"ok": True, "data": output}, ensure_ascii=False, sort_keys=True, indent=2))
     return 0
 
