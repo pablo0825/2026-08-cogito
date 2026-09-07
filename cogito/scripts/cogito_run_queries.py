@@ -16,7 +16,9 @@ from cogito_task_rules import effective_slice_id, is_active_task
 def operation_hint(root, run_id, operation, arguments=(), *, action_id='<action-id>',
                    input_value=None, required_inputs=()):
     argv = ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(root),
-            operation, '--run-id', run_id, *arguments, '--action-id', action_id]
+            operation, '--run-id', run_id, *arguments]
+    if action_id is not None:
+        argv.extend(['--action-id', action_id])
     if input_value is not None or required_inputs:
         argv.extend(['--input', '<input.json>'])
     return {'operation': operation, 'argv': argv, 'input': deepcopy(input_value),
@@ -117,4 +119,8 @@ def build_completion_report(run_id: str, final_commit: str, result: Mapping[str,
             amendment["commit_id"] = final_commit
     if "delivery_summary" in result:
         report["delivery_summary"] = deepcopy(result["delivery_summary"])
+        retained = [{'event_sequence': item['event_sequence'], **deepcopy(item['retention'])}
+                    for item in result['delivery_summary']['verification'] if 'retention' in item]
+        if retained:
+            report['review_retentions'] = retained
     return report

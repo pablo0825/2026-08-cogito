@@ -117,6 +117,9 @@ def parser() -> argparse.ArgumentParser:
     transition.add_argument("--event", required=True)
     transition.add_argument("--payload-json", default="{}")
     transition.add_argument("--action-id", required=True)
+    retention = commands.add_parser('review-retention', help='prepare a read-only proposal for retaining prior approvals')
+    retention.add_argument('--run-id', required=True)
+    retention.add_argument('--input', required=True, help='Coordinator impact assessment JSON')
     approve = commands.add_parser("approve")
     approve.add_argument("--run-id", required=True)
     approve.add_argument("--package", required=True)
@@ -287,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
             output = store.load() if args.command == "status" else store.next_action()
         elif args.command == "transition":
             output = RunStore(repo, args.run_id).transition(args.event, _json_arg(args.payload_json), args.action_id)
+        elif args.command == 'review-retention':
+            output = RunStore(repo, args.run_id).prepare_review_retention(_read_object(args.input))
         elif args.command == "approve":
             output = RunStore(repo, args.run_id).approve_package(_read_object(args.package), args.action_id)
         elif args.command == "prepare-package":

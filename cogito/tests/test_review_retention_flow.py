@@ -2,6 +2,8 @@
 import copy
 import json
 import sys
+import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 from cogito_common import CogitoError
@@ -71,9 +73,25 @@ class ReviewRetentionFlowTests(GitTestCase):
 
     def test_retained_review_reaches_accepted_without_rechecking_unaffected_task(self):
         repo, _, store, draft, head = self.corrected_wave()
-        proposal = self.proposal(store)
+        hint = store.next_action()['optional_operations'][0]
+        self.assertEqual(hint['candidate_task_ids'], ['T-a'])
+        self.assertNotIn('--action-id', hint['argv'])
+        impact_path = store.run_dir / 'impact.json'
+        impact_path.write_text(json.dumps(self.impact()))
         before = store.events_path.read_bytes()
-        store.transition('review-approved', {'retention': proposal}, 'retain-approve')
+        argv = [str(impact_path) if value == '<input.json>' else value for value in hint['argv']]
+        process = subprocess.run(argv, capture_output=True, text=True)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        prepared = json.loads(process.stdout)['data']
+        self.assertEqual(store.events_path.read_bytes(), before)
+        proposal = {**prepared, 'reviewer_id': 'retention-reviewer',
+            'assessment': 'Verified cumulative diff, dependencies and current related checks.'}
+        approval_path = store.run_dir / 'approval.json'
+        approval_path.write_text(json.dumps({'retention': proposal}))
+        process = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'scripts/cogito_gate.py'),
+            '--repo', str(repo), 'transition', '--event', 'review-approved', '--run-id', store.run_id,
+            '--payload-json', str(approval_path), '--action-id', 'retain-approve'], capture_output=True, text=True)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         retained = store.events_path.read_bytes()
         self.assertTrue(retained.startswith(before))
         store.transition('review-approved', {'retention': proposal}, 'retain-approve')
@@ -91,17 +109,45 @@ class ReviewRetentionFlowTests(GitTestCase):
         relative = f'docs/cogito/results/{store.run_id}.json'
         final = repo / relative
         final.parent.mkdir(parents=True, exist_ok=True)
-        final.write_text(json.dumps({'schema_version': '3.0', 'run_id': store.run_id, 'status': 'accepted',
+        result = {'schema_version': '3.0', 'run_id': store.run_id, 'status': 'accepted',
             'package_hash': package_hash(store.approved_package()),
             'effective_contract_hash': store.load()['effective_contract_hash'],
             'integration_commits': [integration], 'slice_dispositions': {'FS-1': 'accepted'},
             'checks': [{'id': 'C-b', 'status': 'passed', 'evidence': post['evidence_path']}],
-            'reviews': [{'reviewer': 'reviewer'}], 'amendments': [{'id': 'TA-review', 'commit_id': head}],
-            'human_gate': {'required': False, 'outcome': 'not-required'}, 'remaining_risks': []}))
-        git(repo, 'add', relative, 'docs/cogito/project-graph.json')
-        git(repo, 'commit', '-qm', 'record delivery')
-        store.finalize(relative, 'docs/cogito/project-graph.json', git(repo, 'rev-parse', 'HEAD'))
-        self.assertEqual(store.completion_report()['status'], 'accepted')
+            'reviews': [{'reviewer': 'reviewer'}, {'reviewer': 'retention-reviewer'}],
+            'amendments': [{'id': 'TA-review', 'commit_id': head}],
+            'delivery_summary': store.delivery_summary(),
+            'human_gate': {'required': False, 'outcome': 'not-required'}, 'remaining_risks': []}
+        for index, mode in enumerate(('missing-summary', 'missing-reviewer', 'valid')):
+            candidate = copy.deepcopy(result)
+            if mode == 'missing-summary':
+                del candidate['delivery_summary']
+            elif mode == 'missing-reviewer':
+                candidate['reviews'] = [{'reviewer': 'reviewer'}]
+            final.write_text(json.dumps(candidate))
+            git(repo, 'add', relative, 'docs/cogito/project-graph.json')
+            git(repo, 'commit', *(['--amend'] if index else []), '-qm', 'record delivery')
+            unchanged = store.events_path.read_bytes()
+            if mode != 'valid':
+                with self.assertRaisesRegex(CogitoError, 'summary' if mode == 'missing-summary' else 'Reviewers'):
+                    store.finalize(relative, 'docs/cogito/project-graph.json', git(repo, 'rev-parse', 'HEAD'))
+                self.assertEqual(store.events_path.read_bytes(), unchanged)
+            else:
+                store.finalize(relative, 'docs/cogito/project-graph.json', git(repo, 'rev-parse', 'HEAD'))
+        report = store.completion_report()
+        self.assertEqual(report['status'], 'accepted')
+        approval = next(e for e in store._events.read() if e['type'] == 'review-approved')
+        self.assertEqual(report['review_retentions'], [{'event_sequence': approval['sequence'], **proposal}])
+        source = report['review_retentions'][0]['binding']['sources'][0]['review']
+        original = next(e for e in store._events.read() if e['sequence'] == source['event_sequence'])
+        self.assertEqual(original['event_hash'], source['event_hash'])
+        self.assertEqual(original['payload']['result']['agent_id'], 'reviewer')
+        self.assertEqual(report['review_retentions'][0]['reviewer_id'], 'retention-reviewer')
+        self.assertEqual(report['delivery_summary'], result['delivery_summary'])
+        self.assertEqual([r['task_id'] for r in report['delivery_summary']['reviews']],
+                         ['T-a', 'T-b', 'T-b', 'T-fix'])
+        self.assertEqual([r['check_id'] for r in report['delivery_summary']['verification']
+                         if r['event'] == 'check-evidence-recorded'], ['C-a', 'C-b', 'C-fix', 'C-b', 'C-b'])
         events = store._events.read()
         self.assertEqual(sum(e['type'] == 'check-evidence-recorded' and
             e['payload']['check_id'] == 'C-a' for e in events), 1)

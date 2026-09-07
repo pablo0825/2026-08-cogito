@@ -18,6 +18,8 @@ Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已�
 
 `transition --payload-json` 可直接接 JSON object 字串或 UTF-8 JSON 檔案路徑；CLI 優先解析 inline JSON，不會把合法長 JSON 當檔名查詢。若檔名本身恰為合法 JSON（例如 `null`），使用 `./null` 或絕對路徑明確指定檔案。兩種輸入都必須解析為 object；格式、編碼或讀取失敗會回傳結構化錯誤。
 
+`review-retention --run-id <ID> --input <impact.json>` 是唯讀提案入口，不需要 action ID；覆核後仍使用既有 `transition --event review-approved` 原子記錄。輸入及適用條件見 [保留未受影響審查](execution-policy.md#保留未受影響審查)，不要把提案成功當成已核准。
+
 Gate 與 Runner 的 JSON 檔案輸入使用 UTF-8；非 UTF-8 或損壞編碼與 JSON 格式錯誤一樣，回傳 exit code `2`，並在 stderr 輸出包含 `ok: false` 與 `error` 的 JSON，不輸出 Python traceback，也不嘗試轉碼或推進流程。
 
 Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 Markdown。Package 核准前，從已通過 `prepare-package` 的相同草稿呈現範圍、Spec／Plan 路徑、checks 與風險；核准與執行須綁定同一 candidate hash。顯示層不得補預設值或改寫契約；草稿有變動時重新驗證並確認核准。Python contract 不轉型、不修改輸入；格式錯誤不可透過改寫已凍結資料來掩蓋。

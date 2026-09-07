@@ -124,7 +124,7 @@ Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改
 
 完成本波正式驗證後，由不同 Agent 逐 Task 進行獨立 review。Gate 逐 task 比對 Implementer task lease 的 `agent_id`、Reviewer Result 的 `reviewed_implementer` 與不同的 reviewer `agent_id`，由已登錄 Result 推導審查完成情況，不接受 Agent 回報的 `independent: true`，也不在 Package 預先綁定 Agent 身分。Coordinator 必須指派實際不同的 Agent，並維持穩定且唯一的 ID；Gate 的 ID 比對不提供外部身分驗證。Reviewer 可建議核准、提出 Package 內修正或升級風險，但不得移除 human predicate；最終 review verdict 由 Gate 計算。Maintenance 只有在 Mini Package 的低風險宣告已有足夠證據並經核准、且 Gate 的檢查通過時可豁免；語意判斷與機械檢查的分工見 [Package Authoring](package-authoring.md#選擇-package-類型)。
 
-Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task 最新完成 Implementer Result 的 `base_commit`／`head_commit`，不把後續 task 的 commit 範圍併入。該 head 必須仍是目前 worktree HEAD 的祖先；目前 HEAD 與內容須對應本輪 `verification-passed` 採用的正式 evidence；atomic 模式也接受最後 Task Result 綁定的相同內容提交前證據。修正後重新驗證，即需重新提交本輪各 task 的 review，不能沿用上一輪核准。審查結束轉移也會重新比對 worktree，拒絕 review 後才加入的未驗證內容。只有 optional checks 的 Package 仍需至少一份本輪已登錄、未竄改且通過的 controlled evidence 作為審查內容依據。
+Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task 最新完成 Implementer Result 的 `base_commit`／`head_commit`，不把後續 task 的 commit 範圍併入。該 head 必須仍是目前 worktree HEAD 的祖先；目前 HEAD 與內容須對應本輪 `verification-passed` 採用的正式 evidence；atomic 模式也接受最後 Task Result 綁定的相同內容提交前證據。修正後重新驗證，預設重新提交本輪各 task 的 review；符合下方「保留未受影響審查」條件者可明確採認原 approval。審查結束轉移也會重新比對 worktree，拒絕 review 後才加入的未驗證內容。只有 optional checks 的 Package 仍需至少一份本輪已登錄、未竄改且通過的 controlled evidence 作為審查內容依據。
 
 ### 啟動審查修正
 
@@ -147,9 +147,35 @@ Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`�
 
 以上為欄位示意；finding 使用 `next` 的原值，Task、Slice、paths 與 check IDs 依本次有效契約撰寫。使用 `review-fix-start --run-id <ID> --input <file> --action-id <ID>`。工具在登記前驗證 finding、修正責任、依賴、checks、checkout 及現有門檻，按 start → amendment 登記事件；不再要求 Agent 分開操作。若 finding 已被本輪通過結果取代、Amendment 非法或契約／內容改變，立即拒絕。
 
-啟動成功後依一般 Atomic Task 流程實作、相關檢查、獨立 commit 與 `task-finish`；每項修正 commit 保留 `Cogito-Amendment: <ID>` trailer。修正 Tasks 完成後依 `next` 執行 `review-fix-complete`，再正式驗證及本輪逐 Task 獨立重審；本版沒有提前正式審查或選擇性沿用舊 review。
+啟動成功後依一般 Atomic Task 流程實作、相關檢查、獨立 commit 與 `task-finish`；每項修正 commit 保留 `Cogito-Amendment: <ID>` trailer。修正 Tasks 完成後依 `next` 執行 `review-fix-complete`，再正式驗證及本輪獨立審查；未受影響的原 approval 可依下節採認。正式審查仍在實作與驗證後進行，不與後續實作並行。
 
 既有分開的 `review-fix-start` → `amend` 仍支援，包括非 Atomic 流程。新操作不得在 `reviewing` 先用 `amend` 加修正 Tasks；一般 check-only 等其他合法 Amendment 不受此限制。已被舊版接受的錯序恢復見 [Runtime Interface](runtime-interface.md#固定操作與歷史登記恢復)。
+
+### 保留未受影響審查
+
+這是可選捷徑，限同一 Atomic Development Run、整合前 `review-fix` 完成並重新 verification 的 `reviewing` 階段。首版要求所有 Task 在同一實作 checkout、修正提交區間無 merge；其他情況走正常本輪 review。已完成 Task 的 commit 與歷史測試原本就保留，不因未使用此捷徑重新實作或補空 commit。
+
+1. Coordinator 先在修正 Plan 說明影響與選測理由；實作修正 Task、執行相關 controlled checks 並重新 verification。對原 finding 的 Task 及新增／受影響 Task，提交本輪正常 Reviewer Result。
+2. Coordinator 準備 impact JSON，例如：
+
+   ```json
+   {
+     "author_id": "coordinator",
+     "retained": [{"task_id": "T-001", "reason": "試算不依賴此次顯示文字", "dependency_paths": ["src/rules"]}],
+     "affected_task_ids": ["T-003", "T-004"],
+     "check_ids": ["C-display"],
+     "assessment": "追蹤共用 service、mapper、contract 與設定，修正僅影響 Reviewer 顯示；顯示及修正 Task 的必要 checks 已通過。"
+   }
+   ```
+
+   IDs 與 paths 使用實際契約值；`dependency_paths` 列出 Task DAG／paths 未表達、但本次分析確認相關的依賴。Gate 不理解程式語意，不能用空清單代表已證明沒有依賴。`affected_task_ids` 必須涵蓋實際 touched 與新增 Task；工具自動加入這些 Task 的全部 targeted checks，`check_ids` 可補充其他相關檢查，不能用來刪除 required checks。
+3. 執行 `review-retention --run-id <ID> --input <impact.json>`。工具只產生提案，沒有追加核准事件。保存輸出 `data`，包含原 review／verification 引用、原審查波次內容、當前 HEAD／tree、累積 touched paths、契約及證據 hash。`next.optional_operations` 的候選僅是提示，仍須通過此入口驗證。
+4. 不同於提案者及本 Run Implementer 的 Reviewer 檢查實際差異、未受影響理由與選測充分性，在該 `data` object 加入 `reviewer_id` 與非空 `assessment`。不要改寫機器產生的 `impact`／`binding`／`binding_hash`；判斷需要修改 impact 時，重新產生提案。保存為 `{"retention": <覆核後的 object>}`。
+5. 以 `transition --event review-approved --run-id <ID> --payload-json <approval.json> --action-id <ID>` 結束本輪審查。Gate 再次檢查目前內容與證據，在 executor 停止的同一鎖定區間內追加一筆 `review-approved`，內含採認依據。相同輸入／action ID 重送不重複寫入；不另造原 Reviewer Result。
+
+原 approval 必須尚未被新結果取代；`needs-fix` 或本輪新結果不能被採認覆蓋。基準是原 review 當時的整個 verified wave，涵蓋其後每一筆提交的 touched paths；修改後還原也視為受影響，同檔不同區塊仍保守重審。Task／既有 targeted check 定義、已知祖先依賴、明示語意依賴及凍結產品邊界必須不受影響；共用設定、lockfile、工具鏈或執行流程變動不採認。原／新 verification 還須具有相同 executor/workflow 綁定；缺少此欄位的歷史記錄仍可讀取，但使用正常 review。
+
+歷史 evidence 不改綁新的 tree 或契約；受影響檢查必須對應當前內容，較新失敗、未知或未完成 attempt 不能退回舊成功。無法證明安全、提案漂移或捷徑成本高於重審時，提交正常本輪 review 即可，不需另建 Run 或採認恢復流程。採認者及理由隨 [交付摘要](finalization.md#2-取得交付摘要) 保存，必要整合檢查照常執行。
 
 ## 串行整合
 

@@ -7,7 +7,7 @@ from cogito_common import CogitoError, hash_json, load_json
 from cogito_contracts import materialize_contract_with_limits, path_allowed
 from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_review_retention_rules import (
-    reference, source_review, validate_candidate, validate_impact, validate_reviewer,
+    reference, source_review, validate_candidate, validate_impact, validate_reviewer, validate_retention_shape,
 )
 from cogito_task_finish import select_task_evidence
 
@@ -50,7 +50,7 @@ def _evidence(store, events, path):
 def _touches(store, worktree, base, head, old_tree, tree):
     store._git_at(worktree, 'merge-base', '--is-ancestor', base, head)
     commits = store._git_at(worktree, 'rev-list', '--reverse', base + '..' + head).splitlines()
-    touched = set()
+    touched: set[str] = set()
     for commit in commits:
         parents = store._git_at(worktree, 'rev-list', '--parents', '-n', '1', commit).split()
         if len(parents) != 2:
@@ -184,8 +184,7 @@ def prepare_retention(store, impact):
 
 
 def validate_retention(store, request):
-    if not isinstance(request, dict) or set(request) != {'impact', 'binding', 'binding_hash', 'reviewer_id', 'assessment'}:
-        raise CogitoError('retention requires prepared proposal plus reviewer_id and assessment')
+    validate_retention_shape(request)
     prepared = prepare_retention(store, request['impact'])
     if any(request[k] != v for k, v in prepared.items()):
         raise CogitoError('retention proposal or verified contents changed; prepare and review again')

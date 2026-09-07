@@ -135,7 +135,8 @@ class RetentionAdversarialTests(GitTestCase):
         store.transition('review-approved', {'retention': self.proposal(store)})
         history = store._events.read()
         self.assertEqual(project_events(history, store.workflow)['state'], 'integrating')
-        for mode in ('hash', 'source-hash', 'implementation-hash', 'verification-hash', 'sources-type'):
+        for mode in ('hash', 'source-hash', 'implementation-hash', 'verification-hash', 'sources-type', 'reference-type', 'sequence-type',
+                     'source-extra', 'checks-empty', 'touched-unsafe'):
             with self.subTest(mode=mode):
                 changed = copy.deepcopy(history)
                 record = changed[-1]['payload']['retention']
@@ -143,6 +144,16 @@ class RetentionAdversarialTests(GitTestCase):
                     record['binding_hash'] = '0' * 64
                 elif mode == 'sources-type':
                     record['binding']['sources'] = None
+                elif mode == 'reference-type':
+                    record['binding']['sources'][0]['implementation'] = []
+                elif mode == 'sequence-type':
+                    record['binding']['sources'][0]['review']['event_sequence'] = True
+                elif mode == 'source-extra':
+                    record['binding']['sources'][0]['extra'] = 'not allowed'
+                elif mode == 'checks-empty':
+                    record['binding']['checks'] = []
+                elif mode == 'touched-unsafe':
+                    record['binding']['sources'][0]['touched_paths'] = ['../escape']
                 else:
                     key = {'source-hash': 'review', 'implementation-hash': 'implementation',
                            'verification-hash': 'verification'}[mode]

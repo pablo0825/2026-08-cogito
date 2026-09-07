@@ -215,6 +215,8 @@ def _validate_acceptance_history(context: FinalizationContext) -> None:
     }
     for task in state.get('tasks', {}).values():
         reviewer_ids.update(task.get('adoption', {}).get('source_reviewers', []))
+    reviewer_ids.update(e['payload']['retention']['reviewer_id'] for e in events
+                        if e['type'] == 'review-approved' and 'retention' in e['payload'])
     if package["kind"] != "maintenance" and reviewer_ids != {
         item.get("reviewer") for item in result["reviews"]
     }:

@@ -1,7 +1,7 @@
 # 第二批：修正後保留有效成果
 
 日期：2026-09-07。基準：Cogito 3.5.0，commit `651f6ad`。
-狀態：計畫草案；尚未實作。此文件不是 Cogito Run 或 Package。
+狀態：使用者核准並要求先提交計畫後實作；已完成並驗證，交付版本 `3.6.0`。本文件不是 Cogito Run 或 Package。
 
 ## 1. 目標與減法決策
 
@@ -122,3 +122,30 @@ T-001 試算、T-002 送件、T-003 Reviewer 顯示在第一輪接受審查；T-
 本次僅撰寫計畫，未執行新功能測試或修改 backend 的 Run。
 
 子代理再讀計畫後未發現阻塞，提出兩項必要澄清：限制機械依賴分析的資料來源、明定 touch 後 revert 的處理。主代理已分別補入第 4.3 與第 5 節；採保守拒絕採認，避免默認新增語意依賴引擎或省略中途變動。
+
+## 10. 實作決策與分包紀錄
+
+本節為後續實作紀錄；第 9 節的「僅撰寫計畫」描述當時的計畫審核階段。
+
+- 計畫 commit：`ce38183`。
+- T-001 commit：`a6aa774`。新增 `cogito_review_retention_rules.py` 與 `test_review_retention_rules.py`；獨立審查通過，15 項新純規則及 7 項原 review decision 測試通過。
+- T-002 commit：`2b0c1eb`。新增採認 adapter、更新 rules／run store／projection／review decision，新增 flow 與 adversarial tests。子代理以真實隔離 Git 驗證採認、拒絕後正常重審、回應遺失精確重送；獨立審查發現 executor admission 鎖提早釋放，主代理修正後再經複核，並補鎖持續至 append 的測試。
+- T-003 範圍：Gate CLI、run store/query 提示與 report、採認共用 shape contract、delivery summary／finalization rules、三份操作文件，以及對應 CLI／flow／summary 測試。主代理實作，子代理獨立審查與驗收；新模組加入預設 mypy scope，交付時更新 VERSION。
+
+減法實作沒有新增核准狀態或新的權威事件類型：唯讀 `review-retention --input` 產生提案，既有 `transition --event review-approved --payload-json <file>` 在同一筆事件保存採認並閉合審查。保持正常逐 Task review 為可用的回退途徑。
+
+首版採認再限於單一已完成實作 checkout、無 merge 的線性修正區間；複雜區間使用正常 review。新的 atomic verification 附加 executor/workflow digest；歷史缺少 digest 不補造，也不提供採認資格，正常載入與 review 不受影響。這是為避免在無法證明工具鏈未變時沿用舊 approval。
+
+Result 沿用現有 `delivery_summary`，有採認才額外要求摘要不可省略。採認存於 verification 的 `review-approved.retention`，Result reviewer 集合包含採認 Reviewer，report 從同一摘要產生 `review_retentions`。不增加證據移植、跨 Run 採認或並行審查。
+
+最終驗證（均由子代理執行；各項有重疊，不累加為獨立案例數）：
+
+- 自動測試：相關 selection 共 69 tests passed，涵蓋 retention rules／adversarial、atomic verification／correction、review decision／fix、event repository、CLI contract、next/report 與 delivery summary。
+- 嚴格 shape 案例補驗：新增非法引用型別、布林 sequence、未知欄位、空 checks、危險 touched path 後，單一 adversarial test 加純規則 15 項，共 16 tests passed。
+- 真實隔離 Git／CLI 驗收：3 tests passed。實際使用 next argv、唯讀提案及 review-approved CLI，完成 merge、相關 post-check、finalize、accepted report；缺摘要／採認 Reviewer 被拒絕，原 Task check/review 各保留一次；驗證拒絕後正常重審及 durable append 後回應遺失的精確重送。
+- 型別檢查：兩個新模組補上明確型別後，預設 mypy 設定的 22 files passed。
+- 獨立程式審查：T-002 executor admission 空窗已修正並補驗；T-003 未發現必要修正。
+- 文件閱讀模擬：發現 finalization 的 CLI JSON 包裝說明不夠明確，已改成取 `data` object 並經唯讀複核。這項屬文件模擬，與上述真實 CLI 驗收分開記錄。
+- Skill 格式驗證未執行：本批未修改 SKILL.md／agent metadata；已核對變更文件路徑、命令與 diff。
+
+未修改後端 DEV-003、未建立交付用分支／worktree（測試使用暫存隔離 Git fixtures）、未執行全套 regression，也未宣稱 CI 通過。

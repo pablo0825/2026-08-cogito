@@ -37,7 +37,7 @@ RECEIPT_FIELDS = (
     "evidence", "passed", "delivery_head", "human_required", "reviewer_escalation",
     "binding", "feedback_hash", "approved", "conditional", "amendment_id", "task_ids",
     "reviews", "commit_id", "completion_mode", "content_tree", "failed_evidence", "reason", "independent",
-    "review_task_id", "reviewer", "review_head",
+    "review_task_id", "reviewer", "review_head", "retention", "review_runtime",
 )
 
 
@@ -119,6 +119,13 @@ def _validate_receipt(record: Any, name: str) -> None:
     require_object(record, name, "event_sequence", "event")
     require_integer(record["event_sequence"], f"{name}.event_sequence", 1, 2**63 - 1)
     require_string(record["event"], f"{name}.event")
+    if 'retention' in record:
+        from cogito_review_retention_rules import validate_retention_shape
+        if record['event'] != 'review-approved':
+            raise CogitoError('retention belongs to a review approval receipt')
+        validate_retention_shape(record['retention'])
+    if 'review_runtime' in record:
+        require_string(record['review_runtime'], 'review runtime', CONTENT_HASH_RE)
     for key in ("commit_id", "base_commit", "head_commit", "delivery_head", "previous_delivery_head", "content_tree", "index_tree", "review_head"):
         if key in record:
             require_string(record[key], f"{name}.{key}", GIT_OBJECT_RE)
@@ -221,8 +228,9 @@ def validate_delivery_summary(summary: Any) -> None:
 def validate_delivery_summary_records(state: Mapping[str, Any], events: Sequence[Mapping[str, Any]], result: Mapping[str, Any]) -> None:
     """New stage-commit runs require an exact summary; legacy omission is valid."""
     if "delivery_summary" not in result:
-        if state.get("stage_commits") is True:
-            raise CogitoError("Result requires delivery_summary for a stage-commit run")
+        if state.get("stage_commits") is True or any(
+                e['type'] == 'review-approved' and 'retention' in e['payload'] for e in events):
+            raise CogitoError("Result requires delivery_summary for stage commits or review retention")
         return
     validate_delivery_summary(result["delivery_summary"])
     if result["delivery_summary"] != build_delivery_summary(state, events):

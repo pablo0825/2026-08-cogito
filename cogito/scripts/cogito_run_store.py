@@ -1727,10 +1727,27 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     ['--event', 'implementation-complete']))
         if state['state'] == 'reviewing':
             from cogito_correction_rules import current_review_finding
+            events = self._events.read()
             try:
-                finding = current_review_finding(state, self._events.read())
+                finding = current_review_finding(state, events)
             except CogitoError:
-                pass
+                if any(e['type'] == 'review-fix-complete' for e in events):
+                    from cogito_review_retention_rules import source_review
+                    cycle = max((e['sequence'] for e in events if e['type'] == 'verification-passed'), default=0)
+                    candidates = []
+                    for task in state['tasks'].values():
+                        try:
+                            source_review(events, task['id'], cycle)
+                        except CogitoError:
+                            continue
+                        candidates.append(task['id'])
+                    if candidates:
+                        hint = operation_hint(self.root, self.run_id, 'review-retention',
+                            action_id=None,
+                            required_inputs=['author_id', 'retained', 'affected_task_ids', 'check_ids', 'assessment'])
+                        hint.update(candidate_task_ids=candidates, optional=True,
+                            note='Candidates only; prepare checks scope, history, current evidence and runtime. Normal review remains available.')
+                        output['optional_operations'] = [hint]
             else:
                 output['next_action'] = 'prepare-review-fix'
                 operations.append(operation_hint(self.root, self.run_id, 'review-fix-start',
