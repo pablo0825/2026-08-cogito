@@ -143,6 +143,11 @@ def parser() -> argparse.ArgumentParser:
     retention = commands.add_parser('review-retention', help='prepare a read-only proposal for retaining prior approvals')
     retention.add_argument('--run-id', required=True)
     retention.add_argument('--input', required=True, help='Coordinator impact assessment JSON')
+    inventory = commands.add_parser(
+        "slice-inventory", help="read accepted single-Slice facts for Package preparation",
+    )
+    inventory.add_argument("--source-run", required=True, help="accepted DEV-* run ID")
+    inventory.add_argument("--source-slice", required=True, help="sole accepted Slice ID")
     approve = commands.add_parser("approve")
     approve.add_argument("--run-id", required=True)
     approve.add_argument("--package", required=True)
@@ -317,6 +322,9 @@ def main(argv: list[str] | None = None) -> int:
             output = RunStore(repo, args.run_id).transition(args.event, _json_arg(args.payload_json), args.action_id)
         elif args.command == 'review-retention':
             output = RunStore(repo, args.run_id).prepare_review_retention(_read_object(args.input))
+        elif args.command == "slice-inventory":
+            from cogito_slice_inventory import build_slice_inventory
+            output = build_slice_inventory(repo, args.source_run, args.source_slice)
         elif args.command == "approve":
             output = RunStore(repo, args.run_id).approve_package(_read_object(args.package), args.action_id)
         elif args.command == "prepare-package":

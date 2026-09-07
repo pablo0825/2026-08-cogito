@@ -10,6 +10,8 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 先以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步。敏感操作使用專用 subcommand：`prepare-package`、`approve`、`start`、`amend`、`task`、`task-finish`、`agent-result`、`correct-result-metadata`、`run-check`、`verify`、`correction-start`、`correction-complete`、`review-fix-start`、`review-fix-complete`、`integrate`、`retry`、`post-verify`、`human`、`human-approve`、`finalize`、`resume`、`report`；實際參數以各 subcommand 的 `--help` 為準。`implementation-complete` 與 `review-approved` 由通用 `transition` 提交，但 Gate 仍會從已登錄 Result 與 task milestone 推導 verdict。不要透過通用 `transition`、直接呼叫 runner 或直接呼叫 runtime `record()` 寫入其他敏感事件。每個有副作用的呼叫都提供穩定 `--action-id`；只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
 
+`slice-inventory --source-run <RUN> --source-slice <SLICE>` 是 Package 準備用的唯讀查詢。它只接受明確指定且已 accepted 的單一 Development Slice，從 hash-chain 驗證後的事件投影與 final commit Git blobs 讀取 Package、Result、有效 amendments 和 Start-to-final diff；不讀取或修復 `state.json` cache，也不建立 lock、event、Package 草稿或其他檔案。輸出保留凍結順序與 hashes；`implementer_results` 與 `paths.implementer_reported` 是有效投影中的 Implementer Result 事實，`paths.start_to_final` 則是完整 Git diff，兩者不互相冒充。Amendment 依 event sequence 分別列出 path additions／fixes、Tasks 與 Checks。工具不搜尋目標 repository、不判斷相似度，也不宣稱候選清單適用或完整。對含既有 `controlled-check-attempt-resolved` 的 accepted history，查詢會先對帳 replacement evidence、當時 effective contract 與 Result receipt，再只從本次唯讀投影排除該非 transition 記錄；這不恢復舊寫入命令或放寬其他歷史事件。資料對帳失敗或含其他不支援事件、輸出超過固定上限時一律 fail closed，改由 Coordinator 直接檢視已接受 artifacts。
+
 `render --type workflow` 與 `render --type project` 可由權威 JSON 即時產生 Mermaid 狀態圖或 Slice 相依圖。圖是衍生 view，不得反向編輯或取代 workflow／Project Graph。
 
 ## JSON 輸入與顯示

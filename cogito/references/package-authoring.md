@@ -55,7 +55,9 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分，無法拆分的理由寫在既有 Plan。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
 
-核准前，Coordinator 沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試；只檢查實際適用的層次。確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Policy](execution-policy.md#實作中補列必要路徑) 判斷是否符合輕量補正。
+核准前，若有同型且已 accepted 的單一 Slice，Coordinator 先用唯讀 `slice-inventory --source-run <RUN> --source-slice <SLICE>` 取得該次凍結路徑、amendment 補列、實際提交路徑、Result 摘要、Tasks、Checks、Spec／Plan 引用與 source registry，作為候選清單；來源必須由呼叫端明確指定，不由工具猜測相似度。Inventory 只是歷史事實，不證明本次適用性或完整性，也不產生 Package skeleton。Coordinator 再沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試，只檢查實際適用的層次，並逐項標記沿用、新增或不適用。沒有合適 accepted Slice 時直接進行這段目標追蹤，不做全 repository 內容搜尋作為預設起點。
+
+確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Policy](execution-policy.md#實作中補列必要路徑) 判斷是否符合輕量補正。
 
 新 `init` 的開發 run 會要求 atomic Package；歷史 run 與已凍結的 RP successor 保留原契約，沒有標記的舊 Package 不補寫、不改 hash。Maintenance／Documentation 維持原流程。
 
