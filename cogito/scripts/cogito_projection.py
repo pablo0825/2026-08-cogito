@@ -113,11 +113,15 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                     or receipt.get('successor_run_id') != projection['run_id']
                     or not receipt.get('evidence') or not receipt.get('source_reviewers')):
                 raise CogitoError('invalid work adoption receipt')
-            projection['tasks'][target].update(status='reviewed', adoption=receipt, worktree=payload['worktree'])
+            adopted_task = projection['tasks'][target]
+            adopted_task['status'] = 'reviewed'
+            adopted_task['adoption'] = receipt
+            adopted_task['worktree'] = payload['worktree']
         elif event_type == "adoption-ready":
             ids = payload.get('task_ids', [])
+            missing_task: Mapping[str, Any] = {}
             if (projection['state'] != 'executing' or not ids
-                    or any(projection['tasks'].get(t, {}).get('status')!='reviewed' for t in ids)):
+                    or any(projection['tasks'].get(t, missing_task).get('status')!='reviewed' for t in ids)):
                 raise CogitoError('invalid adoption progression')
             projection['state'] = 'integrating'
         elif event_type == "task-updated":
@@ -132,12 +136,12 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             )
             projection["agent_results"].append(result_payload["result"])
             if result.get("role") == "implementer":
-                task = projection["tasks"].get(result.get("task_id", ""))
-                if task is not None:
+                result_task = projection["tasks"].get(result.get("task_id", ""))
+                if result_task is not None:
                     if "maintenance_end_tree" in result_payload:
-                        task["maintenance_end_tree"] = result_payload["maintenance_end_tree"]
+                        result_task["maintenance_end_tree"] = result_payload["maintenance_end_tree"]
                     if "maintenance_end_index_tree" in result_payload:
-                        task["maintenance_end_index_tree"] = result_payload["maintenance_end_index_tree"]
+                        result_task["maintenance_end_index_tree"] = result_payload["maintenance_end_index_tree"]
         elif event_type == "agent-result-metadata-corrected":
             from cogito_result_metadata import require_recovery_state, validate_correction
             require_recovery_state(projection)

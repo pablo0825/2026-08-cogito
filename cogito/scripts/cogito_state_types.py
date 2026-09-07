@@ -79,6 +79,7 @@ class _OptionalRunFields(TypedDict, total=False):
     checkpoints: list[dict[str, Any]]
     shared_document: dict[str, Any]
     human: dict[str, Any]
+    withdrawn_human_feedback: list[dict[str, Any]]
     human_review_mandate: dict[str, Any]
     planning: dict[str, Any]
     carryover_worktrees: dict[str, dict[str, str]]
