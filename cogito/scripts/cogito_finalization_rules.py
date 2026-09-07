@@ -120,6 +120,11 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
     ]
     if [item.get("id") for item in result["amendments"]] != [item["id"] for item in amendments]:
         raise CogitoError("Result amendment summary is incomplete or out of order")
+    path_reviews = {
+        event["payload"]["amendment"]["id"]: event["payload"].get("scope_review", {})
+        for event in events if event["type"] == "technical-amendment-added"
+        and event["payload"]["amendment"].get("path_additions")
+    }
     completions = {
         item["payload"].get("amendment_id"): item["payload"]
         for item in events
@@ -132,6 +137,13 @@ def _validate_amendment_history(context: FinalizationContext) -> None:
         }
     }
     for item in result["amendments"]:
+        if item["id"] in path_reviews:
+            if (set(item) != {"id", "proposal_hash"} or not item["proposal_hash"]
+                    or item["proposal_hash"] != path_reviews[item["id"]].get("proposal_hash")):
+                raise CogitoError("Result path amendment does not match its reviewed proposal")
+            continue
+        if "proposal_hash" in item:
+            raise CogitoError("Result correction amendment requires its completion history")
         completion = completions.get(item["id"], {})
         if completion.get("completion_mode") == "working-tree":
             starts = [event for event in events if event["type"] == "start-gate-passed"]

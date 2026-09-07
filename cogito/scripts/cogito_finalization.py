@@ -113,7 +113,10 @@ def _validate_delivery_scope(
     if len(starts) != 1:
         raise CogitoError("delivery scope requires exactly one Start Gate head")
     base = starts[0]["payload"]["delivery_head"]
-    validate_committed_scope(context.package, base, final_commit, git, metadata_paths, read_blob)
+    validate_committed_scope(
+        context.package, base, final_commit, git, metadata_paths, read_blob,
+        approved_paths=context.effective_contract["approved_paths"],
+    )
 
 
 def _validate_commit_history(context: FinalizationContext, final_commit: str, git: GitCommand) -> None:
@@ -129,6 +132,10 @@ def _validate_commit_history(context: FinalizationContext, final_commit: str, gi
         git("cat-file", "-e", f"{commit}^{{commit}}")
         git("merge-base", "--is-ancestor", commit, final_commit)
     for item in result["amendments"]:
+        if "proposal_hash" in item:
+            # Record validation already bound this authorization-only summary
+            # to the independently reviewed path amendment event.
+            continue
         commit = item.get("commit_id", final_commit)
         git("cat-file", "-e", f"{commit}^{{commit}}")
         if "commit_id" not in item:

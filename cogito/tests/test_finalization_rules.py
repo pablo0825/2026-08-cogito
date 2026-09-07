@@ -66,6 +66,30 @@ def context(kind: str = "feature") -> FinalizationContext:
 
 
 class FinalizationRecordTests(unittest.TestCase):
+    def test_path_amendment_summary_matches_review_without_correction_commit(self):
+        value = context()
+        path_event = {"type": "technical-amendment-added", "payload": {
+            "amendment": {"id": "TA-path", "path_additions": [{"task_id": "T-2"}]},
+            "scope_review": {"proposal_hash": "a" * 64},
+        }}
+        value.events.append(path_event)
+        value.result["amendments"].append({"id": "TA-path", "proposal_hash": "a" * 64})
+        self.assertEqual(validate_finalization_records(value), {"/evidence/C-1.json"})
+        for replacement in (
+            {"id": "TA-path", "proposal_hash": "b" * 64},
+            {"id": "TA-path", "commit_id": "c" * 40},
+            {"id": "TA-path", "proposal_hash": "a" * 64, "commit_id": "c" * 40},
+        ):
+            with self.subTest(replacement=replacement):
+                changed = copy.deepcopy(value)
+                changed.result["amendments"][-1] = replacement
+                self.assert_rejected_unchanged(changed)
+
+    def test_path_summary_cannot_replace_correction_completion(self):
+        value = context()
+        value.result["amendments"][0] = {"id": "TA-1", "proposal_hash": "a" * 64}
+        self.assert_rejected_unchanged(value)
+
     def assert_rejected_unchanged(self, value: FinalizationContext) -> None:
         before = copy.deepcopy(value)
         with self.assertRaises(CogitoError):

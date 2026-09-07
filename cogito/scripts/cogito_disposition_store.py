@@ -166,7 +166,7 @@ class DispositionStore:
         for run_id in dict.fromkeys([*self.load()['run_ids'], *extra_runs]):
             run = RunStore(self.root,run_id)
             if run.load().get('package_hash'):
-                package = run.approved_package()
+                package = run.effective_package()
                 paths.update(package.get('approved_paths', []))
                 for item in package.get('slices',[]): slices.add(item['id'])
                 for task in package.get('execution_dag',{}).get('tasks',[]):

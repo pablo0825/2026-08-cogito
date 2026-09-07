@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from cogito_common import CogitoError, hash_json
 from cogito_contracts import path_allowed
@@ -17,9 +17,14 @@ BlobReader = Callable[[str, str], bytes]
 def validate_committed_scope(
     package: Mapping[str, Any], base_commit: str, commit_id: str,
     git: GitCommand, control_paths: set[str], read_blob: BlobReader | None = None,
-    *, graph_hash: str | None = None,
+    *, graph_hash: str | None = None, approved_paths: Sequence[str] | None = None,
 ) -> None:
-    """Allow only approved product paths and exact, validated control artifacts."""
+    """Validate effective product scope while preserving frozen control artifacts.
+
+    Callers may supply paths from the validated effective contract. The original
+    Package still owns all document hashes and committed Package identity.
+    """
+    product_paths = package["approved_paths"] if approved_paths is None else approved_paths
     changed = set(filter(None, git(
         "diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none",
         "-z", base_commit, commit_id, "--",
@@ -35,7 +40,7 @@ def validate_committed_scope(
     allowed_control = control_paths | documents | sources.keys() | {package_path}
     unexpected = sorted(
         path for path in changed
-        if path not in allowed_control and not path_allowed(path, package["approved_paths"])
+        if path not in allowed_control and not path_allowed(path, product_paths)
     )
     if unexpected:
         raise CogitoError(f"committed delivery exceeds approved paths: {unexpected}")
@@ -50,7 +55,7 @@ def validate_committed_scope(
             raise CogitoError("committed delivery changes the frozen Package")
     for path in changed & sources.keys():
         # A source snapshot does not revoke an explicit product-path approval.
-        if path_allowed(path, package["approved_paths"]):
+        if path_allowed(path, product_paths):
             continue
         if read_blob is None:
             raise CogitoError("committed source validation requires a raw Git blob reader")

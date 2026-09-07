@@ -56,13 +56,14 @@ class DeliveryControlScopeTests(GitTestCase):
         self.git("commit", "-qm", "commit bootstrap and product")
         return self.git("rev-parse", "HEAD")
 
-    def validate(self, final):
+    def validate(self, final, approved_paths=None):
         index = self.repo / ".git/index"
         before = index.read_bytes()
         try:
             validate_committed_scope(
                 self.package, self.base, final, self.git, {self.graph_path},
                 self.repository.read_blob, graph_hash=hash_json(self.graph),
+                approved_paths=approved_paths,
             )
         finally:
             self.assertEqual(index.read_bytes(), before)
@@ -77,6 +78,32 @@ class DeliveryControlScopeTests(GitTestCase):
         self.write("docs/other.md", b"not approved\n")
         with self.assertRaisesRegex(CogitoError, "exceeds approved paths"):
             self.validate(self.commit())
+
+    def test_effective_paths_allow_addition_without_rewriting_frozen_package(self):
+        self.write("mappers/value.py", b"value = 1\n")
+        final = self.commit()
+        with self.assertRaisesRegex(CogitoError, "exceeds approved paths"):
+            self.validate(final)
+        self.validate(final, [*self.package["approved_paths"], "mappers/value.py"])
+
+    def test_effective_exact_path_does_not_authorize_its_sibling(self):
+        self.write("mappers/value.py", b"value = 1\n")
+        self.write("mappers/other.py", b"not approved\n")
+        with self.assertRaisesRegex(CogitoError, "exceeds approved paths"):
+            self.validate(self.commit(), [*self.package["approved_paths"], "mappers/value.py"])
+
+    def test_effective_paths_do_not_allow_replacing_committed_package(self):
+        paths = [*self.package["approved_paths"], "mappers/value.py"]
+        modified = {**self.package, "approved_paths": paths}
+        modified["package_hash"] = package_hash(modified)
+        self.write(self.package_path, json.dumps(modified).encode())
+        with self.assertRaisesRegex(CogitoError, "frozen Package"):
+            self.validate(self.commit(), paths)
+
+    def test_effective_paths_preserve_unrelated_source_hash_checks(self):
+        self.write("legacy/source.bin", self.binary + b"unapproved\n")
+        with self.assertRaisesRegex(CogitoError, "frozen hash"):
+            self.validate(self.commit(), [*self.package["approved_paths"], "mappers/value.py"])
 
     def test_committed_package_tamper_is_rejected_even_when_live_file_is_restored(self):
         modified = {**self.package, "stop_conditions": ["changed after approval"]}

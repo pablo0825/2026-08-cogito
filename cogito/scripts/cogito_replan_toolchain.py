@@ -161,7 +161,7 @@ def _candidate(store):
 def _assert_scope(store, candidate):
     from cogito_disposition_scope import paths_overlap
     state = store.load()
-    source = store.source().approved_package()
+    source = store.source().effective_package()
     for package in (source, candidate):
         if not package:
             continue

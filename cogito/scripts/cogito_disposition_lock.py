@@ -61,9 +61,13 @@ def check_disposition_fence(store, operation, args=(), kwargs=None):
             extra_paths.extend(value.get('path_fixes', []))
             for task in value.get('added_tasks', []):
                 extra_paths.extend(task.get('paths', []))
+            for addition in value.get('path_additions', []):
+                extra_paths.extend(addition['paths'])
     if operation == 'add_amendment':
         amendment = args[0] if args else kwargs['amendment']
         extra_paths.extend(amendment.get('path_fixes', []))
         for task in amendment.get('added_tasks', []):
             extra_paths.extend(task.get('paths', []))
+        for addition in amendment.get('path_additions', []):
+            extra_paths.extend(addition['paths'])
     check_package(store.root, package, store.run_id, skip_disposition_id=_authority.get(), extra_paths=extra_paths)

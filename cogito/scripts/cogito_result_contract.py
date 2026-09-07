@@ -53,7 +53,11 @@ def validate_result(result: Any) -> None:
     for amendment in require_array(result["amendments"], "Result.amendments"):
         require_object(amendment, "Result amendment", "id")
         require_id(amendment["id"], "Result amendment.id")
-        if "commit_id" in amendment:
+        if "proposal_hash" in amendment:
+            if set(amendment) != {"id", "proposal_hash"}:
+                raise CogitoError("Result path amendment must only identify its reviewed proposal")
+            require_string(amendment["proposal_hash"], "Result amendment.proposal_hash", CONTENT_HASH_RE)
+        elif "commit_id" in amendment:
             if "base_commit" in amendment or "content_tree" in amendment:
                 raise CogitoError("Result amendment cannot mix commit and working-tree completion")
             require_string(amendment["commit_id"], "Result amendment.commit_id", GIT_OBJECT_RE)

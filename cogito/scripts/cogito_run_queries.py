@@ -88,7 +88,7 @@ def build_completion_report(run_id: str, final_commit: str, result: Mapping[str,
         "human_gate": result["human_gate"], "remaining_risks": result["remaining_risks"],
     })
     for amendment in report["amendments"]:
-        if "commit_id" not in amendment:
+        if "commit_id" not in amendment and "proposal_hash" not in amendment:
             amendment["commit_id"] = final_commit
     if "delivery_summary" in result:
         report["delivery_summary"] = deepcopy(result["delivery_summary"])
