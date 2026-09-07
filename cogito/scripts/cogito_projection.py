@@ -29,6 +29,7 @@ def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, An
 
 def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any]) -> RunState:
     """Project recorded events using supplied workflow data, without file IO."""
+    result_origins: dict[tuple[int, str], tuple[int, Mapping[str, Any]]] = {}
     projection: RunState | None = None
     for item in events:
         event_type = item.get("type")
@@ -126,6 +127,9 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             if not isinstance(result, dict):
                 raise CogitoError("agent-result-recorded requires a structured result")
             result_payload = cast(AgentResultRecordedPayload, payload)
+            result_origins[(item.get("sequence"), item.get("event_hash"))] = (
+                len(projection["agent_results"]), result_payload["result"],
+            )
             projection["agent_results"].append(result_payload["result"])
             if result.get("role") == "implementer":
                 task = projection["tasks"].get(result.get("task_id", ""))
@@ -134,6 +138,32 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                         task["maintenance_end_tree"] = result_payload["maintenance_end_tree"]
                     if "maintenance_end_index_tree" in result_payload:
                         task["maintenance_end_index_tree"] = result_payload["maintenance_end_index_tree"]
+        elif event_type == "agent-result-metadata-corrected":
+            from cogito_result_metadata import require_recovery_state, validate_correction
+            require_recovery_state(projection)
+            if (set(payload) != {"original_event_sequence", "original_event_hash", "result"}
+                    or type(payload['original_event_sequence']) is not int
+                    or not isinstance(payload['original_event_hash'], str)
+                    or not isinstance(payload['result'], dict)):
+                raise CogitoError("invalid Result metadata correction payload")
+            reference = (payload["original_event_sequence"], payload["original_event_hash"])
+            if reference not in result_origins:
+                raise CogitoError("Result metadata correction references an unknown original event")
+            position, original = result_origins[reference]
+            latest_position = max((i for i, result in enumerate(projection["agent_results"])
+                                   if result.get("task_id") == original.get("task_id")
+                                   and result.get("role") == "implementer"), default=-1)
+            if position != latest_position:
+                raise CogitoError("Result metadata correction cannot revive a superseded Task Result")
+            validate_correction(original, payload["result"])
+            task = projection["tasks"].get(original["task_id"], {})
+            if (projection.get("task_delivery") != "atomic" or task.get("status") != "complete"
+                    or task.get("agent_id") != original["agent_id"]
+                    or task.get("base_commit") != original["base_commit"]
+                    or projection["agent_results"][position] != original):
+                raise CogitoError("Result metadata correction requires an uncorrected completed atomic Result")
+            projection["agent_results"][position] = dict(payload["result"])
+            projection.setdefault("result_metadata_corrections", []).append(dict(payload))
         elif event_type == "check-evidence-recorded":
             if not _required(payload, "check_id", "evidence_path", "evidence_hash"):
                 raise CogitoError("check-evidence-recorded is incomplete")
@@ -248,6 +278,20 @@ def _apply_transition(projection: RunState, workflow: Mapping[str, Any], event_t
                 task['status'] = 'blocked'
                 task['released_by'] = payload['disposition_id']
     if event_type == "package-approved":
+        # RP successors and older initializers can omit the optional delivery hint.
+        # Reconstruct it only from a candidate snapshot authenticated by approval.
+        candidate = projection.get("planning", {}).get("candidate")
+        if candidate is not None:
+            from cogito_contracts import package_hash, validate_package_with_limits
+            approved_candidate = candidate["package"]
+            if (package_hash(approved_candidate) != payload["package_hash"]
+                    or projection.get("candidate_package_hash") != payload["package_hash"]):
+                raise CogitoError("approved Package does not match the recorded candidate snapshot")
+            validate_package_with_limits(approved_candidate, workflow["limits"])
+            if approved_candidate.get("task_delivery") == "atomic":
+                projection["task_delivery"] = "atomic"
+            else:
+                projection.pop("task_delivery", None)
         projection["package_path"] = payload["package_path"]
         projection["package_hash"] = payload["package_hash"]
         projection["effective_contract_hash"] = payload["package_hash"]

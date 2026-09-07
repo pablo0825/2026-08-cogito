@@ -142,6 +142,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--run-id", required=True)
     result.add_argument("--input", required=True)
     result.add_argument("--action-id", required=True)
+    repair = commands.add_parser('correct-result-metadata')
+    repair.add_argument('--run-id', required=True)
+    repair.add_argument('--input', required=True)
+    repair.add_argument('--action-id', required=True)
     verify = commands.add_parser("verify")
     verify.add_argument("--run-id", required=True)
     verify.add_argument("--evidence", action="append", required=True)
@@ -289,6 +293,8 @@ def main(argv: list[str] | None = None) -> int:
             output = store.add_amendment(amendment, args.action_id)
         elif args.command == "task":
             output = RunStore(repo, args.run_id).update_task(args.task_id, args.status, args.agent_id, args.action_id)
+        elif args.command == 'correct-result-metadata':
+            output = RunStore(repo, args.run_id).correct_result_metadata(_read_object(args.input), args.action_id)
         elif args.command == "agent-result":
             output = RunStore(repo, args.run_id).submit_agent_result(_read_object(args.input), args.action_id)
         elif args.command == "verify":

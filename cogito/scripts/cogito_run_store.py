@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from cogito_path_amendment import PathAmendmentMixin
+from cogito_result_metadata import ResultMetadataMixin
 from cogito_path_amendment_state import EVENTS as PATH_EVENTS, guard_pending
 from cogito_checkpoints import CheckpointMixin, guard_checkpoint
 from cogito_disposition_run import DispositionRunMixin
@@ -66,13 +67,13 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
+class RunStore(ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
         *PATH_EVENTS, *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
-        "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
+        "task-updated", "agent-result-recorded", "agent-result-metadata-corrected", "check-evidence-recorded", "start-gate-passed",
         "verification-passed", "verification-correction-required",
         "post-verification-correction-required", "technical-correction-complete",
         "post-integration-correction-complete", "review-fix-required", "review-fix-complete",

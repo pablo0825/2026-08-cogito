@@ -79,6 +79,12 @@ def build_delivery_summary(state: Mapping[str, Any], events: Sequence[Mapping[st
         if kind in INTEGRATION_EVENTS:
             summary["integration"].append({**marker, **_select(payload, (
                 "commit_id", "previous_delivery_head", "slice_id", "task_ids", "source_heads"))})
+        if kind == "agent-result-metadata-corrected":
+            summary["corrections"].append({**marker,
+                "original_event_sequence": payload["original_event_sequence"],
+                "original_event_hash": payload["original_event_hash"],
+                "task_id": payload["result"]["task_id"],
+                "requested_transition": payload["result"]["requested_transition"]})
         if kind in CORRECTION_EVENTS:
             record = {**marker, **_select(payload, ("amendment_id", "commit_id", "content_tree"))}
             if state.get("kind") == "maintenance":
@@ -116,7 +122,9 @@ def _validate_receipt(record: Any, name: str) -> None:
     for key in ("commit_id", "base_commit", "head_commit", "delivery_head", "previous_delivery_head", "content_tree", "index_tree", "review_head"):
         if key in record:
             require_string(record[key], f"{name}.{key}", GIT_OBJECT_RE)
-    for key in ("feedback_hash", "evidence_hash", "effective_contract_hash"):
+    if "original_event_sequence" in record:
+        require_integer(record["original_event_sequence"], f"{name}.original_event_sequence", 1, 2**63 - 1)
+    for key in ("original_event_hash", "feedback_hash", "evidence_hash", "effective_contract_hash"):
         if key in record:
             require_string(record[key], f"{name}.{key}", CONTENT_HASH_RE)
     for key in ("task_id", "agent_id", "reviewer", "implementer", "slice_id", "branch", "check_id", "evidence_path", "amendment_id", "reason", "requested_transition", "review_task_id"):
@@ -176,6 +184,13 @@ def validate_delivery_summary(summary: Any) -> None:
                 require_object(record, name, "commit_id")
             elif section == "verification":
                 require_choice(record["event"], name, VERIFICATION_EVENTS)
+            elif section == "corrections" and record["event"] == "agent-result-metadata-corrected":
+                require_object(record, name, "original_event_sequence", "original_event_hash", "task_id", "requested_transition")
+                if set(record) != {"event_sequence", "event", "original_event_sequence", "original_event_hash", "task_id", "requested_transition"}:
+                    raise CogitoError("metadata correction must not claim implementation or amendment completion")
+                require_choice(record["requested_transition"], name, {"verifying"})
+                if record["original_event_sequence"] >= record["event_sequence"]:
+                    raise CogitoError("metadata correction must reference an earlier event")
             elif section == "corrections":
                 require_choice(record["event"], name, CORRECTION_EVENTS)
                 require_object(record, name, "amendment_id", "completion_mode")
