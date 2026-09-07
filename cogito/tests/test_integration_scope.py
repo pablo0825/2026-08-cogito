@@ -185,7 +185,8 @@ class IntegrationScopeTests(GitTestCase):
                 context = FinalizationContext(
                     run_id=draft['run_id'], package=draft, state={},
                     events=[{'type': 'start-gate-passed', 'payload': {'delivery_head': baseline}}],
-                    result={}, graph={}, effective_contract={},
+                    result={}, graph={},
+                    effective_contract={'approved_paths': draft['approved_paths']},
                 )
                 index_before = (repo / '.git/index').read_bytes()
                 with self.assertRaisesRegex(runtime.CogitoError, 'approved paths'):
