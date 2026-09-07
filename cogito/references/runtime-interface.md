@@ -8,11 +8,13 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 ## 呼叫 CLI
 
-先以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步。敏感操作使用專用 subcommand：`prepare-package`、`approve`、`start`、`amend`、`task`、`agent-result`、`run-check`、`verify`、`correction-start`、`correction-complete`、`review-fix-start`、`review-fix-complete`、`integrate`、`retry`、`post-verify`、`human`、`human-approve`、`finalize`、`resume`、`report`；實際參數以各 subcommand 的 `--help` 為準。`implementation-complete` 與 `review-approved` 由通用 `transition` 提交，但 Gate 仍會從已登錄 Result 與 task milestone 推導 verdict。不要透過通用 `transition`、直接呼叫 runner 或直接呼叫 runtime `record()` 寫入其他敏感事件。每個有副作用的呼叫都提供穩定 `--action-id`；只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
+先以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步。敏感操作使用專用 subcommand：`prepare-package`、`approve`、`start`、`amend`、`task`、`task-finish`、`agent-result`、`correct-result-metadata`、`run-check`、`verify`、`correction-start`、`correction-complete`、`review-fix-start`、`review-fix-complete`、`integrate`、`retry`、`post-verify`、`human`、`human-approve`、`finalize`、`resume`、`report`；實際參數以各 subcommand 的 `--help` 為準。`implementation-complete` 與 `review-approved` 由通用 `transition` 提交，但 Gate 仍會從已登錄 Result 與 task milestone 推導 verdict。不要透過通用 `transition`、直接呼叫 runner 或直接呼叫 runtime `record()` 寫入其他敏感事件。每個有副作用的呼叫都提供穩定 `--action-id`；只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
 
 `render --type workflow` 與 `render --type project` 可由權威 JSON 即時產生 Mermaid 狀態圖或 Slice 相依圖。圖是衍生 view，不得反向編輯或取代 workflow／Project Graph。
 
 ## JSON 輸入與顯示
+
+Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已知 `input`、尚待 Agent 判斷的 `required_inputs`，以及檢查缺失或 `blockers`。將已知輸入與必要判斷保存成 JSON 檔，再替換 argv 中的 `<input.json>`／`<action-id>`；不要把佔位字串當真實參數。這是操作提示，執行時仍重新驗證。`task-finish` 與合併的 `review-fix-start` 預設回傳當次摘要及下一步，完整歷史由既有查詢取得。
 
 `transition --payload-json` 可直接接 JSON object 字串或 UTF-8 JSON 檔案路徑；CLI 優先解析 inline JSON，不會把合法長 JSON 當檔名查詢。若檔名本身恰為合法 JSON（例如 `null`），使用 `./null` 或絕對路徑明確指定檔案。兩種輸入都必須解析為 object；格式、編碼或讀取失敗會回傳結構化錯誤。
 
@@ -31,6 +33,19 @@ Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 
 - `.cogito/runs/<run-id>/check-actions/` 保存每個 controlled check 的原始請求指紋與開始執行時的契約／check hash，並以檔案鎖串行處理同一 action。證據已發布、事件未寫入時，同一請求可驗證並補登錄既有證據。已開始但沒有完整證據的 attempt 代表結果未知，不自動重跑；應確認程序與外部副作用後才決定是否以新 action 執行，不能刪除 marker 來強制重試。
 - Resume Gate 驗證 Package、baseline、Git commits、worktrees 與已登錄 evidence。整合與結案的 Git commit 由 Coordinator 建立；若 commit 已成功而 Gate 事件未記錄，Coordinator 先查詢 run 狀態並確認既有 commit ID 與原始請求，再沿用原始 action ID 與相同參數重送對應 Gate 命令，由 Gate 驗證後補記事件，不再次 merge 或 commit。`resume` 不會掃描 Git trailers 自動尋找 commit 或補記整合／結案事件；無法確認既有 commit 或驗證失敗時，Coordinator 停止推進並保留現場。
 - Technical Amendment event 是 append-only overlay。Gate 按序驗證後必須 materialize effective contract 快照與 hash；dispatch 與 runner 只能使用該快照。Controlled runner 以內容 hash 建立新 evidence 檔，既有 evidence 不得覆寫或就地更新。
+
+## 固定操作與歷史登記恢復
+
+`task-finish` 與 `review-fix-start --input` 只串接各自固定的兩項登記。`.cogito/runs/<run-id>/fixed-actions/` 保存不可變的輸入、起始契約／事件、內容與子事件綁定；完成與否以權威事件核對，不以 cache 或可改写的 done flag 判定。不得手動修改或刪除這些綁定來重試。
+
+一部分事件成功、後續寫入或回應失敗時，停止接續派工與檢查，查 `next` 的 `retry-fixed-action`，以原輸入及原 action ID 重送。工具只完成缺少的登記，不重新選 commit、finding 或 evidence，也不重計修正次數。若已 `blocked`，先處理原阻塞並通過既有 Resume Gate，再重送；重送不能穿透 blocked、RP、DP 或 human 限制。契約、內容、事件或身分無法對帳時保持停止，不自行改工具放行。
+
+舊版接受的兩種已知登記錯誤，沿用同 Run 的受限恢復：
+
+- **Result 下一階段填錯：**限 blocked-from-executing、已完成的 Atomic Implementer Result，將 `executing` 更正為 `verifying`，其餘內容不變。`next` 的 `recover-result-metadata` 提供原 event sequence/hash 與更正輸入；以 `correct-result-metadata --run-id <ID> --input <file> --action-id <ID>` 提交。Gate 重驗原 lease、提交鏈、當時契約、證據、目前完成 tip 及實際 executor/check 停止情況；只追加更正事件，在原 Result 位置投影生效。全部必要更正後另走 Resume Gate，不自動 resume。RP successor 的 atomic 判定只能來自核准 hash 綁定的 snapshot，不能替缺欄資料臆測模式。
+- **Amendment 在 review-fix start 之前：**不更動事件次序、不另建 Task。舊資料須能唯一對應本輪 finding → amendment → start，且 Amendment 未被其他 closure 消耗、所有新增 Task 的 lease／running／Result／complete 都在 start 後。恢復後以原 `review-fix-complete` 重新驗證提交、trailer 與證據；錯輪或歧義資料拒絕。
+
+以上已定義且通過驗證的行政恢復由 Coordinator 執行，不為相同既有授權再加一次人工確認。若需要新增產品／授權範圍，或現有工具沒有安全恢復方式而必須修改工具，停止受影響工作並向使用者說明。保留原事件與證據；舊版 CLI 不保證可讀新版恢復事件，工具切換時須驗證完整歷史相容性。
 
 ## 停止條件與狀態操作
 

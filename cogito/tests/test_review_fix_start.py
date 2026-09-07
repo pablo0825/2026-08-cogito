@@ -105,6 +105,10 @@ class ReviewFixStartTests(GitTestCase):
 
     def test_invalid_finding_or_amendment_leaves_no_start_event(self):
         _, _, store, _, _, original = self.reviewing()
+        hint = store.next_action()['operations'][0]
+        self.assertEqual(hint['operation'], 'review-fix-start')
+        self.assertEqual(hint['input']['finding'], original['finding'])
+        self.assertEqual(hint['required_inputs'], ['amendment'])
         for mode in ('finding', 'paths', 'empty', 'dependency'):
             request = copy.deepcopy(original)
             if mode == 'finding':
@@ -120,6 +124,20 @@ class ReviewFixStartTests(GitTestCase):
                 store.start_review_fix_with_amendment(request, mode)
             self.assertEqual(store.events_path.read_bytes(), before)
         self.assertFalse(list((store.run_dir / 'fixed-actions').glob('start*.json')))
+
+    def test_cache_failure_after_amendment_does_not_restart_cycle(self):
+        _, _, store, _, _, request = self.reviewing()
+        size = len(store._events.read())
+        refresh = store._events.refresh_cache
+        def cache_failure(state):
+            if len(store._events.read()) == size + 2:
+                raise CogitoError('state cache could not be refreshed')
+            return refresh(state)
+        with patch.object(store._events, 'refresh_cache', side_effect=cache_failure):
+            with self.assertRaisesRegex(CogitoError, 'cache'):
+                store.start_review_fix_with_amendment(request, 'start-cache')
+        store.start_review_fix_with_amendment(request, 'start-cache')
+        self.assertEqual(len(store._events.read()), size + 2)
 
     def test_partial_start_blocks_work_and_replays_same_binding(self):
         repo, worker, store, _, _, request = self.reviewing()

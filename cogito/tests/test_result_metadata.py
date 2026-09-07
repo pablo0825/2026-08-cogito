@@ -54,7 +54,12 @@ class ResultMetadataTests(GitTestCase):
         self.assertEqual(self.store.load()["state"], "reviewing")
 
     def test_first_task_overlay_keeps_last_tip_and_completion_guard(self):
+        hint = self.store.next_action()
+        self.assertEqual(hint['next_action'], 'recover-result-metadata')
+        self.assertEqual(len(hint['operations']), 4)
+        self.assertEqual(hint['operations'][0]['input'], self.fixture.request(3))
         self.correct(0)
+        self.assertEqual(len(self.store.next_action()['operations']), 3)
         self.assertEqual(self.store.load()["agent_results"][-1], self.fixture.results[-1])
         self.store.resume_gate("resume")
         with self.assertRaises(CogitoError):
@@ -64,6 +69,16 @@ class ResultMetadataTests(GitTestCase):
         self.store.resume_gate("resume")
         with self.assertRaises(CogitoError):
             self.store.transition("implementation-complete", {}, "unchanged")
+
+    def test_unknown_new_attempt_cannot_reuse_completed_request_fingerprint(self):
+        original = next((self.store.run_dir / 'check-actions').glob('*/started.json'))
+        target = self.store.run_dir / 'check-actions' / 'new-unknown-attempt'
+        target.mkdir()
+        (target / 'started.json').write_bytes(original.read_bytes())
+        request = json.loads((original.parent / 'request.json').read_text())
+        request['action_id'] = 'new-unknown-attempt'
+        (target / 'request.json').write_text(json.dumps(request))
+        self.assert_rejected(self.fixture.request())
 
     def test_exact_replay_is_idempotent_and_payload_conflict_rejected(self):
         result = self.correct()

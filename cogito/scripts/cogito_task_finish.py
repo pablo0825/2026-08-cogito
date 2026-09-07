@@ -120,6 +120,8 @@ def select_task_evidence(store, task):
         if event.get('request_hash') != expected:
             continue
         evidence = load_json(Path(payload['evidence_path']))
+        if hash_json(evidence) != payload['evidence_hash']:
+            raise CogitoError('controlled evidence differs from its recorded hash: ' + payload['check_id'])
         try:
             started = datetime.fromisoformat(evidence['started_at'])
             if started.tzinfo is None:

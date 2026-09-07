@@ -152,8 +152,9 @@ class ResultMetadataMixin:
 
     def _require_finished_check_attempts(self, snapshot):
         store = cast("RunStore", self)
-        completed = {event.get("request_hash") for event in snapshot.events
+        completed = {event.get("action_id") for event in snapshot.events
                      if event["type"] == "check-evidence-recorded"}
         for path in (store.run_dir / "check-actions").glob("*/started.json"):
-            if load_json(path).get("request_hash") not in completed:
+            request_path = path.parent / 'request.json'
+            if not request_path.is_file() or load_json(request_path).get('action_id') not in completed:
                 raise CogitoError("Result recovery cannot proceed with an unknown check outcome")

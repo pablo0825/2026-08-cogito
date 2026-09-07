@@ -1617,10 +1617,116 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         from cogito_actions import pending_fixed_action
         pending_operation = pending_fixed_action(self.root, self.run_id)
         if pending_operation and projection['state'] not in {'blocked', 'cancelled', 'superseded'}:
+            from cogito_run_queries import fixed_action_hint
             return {'state': projection['state'], 'next_action': 'retry-fixed-action',
                     'operation': pending_operation['operation'], 'action_id': pending_operation['action_id'],
-                    'request': pending_operation['request']}
+                    'request': pending_operation['request'],
+                    'operations': [fixed_action_hint(self.root, self.run_id, pending_operation)]}
         output = derive_next_action(projection)
+        if (projection['state'] == 'blocked' and projection.get('blocked_from') == 'executing'
+                and projection.get('task_delivery') == 'atomic' and not pending_operation):
+            from cogito_result_metadata import require_recovery_state
+            from cogito_run_queries import operation_hint
+            try:
+                require_recovery_state(projection)
+            except CogitoError:
+                pass
+            else:
+                seen = set()
+                operations = []
+                for event in reversed(self._events.read()):
+                    if event['type'] != 'agent-result-recorded':
+                        continue
+                    result = event['payload']['result']
+                    if result.get('role') != 'implementer' or result['task_id'] in seen:
+                        continue
+                    seen.add(result['task_id'])
+                    if (result.get('status') == 'complete' and result.get('requested_transition') == 'executing'
+                            and result in projection['agent_results']):
+                        operations.append(operation_hint(self.root, self.run_id, 'correct-result-metadata',
+                            input_value={'original_event_sequence': event['sequence'], 'original_event_hash': event['event_hash'],
+                                         'result': {**result, 'requested_transition': 'verifying'}}))
+                if operations:
+                    output.update(next_action='recover-result-metadata', operations=operations,
+                                  recovery_note='Gate revalidates historical evidence and stopped executors; no automatic resume')
+        if (projection.get('task_delivery') == 'atomic'
+                and output['next_action'] in {'dispatch-ready-workers', 'dispatch-review-fix',
+                    'dispatch-in-scope-correction', 'dispatch-independent-reviewer'}):
+            self._atomic_operation_hints(output, projection)
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)
         return output
+
+    def _atomic_operation_hints(self, output, state):
+        from cogito_run_queries import operation_hint
+        from cogito_task_finish import select_task_evidence
+        operations = []
+        running = [t for t in state['tasks'].values() if t['status'] == 'running']
+        for task in running:
+            hint = operation_hint(self.root, self.run_id, 'task-finish', ['--task-id', task['id']],
+                                  required_inputs=['risks'])
+            hint['check_ids'] = task['check_ids']
+            try:
+                paths = select_task_evidence(self, task)
+                evidence = [_load_json(Path(p)) for p in paths]
+                self._validate_evidence(self.approved_package(), evidence, snapshot=self._events.snapshot(),
+                                        phase='task', task_id=task['id'])
+                head = self._git_at(Path(task['worktree']), 'rev-parse', 'HEAD')
+                parents = self._git_at(Path(task['worktree']), 'rev-list', '--parents', '-n', '1', head).split()[1:]
+                if parents != [task['base_commit']]:
+                    raise CogitoError('create one atomic Task commit before task-finish')
+                tree = self._require_atomic_clean(Path(task['worktree']), head, state)
+                if any(e['worktree_binding']['content_tree'] != tree for e in evidence):
+                    raise CogitoError('targeted checks do not match current checkout content')
+                hint['recorded_evidence'] = paths
+            except CogitoError as exc:
+                hint['blockers'] = [str(exc)]
+            operations.append(hint)
+        if state['state'] == 'executing' and not running and not output.get('ready_tasks'):
+            from cogito_task_finish import preflight_store
+            preview, _ = preflight_store(self)
+            try:
+                preview.transition('implementation-complete', {})
+            except CogitoError:
+                pass
+            else:
+                output['next_action'] = 'complete-implementation'
+                operations.append(operation_hint(self.root, self.run_id, 'transition',
+                    ['--event', 'implementation-complete']))
+        if state['state'] == 'reviewing':
+            from cogito_correction_rules import current_review_finding
+            try:
+                finding = current_review_finding(state, self._events.read())
+            except CogitoError:
+                pass
+            else:
+                output['next_action'] = 'prepare-review-fix'
+                operations.append(operation_hint(self.root, self.run_id, 'review-fix-start',
+                    input_value={'finding': {'event_sequence': finding['sequence'], 'event_hash': finding['event_hash']}},
+                    required_inputs=['amendment']))
+        if state['state'] == 'review-fix' and not running:
+            from cogito_task_finish import preflight_store
+            events = self._events.read()
+            for event in reversed(events):
+                if event['type'] != 'technical-amendment-added':
+                    continue
+                amendment = event['payload']['amendment']
+                ids = {t['id'] for t in amendment.get('added_tasks', [])}
+                results = [r for r in state['agent_results'] if r['role'] == 'implementer' and r['task_id'] in ids]
+                if not results:
+                    if ids:
+                        break
+                    continue
+                head = results[-1]['head_commit']
+                preview, _ = preflight_store(self)
+                try:
+                    preview.complete_review_fix(amendment['id'], head)
+                except CogitoError as exc:
+                    output['closure_blocker'] = str(exc)
+                    break
+                output['next_action'] = 'complete-review-fix'
+                operations.append(operation_hint(self.root, self.run_id, 'review-fix-complete',
+                    ['--amendment-id', amendment['id'], '--commit-id', head]))
+                break
+        if operations:
+            output['operations'] = operations

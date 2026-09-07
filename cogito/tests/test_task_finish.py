@@ -131,3 +131,40 @@ class TaskFinishTests(GitTestCase):
         with self.assertRaises(CogitoError):
             store.finish_task('T-a', {'risks': []}, 'finish')
         self.assertEqual(store.events_path.read_bytes(), before)
+
+    def test_real_cache_refresh_failure_recovers_from_authoritative_receipt(self):
+        _, _, store, _ = self.ready()
+        size = len(store._events.read())
+        refresh = store._events.refresh_cache
+        def cache_failure(state):
+            if len(store._events.read()) > size:
+                raise CogitoError('state cache could not be refreshed')
+            return refresh(state)
+        with patch.object(store._events, 'refresh_cache', side_effect=cache_failure):
+            with self.assertRaisesRegex(CogitoError, 'cache'):
+                store.finish_task('T-a', {'risks': []}, 'finish-cache')
+        self.assertEqual(len(store._events.read()), size + 1)
+        store.finish_task('T-a', {'risks': []}, 'finish-cache')
+        self.assertEqual(len(store._events.read()), size + 2)
+
+    def test_tampered_latest_attempt_time_cannot_expose_an_older_success(self):
+        _, worker, store, original = self.ready()
+        (worker / 'src/a.txt').write_text('bad\n')
+        failed = self.check(store, worker, action='newer-failure')
+        (worker / 'src/a.txt').write_text('after\n')
+        failed['started_at'] = '2000-01-01T00:00:00+00:00'
+        path = Path(failed['evidence_path'])
+        path.chmod(0o600)
+        path.write_text(json.dumps(failed))
+        with self.assertRaisesRegex(CogitoError, 'recorded hash'):
+            store.finish_task('T-a', {'risks': []}, 'finish')
+
+    def test_next_provides_command_and_missing_check_reason_without_appending(self):
+        _, _, store, _ = self.executing()
+        self.lease(store)
+        before = store.events_path.read_bytes()
+        hint = store.next_action()['operations'][0]
+        self.assertEqual(hint['operation'], 'task-finish')
+        self.assertIn('C-a', hint['blockers'][0])
+        self.assertEqual(hint['required_inputs'], ['risks'])
+        self.assertEqual(store.events_path.read_bytes(), before)

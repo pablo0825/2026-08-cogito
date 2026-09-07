@@ -6,7 +6,7 @@ from typing import Any, Iterable, Mapping, cast
 
 from cogito_checkpoints import guard_checkpoint, project_checkpoint
 from cogito_human_projection import HUMAN_EVENTS, project_human_metadata
-from cogito_state_types import EvidenceLedgerEntry, RunState, TaskState
+from cogito_state_types import AgentResult, EvidenceLedgerEntry, RunState, TaskState
 from cogito_event_types import (
     AgentResultRecordedPayload, CheckEvidenceRecordedPayload,
     IntegrationCompletedPayload, TaskUpdatedPayload,
@@ -29,7 +29,7 @@ def reduce_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, An
 
 def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, Any]) -> RunState:
     """Project recorded events using supplied workflow data, without file IO."""
-    result_origins: dict[tuple[int, str], tuple[int, Mapping[str, Any]]] = {}
+    result_origins: dict[tuple[Any, Any], tuple[int, Mapping[str, Any]]] = {}
     projection: RunState | None = None
     for item in events:
         event_type = item.get("type")
@@ -156,13 +156,13 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             if position != latest_position:
                 raise CogitoError("Result metadata correction cannot revive a superseded Task Result")
             validate_correction(original, payload["result"])
-            task = projection["tasks"].get(original["task_id"], {})
-            if (projection.get("task_delivery") != "atomic" or task.get("status") != "complete"
-                    or task.get("agent_id") != original["agent_id"]
-                    or task.get("base_commit") != original["base_commit"]
+            corrected_task: Mapping[str, Any] = projection["tasks"].get(original["task_id"], {})
+            if (projection.get("task_delivery") != "atomic" or corrected_task.get("status") != "complete"
+                    or corrected_task.get("agent_id") != original["agent_id"]
+                    or corrected_task.get("base_commit") != original["base_commit"]
                     or projection["agent_results"][position] != original):
                 raise CogitoError("Result metadata correction requires an uncorrected completed atomic Result")
-            projection["agent_results"][position] = dict(payload["result"])
+            projection["agent_results"][position] = cast(AgentResult, dict(payload["result"]))
             projection.setdefault("result_metadata_corrections", []).append(dict(payload))
         elif event_type == "check-evidence-recorded":
             if not _required(payload, "check_id", "evidence_path", "evidence_hash"):

@@ -34,6 +34,8 @@ python3 cogito/scripts/cogito_gate.py --repo <root> delivery-summary --run-id <I
 
 Result 保存 checks、reviews、已知 commit/amendment 摘要與剩餘風險；Project Graph 保存最終 disposition 並清除該 run 的 `active_run_id`。兩者由同一 final commit 原子保存。
 
+歷史 Result metadata 的限縮更正另列於 delivery summary 的 corrections，精確引用原事件；它不是產品修正或 Amendment 完成，不新增產品 commit。原 implementation 記錄保留，Gate 投影採用已驗證的更正。
+
 Result 不內嵌包含自身的 final commit ID。Maintenance 的 amendment 使用 `{id, base_commit, content_tree}`，必須符合 completion event；不填尚未存在的 final commit ID。經獨立覆核的路徑補正使用 `{id, proposal_hash}`，必須對應已生效的 proposal；它只追加授權，不填 `commit_id` 或要求獨立 amendment commit。實際產品內容仍由各 Atomic Task commit 交付。其他修正依其已登錄的合法修正 commits 記錄。
 
 Git 保存交付摘要與證據引用；完整檢查資料與回饋原文仍在本地 `.cogito`，不提供從 Git 摘要還原完整事件的能力，也不另建 audit branch。

@@ -1,8 +1,8 @@
 # 第一批：任務登記與審查修正可靠性計畫
 
-日期：2026-09-07。基準：Cogito 3.4.0。狀態：已完成主代理規劃與第二輪自審，待獨立審核及使用者確認後實作。
+日期：2026-09-07。基準：Cogito 3.4.0。狀態：使用者核准後已實作，交付版本 3.5.0；實際驗證與限制見第 7 節。
 
-本文件是 repository maintenance 的修改提案，不是新的 Cogito Run、Package、Gate 授權或已實作功能。本次只新增計畫；不改 runtime、不升版、不修改後端專案與 DEV-003 帳本。
+本文件記錄 repository maintenance 的修改計畫與交付，不是新的 Cogito Run、Package 或 Gate 授權。最初僅撰寫計畫，之後依使用者「計畫 commit 後開始修改」的指示實作。不修改後端專案與 DEV-003 帳本。
 
 ## 1. 需求與交付界線
 
@@ -137,4 +137,16 @@ AC-08：兩 Task 小包完成 → 整波 verification → needs-fix → 整合�
 
 主代理第二輪審核結論：範圍可成立，但多事件操作的中斷／重送及歷史相容性是主要風險，不能簡化成 shell wrapper。六包中 P1-04／05 必須各自驗證部分成功，P1-06 才宣稱整批可交付。
 
-獨立審核狀態：已派發唯讀子代理，因帳號用量限制未能執行；沒有獨立審核結果，不能記為通過。實作前應補做本計畫的獨立審核，特別檢查 AC-03、AC-06 與不擴大第二批範圍。這是本次規劃尚未完成的審核項目，非產品測試失敗。
+規劃當時的獨立審核子代理因帳號用量限制未能執行，沒有將該次審核記為通過。之後使用者明確授權主代理實作、子代理協助測試或模擬；實作後的獨立操作及文件模擬見第 7 節，並非補造規劃時的審核結果。
+
+## 7. 實際交付與驗證
+
+- 計畫先提交為 `e9519ac`。P1-01～05 依序提交 `01449ea`、`71ab7dc`、`15425a1`、`3f4eee6`、`c6ddd66`；P1-06 與本記錄同次交付。未新增 branch/worktree，未 push/tag，也未在後端套用工具或恢復真實 Run。
+- 主代理完成實作。固定操作使用既有事件順序、唯讀 preflight event adapter 與不可變 `fixed-actions` 綁定；實際事件決定完成狀態。未建立通用交易引擎或新 workflow states。
+- 自動化測試：最後整合選測 `test_task_finish test_review_fix_start test_result_metadata test_run_queries test_gate_cli_contract test_event_repository test_atomic_task_corrections test_correction_rules test_execution_registry` 共 67 項通過。之後補強證據時間被竄改的情境，重跑 `test_task_finish` 全部 10 項通過；這兩組有重疊，不相加作為獨立測試數。
+- 先前各包亦執行相依 Atomic execution/verification、Maintenance review-fix、Feature CLI、RP successor、delivery summary、event JSON/compatibility 與 3.4 path amendment flow 測試。相關驗證涵蓋正常交付直到 accepted、歷史 Result／錯序、部分事件成功、真正 cache refresh 故障、不同 action/input、checkout 漂移、較新失敗／未知檢查及篡改證據。
+- 型別檢查：本次 8 個主要模組的 targeted mypy 通過。另對 projection/state types 擴查，`cogito_projection.py` 仍有 6 個既存型別錯誤；以計畫提交 `e9519ac` 的原始 projection 重跑得到相同 6 個錯誤，本批未擴大修復。不能宣稱全專案 mypy 通過。
+- Skill 格式：`quick_validate.py cogito` 通過；引用路徑、CLI help 與 `git diff --check` 已檢查。
+- 獨立操作模擬：子代理在臨時 Git fixture 實際測試兩種 fixed operation 第一 receipt 後中斷、block、未 resume 重送被拒絕且 events bytes 不變、Resume 後原請求重送成功。無授權取消被拒絕；完整 DP cancellation 路徑未模擬。
+- 獨立文件閱讀模擬：涵蓋一般 Task 完成、needs-fix 修正、blocked 重送及歷史四筆 Result 更正。沒有阻斷性矛盾；建議補上命令列舉與限定手動 Result 回報段落，已修訂。上述屬合成驗證，不是正式 Gate review evidence 或使用者驗收。
+- 未跑全套 regression、未宣稱 CI 通過；並行正式審查與選擇性保留 review 仍屬第二批。

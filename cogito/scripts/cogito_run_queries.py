@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Mapping
 
 from cogito_state_types import RunState
@@ -10,6 +11,25 @@ from cogito_common import CogitoError
 from cogito_result_contract import validate_result
 from cogito_scheduler import ready_tasks
 from cogito_task_rules import effective_slice_id, is_active_task
+
+
+def operation_hint(root, run_id, operation, arguments=(), *, action_id='<action-id>',
+                   input_value=None, required_inputs=()):
+    argv = ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(root),
+            operation, '--run-id', run_id, *arguments, '--action-id', action_id]
+    if input_value is not None or required_inputs:
+        argv.extend(['--input', '<input.json>'])
+    return {'operation': operation, 'argv': argv, 'input': deepcopy(input_value),
+            'required_inputs': list(required_inputs)}
+
+
+def fixed_action_hint(root, run_id, binding):
+    request = deepcopy(binding['request'])
+    arguments = []
+    if binding['operation'] == 'task-finish':
+        arguments = ['--task-id', request.pop('task_id')]
+    return operation_hint(root, run_id, binding['operation'], arguments,
+                          action_id=binding['action_id'], input_value=request)
 
 
 def derive_next_action(projection: RunState) -> dict[str, Any]:

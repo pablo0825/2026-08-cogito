@@ -21,9 +21,11 @@ Atomic Task 依下列順序完成，才能開始下一項 Task：
 1. 登記 `task leased`，再登記 `task running`。
 2. 實作該 Task，使用 `run-check` 執行其 targeted checks。
 3. 建立該 Task 的獨立 commit。
-4. 以 `agent-result` 登錄 Implementer Result，再登記 `task complete`。
+4. 執行 `task-finish --run-id <ID> --task-id <ID> --input <finish.json> --action-id <ID>`，輸入為 `{ "risks": [] }`，有剩餘風險時如實填寫字串陣列。Gate 一次登記 Implementer Result 與 Task complete；成功後依既有 lease 流程接續下一項。
 
 也可先 commit 再檢查；提交前 evidence 只有在提交後內容完全相同時才有效。Result 的 `evidence` 精確列出 Task `check_ids` 的 controlled evidence 路徑。Gate 驗證非空、單一 parent 的 commit，parent 必須是 lease base；拒絕未提交產品內容、過期或不完整證據。
+
+`task-finish` 從既有 lease、Git 與已登記 controlled checks 產生 agent/base/head/changed paths/evidence 與 `requested_transition: verifying`，不要求 Agent 重填。每項 targeted check 使用該 checkout 最新啟動且已登記的 attempt；新失敗、未知結果、歧義或失效證據都不能退回選舊成功。命令不代跑測試、不建立 commit、不自動派工或進入審查。舊 `agent-result` → `task complete` 仍可用，但 completed atomic Implementer Result 的下一階段必須是 `verifying`，新錯誤會立即拒絕；歷史錯誤依 [Runtime Interface](runtime-interface.md#固定操作與歷史登記恢復) 更正。
 
 ### 實作中補列必要路徑
 
@@ -73,7 +75,7 @@ Maintenance 在目前 delivery checkout 執行，保留 Start Gate HEAD，任務
 
 ### 登錄 Agent Result
 
-Agent Result 至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
+使用手動 `agent-result`（包含 Reviewer 登記）時，至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
 
 ### Task 中斷或檢查失敗
 
@@ -123,6 +125,31 @@ Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改
 完成本波正式驗證後，由不同 Agent 逐 Task 進行獨立 review。Gate 逐 task 比對 Implementer task lease 的 `agent_id`、Reviewer Result 的 `reviewed_implementer` 與不同的 reviewer `agent_id`，由已登錄 Result 推導審查完成情況，不接受 Agent 回報的 `independent: true`，也不在 Package 預先綁定 Agent 身分。Coordinator 必須指派實際不同的 Agent，並維持穩定且唯一的 ID；Gate 的 ID 比對不提供外部身分驗證。Reviewer 可建議核准、提出 Package 內修正或升級風險，但不得移除 human predicate；最終 review verdict 由 Gate 計算。Maintenance 只有在 Mini Package 的低風險宣告已有足夠證據並經核准、且 Gate 的檢查通過時可豁免；語意判斷與機械檢查的分工見 [Package Authoring](package-authoring.md#選擇-package-類型)。
 
 Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task 最新完成 Implementer Result 的 `base_commit`／`head_commit`，不把後續 task 的 commit 範圍併入。該 head 必須仍是目前 worktree HEAD 的祖先；目前 HEAD 與內容須對應本輪 `verification-passed` 採用的正式 evidence；atomic 模式也接受最後 Task Result 綁定的相同內容提交前證據。修正後重新驗證，即需重新提交本輪各 task 的 review，不能沿用上一輪核准。審查結束轉移也會重新比對 worktree，拒絕 review 後才加入的未驗證內容。只有 optional checks 的 Package 仍需至少一份本輪已登錄、未竄改且通過的 controlled evidence 作為審查內容依據。
+
+### 啟動審查修正
+
+Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`，取得 `prepare-review-fix` 的精確 finding reference。Coordinator 判斷修正仍在已核准範圍，撰寫新增修正 Task 與 checks 的 Amendment，保存輸入：
+
+```json
+{
+  "finding": { "event_sequence": 54, "event_hash": "<next 提供的 hash>" },
+  "amendment": {
+    "id": "TA-001", "reason": "補齊年度列表的快取設定",
+    "added_tasks": [{
+      "id": "T-005", "slice_id": "FS-043",
+      "paths": ["src/routes/certificate.routes.ts"],
+      "responsibility": "修正年度列表的快取回應",
+      "check_ids": ["V-005"]
+    }]
+  }
+}
+```
+
+以上為欄位示意；finding 使用 `next` 的原值，Task、Slice、paths 與 check IDs 依本次有效契約撰寫。使用 `review-fix-start --run-id <ID> --input <file> --action-id <ID>`。工具在登記前驗證 finding、修正責任、依賴、checks、checkout 及現有門檻，按 start → amendment 登記事件；不再要求 Agent 分開操作。若 finding 已被本輪通過結果取代、Amendment 非法或契約／內容改變，立即拒絕。
+
+啟動成功後依一般 Atomic Task 流程實作、相關檢查、獨立 commit 與 `task-finish`；每項修正 commit 保留 `Cogito-Amendment: <ID>` trailer。修正 Tasks 完成後依 `next` 執行 `review-fix-complete`，再正式驗證及本輪逐 Task 獨立重審；本版沒有提前正式審查或選擇性沿用舊 review。
+
+既有分開的 `review-fix-start` → `amend` 仍支援，包括非 Atomic 流程。新操作不得在 `reviewing` 先用 `amend` 加修正 Tasks；一般 check-only 等其他合法 Amendment 不受此限制。已被舊版接受的錯序恢復見 [Runtime Interface](runtime-interface.md#固定操作與歷史登記恢復)。
 
 ## 串行整合
 

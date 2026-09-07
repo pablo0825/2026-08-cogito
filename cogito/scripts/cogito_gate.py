@@ -359,6 +359,12 @@ def main(argv: list[str] | None = None) -> int:
     except CogitoError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
+    except OSError as exc:
+        if args.command not in {'task-finish', 'review-fix-start', 'correct-result-metadata'}:
+            raise
+        print(json.dumps({'ok': False, 'error': f'storage failed: {exc}; inspect next and retry the original input/action_id',
+                          'action_id': args.action_id}, ensure_ascii=False), file=sys.stderr)
+        return 2
     print(json.dumps({"ok": True, "data": output}, ensure_ascii=False, sort_keys=True, indent=2))
     return 0
 
