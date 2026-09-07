@@ -14,6 +14,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from cogito_path_amendment import PathAmendmentMixin
+from cogito_path_amendment_state import EVENTS as PATH_EVENTS, guard_pending
 from cogito_checkpoints import CheckpointMixin, guard_checkpoint
 from cogito_disposition_run import DispositionRunMixin
 from cogito_human import HumanMixin
@@ -64,10 +66,10 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
+class RunStore(PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
-        *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
+        *PATH_EVENTS, *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
         "task-updated", "agent-result-recorded", "check-evidence-recorded", "start-gate-passed",
@@ -186,6 +188,11 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         if expected_previous_hash is not None and self._events.project().get("last_event_hash", expected_previous_hash) != expected_previous_hash:
             raise CogitoError("event history changed during validation; retry with the same action_id")
         current = self._events.project()
+        from cogito_path_amendment import pending_from_events
+        pending_effect = pending_from_events(self.root, self.run_id)
+        if pending_effect and pending_effect.get('recovery') and event_type not in {'block', 'cancel'}:
+            raise CogitoError('retry the prior path amendment action to finish executor recovery')
+        guard_pending(current, event_type, payload)
         guard_checkpoint(current, event_type)
         if event_type in {"shared-understanding-ready", "shared-understanding-confirmed", "boundary-complete", "package-ready", "mini-package-ready", "package-approved"}:
             self._checkpoint_baseline(current)
@@ -434,7 +441,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         if replay is not None:
             return replay
         package = self.approved_package()
-        validate_agent_result(result, package, workflow_limits=self.workflow["limits"])
+        validate_agent_result(result, package, workflow_limits=self.workflow["limits"], approved_paths=self.effective_package()["approved_paths"])
         state = self.load()
         allowed_states = {
             "implementer": {"executing", "technical-correction", "review-fix", "post-integration-correction", "human-correction"},
@@ -560,6 +567,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             raise CogitoError("atomic task resume exceeds its original path responsibility")
 
     def _require_atomic_clean(self, worktree: Path, head: str, state: RunState) -> str:
+        self._validate_path_files(worktree)
         index, tree = capture_index_and_worktree_trees(worktree)
         controls = {state.get("package_path"), "docs/cogito/project-graph.json"}
         changes = working_tree_changed_paths(worktree, head)
@@ -952,7 +960,7 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
         validate_committed_scope(
             package, decision.previous_delivery_head, commit_id, self._git,
             {"docs/cogito/project-graph.json"}, self._git_repo.read_blob,
-            graph_hash=current["project_graph_hash"],
+            graph_hash=current["project_graph_hash"], approved_paths=self.effective_package()["approved_paths"],
         )
         if package.get("task_delivery") == "atomic":
             from cogito_atomic_integration import validate_atomic_integration
@@ -1563,6 +1571,10 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
                     return output
                 return {"state": projection["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"]}
         projection = self.load()
+        from cogito_path_amendment import pending_from_events
+        pending_effect = pending_from_events(self.root, self.run_id)
+        if pending_effect and pending_effect.get('recovery'):
+            return dict(state=projection['state'], next_action='retry-path-amendment', **pending_effect['recovery'])
         output = derive_next_action(projection)
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)

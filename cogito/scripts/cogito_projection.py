@@ -11,6 +11,7 @@ from cogito_event_types import (
     AgentResultRecordedPayload, CheckEvidenceRecordedPayload,
     IntegrationCompletedPayload, TaskUpdatedPayload,
 )
+from cogito_path_amendment_state import project_path_amendment, apply_path_projection, guard_pending
 from cogito_common import CogitoError
 from cogito_task_rules import dependency_satisfied, effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
@@ -61,9 +62,12 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             continue
         if projection is None:
             raise CogitoError("event log must begin with run-created")
+        guard_pending(projection, event_type, payload)
         guard_checkpoint(projection, event_type)
         guard_preparation(projection, event_type, payload)
-        if event_type == "stage-committed":
+        if project_path_amendment(projection, event_type, payload):
+            pass
+        elif event_type == "stage-committed":
             project_checkpoint(projection, item)
         elif project_planning(projection, event_type, payload):
             pass
@@ -141,6 +145,7 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
         elif event_type == "technical-amendment-added":
             if projection.get("package_hash") is None or projection["state"] in workflow["terminal_states"]:
                 raise CogitoError("amendments require an approved package on an active run")
+            apply_path_projection(projection, payload)
             projection.setdefault("amendments", []).append(dict(payload))
             projection["effective_contract_hash"] = payload.get("effective_contract_hash")
             for task in payload.get("amendment", {}).get("added_tasks", []):

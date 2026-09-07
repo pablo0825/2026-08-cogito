@@ -37,6 +37,11 @@ def derive_next_action(projection: RunState) -> dict[str, Any]:
     if projection.get("pending_checkpoint") and state not in {"blocked", "cancelled", "superseded"}:
         output.update(next_action="commit-stage-artifacts", checkpoint=deepcopy(projection["pending_checkpoint"]))
         return output
+    if projection.get('path_amendment') and state == 'executing':
+        pending = projection['path_amendment']
+        output.update(next_action='review-path-amendment', proposal_hash=pending['proposal_hash'],
+                      amendment=pending['amendment'], author_id=pending['author_id'])
+        return output
     human = projection.get("human")
     if human:
         output.update(feedback_id=human["feedback"]["id"],

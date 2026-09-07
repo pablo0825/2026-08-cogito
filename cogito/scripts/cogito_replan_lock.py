@@ -49,6 +49,11 @@ def replans(root):
         yield project_replan(read_events(path))
 
 def check_run_fence(root, run_id, operation):
+    if operation == 'run_controlled_check':
+        from cogito_path_amendment import pending_from_events
+        if pending_from_events(root, run_id):
+            raise CogitoError('path amendment review pending; controlled checks are paused')
+
     for state in replans(root):
         if _authority.get() == state['replan_id']:
             continue

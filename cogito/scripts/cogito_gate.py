@@ -88,6 +88,11 @@ def parser() -> argparse.ArgumentParser:
     feedback.add_argument("--action-id", required=True)
     feedback.add_argument("--input")
     feedback.add_argument("--evidence", action="append")
+    paths = commands.add_parser('amend-paths', help='review an additive same-run path correction')
+    paths.add_argument('operation', choices=['propose', 'review', 'withdraw'])
+    paths.add_argument('--run-id', required=True)
+    paths.add_argument('--input', required=True)
+    paths.add_argument('--action-id', required=True)
     planning = commands.add_parser("planning", help="versioned preparation in the same run")
     planning.add_argument("operation", choices=["begin", "review", "withdraw", "history", "compare", "recover"])
     planning.add_argument("--run-id", required=True)
@@ -242,6 +247,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "replan":
             from cogito_replan_cli import run as run_replan
             output = run_replan(repo, args.replan_args)
+        elif args.command == 'amend-paths':
+            store = RunStore(repo, args.run_id)
+            operation = getattr(store, 'path_amendment_' + args.operation)
+            try:
+                output = operation(_read_object(args.input), args.action_id)
+            except OSError as exc:
+                raise CogitoError(f'path amendment storage failed; inspect events and retry the same action: {exc}') from exc
         elif args.command == "init":
             from cogito_checkpoints import is_frozen_successor
             from cogito_local_exclude import ensure_local_excludes
