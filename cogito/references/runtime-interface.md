@@ -14,7 +14,11 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 ## JSON 輸入與顯示
 
-Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已知 `input`、尚待 Agent 判斷的 `required_inputs`，以及檢查缺失或 `blockers`。將已知輸入與必要判斷保存成 JSON 檔，再替換 argv 中的 `<input.json>`／`<action-id>`；不要把佔位字串當真實參數。這是操作提示，執行時仍重新驗證。`task-finish` 與合併的 `review-fix-start` 預設回傳當次摘要及下一步，完整歷史由既有查詢取得。
+Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已知 `input`、尚待 Agent 判斷的 `required_inputs`，以及檢查缺失或 `blockers`。將已知輸入與必要判斷保存成 JSON 檔，再替換 argv 中的 `<input.json>`／`<action-id>`；不要把佔位字串當真實參數。這是操作提示，執行時仍重新驗證。
+
+一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence`、`last_event_hash` 與 `next` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection 或歷史。`sequence` 與 `last_event_hash` 識別已落盤的權威位置，`next` 提供緊接工作所需的有界提示；需要完整操作 argv 或 blockers 時查 `next`，只有明確診斷完整 projection 時才查 `status`。`task-finish` 與 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。
+
+`status` 是一般 Run 的唯一完整 `RunState` 查詢；`next`、`report`、`delivery-summary`、planning history／compare／recover、RP／DP status 與其他唯讀查詢維持各自的資料 shape。相同 action ID 與輸入重送 mutation 時不追加事件，receipt 反映重送完成時的目前權威 projection；不要假設它會重現原 action 當時的 bytes。需要對照舊狀態時使用 append-only events，不從 mutation stdout 推測。
 
 `transition --payload-json` 可直接接 JSON object 字串或 UTF-8 JSON 檔案路徑；CLI 優先解析 inline JSON，不會把合法長 JSON 當檔名查詢。若檔名本身恰為合法 JSON（例如 `null`），使用 `./null` 或絕對路徑明確指定檔案。兩種輸入都必須解析為 object；格式、編碼或讀取失敗會回傳結構化錯誤。
 
@@ -31,7 +35,7 @@ Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 
 - `.cogito/runs/<run-id>/events.jsonl` 是 append-only source of truth；event 包含 sequence、action ID、前一事件 hash、payload，以及新增 Gate 命令的 `request_hash`。此指紋綁定命令名稱與原始輸入，納入 event hash；衍生 verdict 保持在 payload。
 - Event JSONL 每一行必須是 JSON object；array、null、字串、數值或布林值會回傳含行號的結構化錯誤與 exit code `2`，不產生 traceback，不跳過該行或修補權威事件，也不改寫 state cache。
 - `state.json` 是 events 可重建的 projection。內容不一致時以 events 重建並 fail closed 檢查。
-- 每個有副作用的 action 使用穩定 `action_id`。相同命令與輸入的重送返回目前狀態，不重做已完成操作；不同輸入或命令使用相同 ID 一律拒絕。Evidence 比對完整輸入內容，不能只比路徑。`run-check` 的 worktree 路徑先 resolve，再計算指紋。舊事件不改寫；舊 action 缺少指紋時不能推測其原始請求，先確認既有結果再決定後續 action。
+- 每個有副作用的 action 使用穩定 `action_id`。相同命令與輸入的重送不重做已完成操作，並依目前權威 projection 回傳 mutation receipt；不同輸入或命令使用相同 ID 一律拒絕。Evidence 比對完整輸入內容，不能只比路徑。`run-check` 的 worktree 路徑先 resolve，再計算指紋。舊事件不改寫；舊 action 缺少指紋時不能推測其原始請求，先確認既有結果再決定後續 action。
 - `.cogito/runs/<run-id>/check-actions/` 保存每個 controlled check 的原始請求指紋與開始執行時的契約／check hash，並以檔案鎖串行處理同一 action。證據已發布、事件未寫入時，同一請求可驗證並補登錄既有證據。已開始但沒有完整證據的 attempt 代表結果未知，不自動重跑；應確認程序與外部副作用後才決定是否以新 action 執行，不能刪除 marker 來強制重試。
 - Resume Gate 驗證 Package、baseline、Git commits、worktrees 與已登錄 evidence。整合與結案的 Git commit 由 Coordinator 建立；若 commit 已成功而 Gate 事件未記錄，Coordinator 先查詢 run 狀態並確認既有 commit ID 與原始請求，再沿用原始 action ID 與相同參數重送對應 Gate 命令，由 Gate 驗證後補記事件，不再次 merge 或 commit。`resume` 不會掃描 Git trailers 自動尋找 commit 或補記整合／結案事件；無法確認既有 commit 或驗證失敗時，Coordinator 停止推進並保留現場。
 - Technical Amendment event 是 append-only overlay。Gate 按序驗證後必須 materialize effective contract 快照與 hash；dispatch 與 runner 只能使用該快照。Controlled runner 以內容 hash 建立新 evidence 檔，既有 evidence 不得覆寫或就地更新。
