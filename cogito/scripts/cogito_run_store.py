@@ -529,6 +529,8 @@ class RunStore(PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, D
         if any(not _path_allowed(path, task.get("paths", [])) for path in actual_paths):
             raise CogitoError("Agent Result exceeds its task path responsibility")
         if package.get("task_delivery") == "atomic" and result["role"] == "implementer":
+            if result["status"] == "complete" and result["requested_transition"] != "verifying":
+                raise CogitoError("completed atomic Implementer Results must request verifying")
             if task.get("status") != "running":
                 raise CogitoError("atomic Implementer Result requires a running task")
             if result["status"] == "complete":
@@ -582,6 +584,8 @@ class RunStore(PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, D
     def _validate_atomic_result(
         self, result: Mapping[str, Any], task: Mapping[str, Any], snapshot: EventSnapshot,
     ) -> None:
+        if result.get("requested_transition") != "verifying":
+            raise CogitoError("completed atomic Implementer Results must request verifying")
         worktree = Path(task["worktree"])
         base, head = result["base_commit"], result["head_commit"]
         if (base != task["base_commit"] or self._git_at(worktree, "rev-parse", "HEAD") != head

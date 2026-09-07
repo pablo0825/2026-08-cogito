@@ -117,6 +117,19 @@ class AtomicTaskTests(GitTestCase):
         with self.assertRaises(CogitoError):
             store.update_task('T-b', 'leased', 'worker')
 
+    def test_invalid_completed_result_transition_is_rejected_before_recording(self):
+        _, worker, store, _ = self.executing()
+        self.lease(store)
+        (worker / 'src/a.txt').write_text('after\n')
+        self.commit(worker)
+        result = self.result(store, worker)
+        result['requested_transition'] = 'executing'
+        before = store.events_path.read_bytes()
+        with self.assertRaisesRegex(CogitoError, 'must request verifying'):
+            store.submit_agent_result(result, 'wrong-transition')
+        self.assertEqual(store.events_path.read_bytes(), before)
+        self.assertEqual(store.load()['tasks']['T-a']['status'], 'running')
+
     def test_interrupted_task_retains_original_base_and_requires_fresh_evidence(self):
         for committed in (False, True):
             with self.subTest(committed=committed):
