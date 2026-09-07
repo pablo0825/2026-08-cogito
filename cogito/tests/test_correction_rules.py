@@ -115,6 +115,48 @@ class CorrectionCompletionTests(unittest.TestCase):
                     with self.assertRaisesRegex(CogitoError, "Technical Amendment"):
                         self.call(review, events=events)
 
+    def legacy_history(self):
+        finding = {'task_id': 'T-original', 'role': 'reviewer', 'agent_id': 'reviewer',
+                   'head_commit': self.commit, 'status': 'needs-fix',
+                   'requested_transition': 'review-fix'}
+        events = [
+            {'type': 'agent-result-recorded', 'payload': {'result': finding}},
+            {'type': 'technical-amendment-added', 'payload': {'amendment': self.amendment}},
+            {'type': 'review-fix-required', 'payload': {'review_task_id': 'T-original',
+                'reviewer': 'reviewer', 'review_head': self.commit}},
+        ]
+        for result in self.state['agent_results']:
+            for status in ('leased', 'running'):
+                events.append({'type': 'task-updated', 'payload': {'task_id': result['task_id'], 'status': status}})
+            events.append({'type': 'agent-result-recorded', 'payload': {'result': result}})
+            events.append({'type': 'task-updated', 'payload': {'task_id': result['task_id'], 'status': 'complete'}})
+        return [{**copy.deepcopy(e), 'sequence': i} for i, e in enumerate(events, 1)]
+
+    def test_legacy_same_cycle_order_is_accepted_without_rewriting_history(self):
+        self.call(True, events=self.legacy_history())
+
+    def test_legacy_order_rejects_unbound_replaced_consumed_and_premature_work(self):
+        for mode in ('reviewer', 'head', 'ambiguous', 'replaced', 'early-task', 'missing-running', 'consumed'):
+            with self.subTest(mode=mode):
+                events = self.legacy_history()
+                if mode in ('reviewer', 'head'):
+                    events[2]['payload']['reviewer' if mode == 'reviewer' else 'review_head'] = 'wrong'
+                elif mode in ('ambiguous', 'replaced'):
+                    duplicate = copy.deepcopy(events[0])
+                    duplicate['sequence'] = 1.5
+                    if mode == 'replaced':
+                        duplicate['payload']['result']['status'] = 'complete'
+                    events.insert(1, duplicate)
+                elif mode == 'early-task':
+                    events[3]['sequence'] = 2.5
+                elif mode == 'missing-running':
+                    events.pop(4)
+                else:
+                    events.insert(0, {'type': 'review-fix-complete', 'sequence': 0,
+                                     'payload': {'amendment_id': 'TA-1'}})
+                with self.assertRaises(CogitoError):
+                    self.call(True, events=events)
+
 
 if __name__ == "__main__":
     unittest.main()

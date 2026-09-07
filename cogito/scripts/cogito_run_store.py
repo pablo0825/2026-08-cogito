@@ -997,6 +997,8 @@ class RunStore(PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, D
         if state["state"] not in {"verifying", "reviewing", "review-fix", "post-integration-verification",
                                   "human-feedback-triage", "human-correction-verifying", "human-correction-reviewing"}:
             raise CogitoError("Technical Amendments are only legal while handling a verification or review finding")
+        if state['state'] == 'reviewing' and amendment.get('added_tasks'):
+            raise CogitoError('start review-fix before adding correction tasks; use review-fix-start')
         if state["state"].startswith("human-"):
             human = state.get("human", {})
             if not human.get("triage") or human["triage"]["route"] != "local" or human.get("escalated"):

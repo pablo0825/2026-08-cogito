@@ -4,6 +4,7 @@ import json
 import sys
 
 from cogito_test_support import GitTestCase, git
+from cogito_common import CogitoError
 import test_atomic_task_verification as verification_tests
 import test_human_acceptance as human_tests
 
@@ -59,6 +60,20 @@ class AtomicCorrectionTests(GitTestCase):
         store.decide_post_verification([evidence[-1]], action_id='verify-delivery-fix')
         self.assertEqual(store.load()['state'], 'finalizing')
         self.assertEqual(self.check_count(store), count)
+
+    def test_reviewing_rejects_new_tasks_before_start_without_appending(self):
+        _, _, store, _, results, evidence = self.wave()
+        store.complete_verification([evidence[-1]])
+        store.submit_agent_result({**results[0], 'role': 'reviewer', 'agent_id': 'reviewer',
+            'reviewed_implementer': 'worker', 'status': 'needs-fix', 'changed_paths': [],
+            'evidence': [], 'risks': ['fix a'], 'requested_transition': 'review-fix'})
+        before = store.events_path.read_bytes()
+        with self.assertRaisesRegex(CogitoError, 'start review-fix'):
+            store.add_amendment(self.amendment())
+        self.assertEqual(store.events_path.read_bytes(), before)
+        store.enter_review_fix()
+        store.add_amendment(self.amendment())
+        self.assertIn('T-fix', store.load()['tasks'])
 
     def test_human_local_correction_reuses_task_evidence_and_gets_independent_review(self):
         for close in (False, True):
