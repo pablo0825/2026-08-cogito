@@ -83,3 +83,5 @@ Gate 或 Python contract 不可用、資料驗證失敗、狀態不合法、證�
 | 取消與成果處置 | [Dispositions](dispositions.md) |
 | 準備階段 checkpoint | [Stage Commits](stage-commits.md) |
 | 結案、回報及 cleanup 重試 | [Finalization](finalization.md) |
+
+受控檢查的執行前 snapshot 恢復沿用 `retry --kind transient`，新增成對參數 `--check-action-id` 與 `--replacement-action-id`；資格、順序與限制見 [執行前 snapshot 失敗的受控重試](execution-policy.md#執行前-snapshot-失敗的受控重試)。

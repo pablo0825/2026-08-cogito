@@ -190,6 +190,8 @@ def parser() -> argparse.ArgumentParser:
     retry.add_argument("--kind", required=True, choices=["transient", "format"])
     retry.add_argument("--reason", required=True)
     retry.add_argument("--action-id", required=True)
+    retry.add_argument('--check-action-id', help='proven pre-execution failed attempt')
+    retry.add_argument('--replacement-action-id', help='fresh run-check action that replaces it')
     resume = commands.add_parser("resume")
     resume.add_argument("--run-id", required=True)
     resume.add_argument("--action-id", required=True)
@@ -327,7 +329,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "integrate":
             output = RunStore(repo, args.run_id).complete_integration(args.commit_id, args.slice_id, args.action_id)
         elif args.command == "retry":
-            output = RunStore(repo, args.run_id).record_retry(args.kind, args.reason, args.action_id)
+            output = RunStore(repo, args.run_id).record_retry(args.kind, args.reason, args.action_id,
+                check_action_id=args.check_action_id, replacement_action_id=args.replacement_action_id)
         elif args.command == "resume":
             output = RunStore(repo, args.run_id).resume_gate(args.action_id)
         elif args.command == "post-verify":

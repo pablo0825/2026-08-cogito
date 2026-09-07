@@ -191,7 +191,15 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
                 if task["id"] in projection["tasks"]:
                     raise CogitoError("amendment task id already exists in run state")
                 projection["tasks"][task["id"]] = cast(TaskState, {**dict(task), "status": "pending"})
+        elif event_type == 'check-preparation-failed':
+            from cogito_check_retry_rules import validate_failure
+            validate_failure(projection, history[:-1], payload)
         elif event_type in {"transient-retry", "format-repair-recorded"}:
+            if 'check_retry' in payload:
+                from cogito_check_retry_rules import validate_link
+                if event_type != 'transient-retry':
+                    raise CogitoError('only transient retry may bind check attempts')
+                validate_link(projection, history[:-1], payload['check_retry'])
             counter = "transient_retries" if event_type == "transient-retry" else "format_repairs"
             limit = int(projection["limits"][counter])
             if projection["state"] in workflow["terminal_states"] or projection["counters"].get(counter, 0) >= limit:

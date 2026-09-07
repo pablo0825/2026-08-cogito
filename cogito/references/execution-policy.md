@@ -209,6 +209,21 @@ Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanni
 
 Atomic 的產品 correction 必須使用新增 Task；只增加檢查可直接重新 verify，不開啟無任務的產品修正。新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
 
+### 執行前 snapshot 失敗的受控重試
+
+Atomic Task 執行中，只有 Gate 在檢查命令啟動前捕捉 snapshot 失敗，並追加 `check-preparation-failed`，才可使用此恢復路徑。先確認失敗原因已排除，再登錄既有 transient retry，明確綁定原 action 與全新的替代 action：
+
+```sh
+python3 cogito/scripts/cogito_gate.py --repo <root> retry --run-id <ID> --kind transient --reason "<已排除的原因>" --check-action-id <原-check-action> --replacement-action-id <新-check-action> --action-id <retry-action>
+python3 cogito/scripts/cogito_gate.py --repo <root> run-check --run-id <ID> --check-id <原-check-id> --worktree <原-worktree> --action-id <新-check-action>
+```
+
+Gate 驗證相同 Task lease、worktree、check 定義與有效契約；替代檢查登錄有效的成功 evidence 後，原未完成 marker 才不再阻擋結案。原 marker、事件與 evidence 全數保留，這不會免除其他失敗或過期檢查。
+
+替代檢查若實際執行失敗，修正後可在剩餘 transient retry 額度內，將同一原 action 綁定另一個全新 action；Gate 會確認上一替代檢查有失敗 evidence 且 executor 已停止。若替代檢查也在啟動前失敗，則以該替代 action 作為下一次 retry 的來源。沒有 outcome、仍在執行或已成功的替代檢查不可重綁。
+
+只有理由文字的舊 retry、歷史上無法確認執行階段的 marker，以及命令執行後的 snapshot 失敗，都維持未知結果的阻擋；不得手動補造失敗紀錄或刪除 marker。
+
 ### 修正與重試額度
 
 | 流程 | 合法循環與額度 |

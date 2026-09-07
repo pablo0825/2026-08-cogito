@@ -43,6 +43,10 @@ class EvidenceAlreadyExists(CogitoError):
         self.path = path
 
 
+class PreExecutionSnapshotError(CogitoError):
+    """Only the snapshot before invoking the check may produce this proof."""
+
+
 def run_check(
     package: Mapping[str, Any], check_id: str, worktree: str | Path,
     amendments: Sequence[Mapping[str, Any]] = (), output_cap: int = OUTPUT_CAP,
@@ -67,7 +71,10 @@ def run_check(
     env = {key: value for key, value in os.environ.items() if key in allowed}
     started_at = datetime.now(timezone.utc).isoformat()
     start = time.monotonic()
-    pre_binding = _working_tree_binding(worktree)
+    try:
+        pre_binding = _working_tree_binding(worktree)
+    except (CogitoError, OSError) as exc:
+        raise PreExecutionSnapshotError('pre-execution snapshot failed; check command was not started: ' + str(exc)) from exc
     output_limit = int(
         package["policy_snapshot"].get(
             "max_check_output_bytes", DEFAULT_MAX_CHECK_OUTPUT_BYTES

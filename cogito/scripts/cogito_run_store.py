@@ -75,7 +75,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         *PATH_EVENTS, *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
         "run-superseded", "work-carried", "work-adopted", "adoption-ready",
         "package-ready", "mini-package-ready", "package-approved", "technical-amendment-added",
-        "task-updated", "agent-result-recorded", "agent-result-metadata-corrected", "check-evidence-recorded", "start-gate-passed",
+        "task-updated", "agent-result-recorded", "agent-result-metadata-corrected", "check-evidence-recorded", "check-preparation-failed", "start-gate-passed",
         "verification-passed", "verification-correction-required",
         "post-verification-correction-required", "technical-correction-complete",
         "post-integration-correction-complete", "review-fix-required", "review-fix-complete",
@@ -756,6 +756,9 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         replay = self._replay(action_id, "check-evidence-recorded", request_hash)
         if replay is not None:
             return replay
+        from cogito_check_retry import validate_replacement
+        with project_lock(self.root):
+            validate_replacement(self, check_id, supplied_worktree, action_id)
         if not self._events.is_initialized():
             raise CogitoError("run must be initialized before controlled checks")
         with controlled_check_attempt(self.run_dir, action_id, request_hash) as started_path:
@@ -796,13 +799,16 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             raise CogitoError(f"expected exactly one check named {check_id!r}")
         execution = {"request_hash": request_hash, "check_hash": hash_json(checks[0]), "effective_contract_hash": effective["effective_contract_hash"]}
         try:
-            from cogito_runner import EvidenceAlreadyExists, run_check, write_evidence_once
+            from cogito_runner import EvidenceAlreadyExists, PreExecutionSnapshotError, run_check, write_evidence_once
         except ImportError as exc:  # pragma: no cover - installation failure
             raise CogitoError(f"controlled runner is unavailable: {exc}") from exc
         record_id = f"{check_id}-{hash_json({'action_id': action_id})[:16]}"
         path = self.run_dir / "evidence" / f"{record_id}.json"
         if path.exists() and not started_path.exists():
             raise CogitoError("existing check evidence has no bound attempt; inspect it before issuing another action")
+        from cogito_check_retry import validate_replacement
+        with project_lock(self.root):
+            validate_replacement(self, check_id, supplied_worktree, action_id)
         if not atomic_create_json(started_path, execution):
             if _load_json(started_path) != execution:
                 raise CogitoError("controlled-check contract changed since this action started")
@@ -810,8 +816,19 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 raise CogitoError("controlled-check outcome is unknown; inspect the interrupted attempt before issuing another action")
         if not path.exists():
             from cogito_execution_registry import controlled_executor
-            with controlled_executor(self.root, self.run_id, record_id):
-                evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
+            from cogito_check_retry import failure_payload
+            with project_lock(self.root):
+                prepared_failure = failure_payload(self, state, check_id, supplied_worktree,
+                                                   action_id, execution, 'pre-execution snapshot failed')
+            try:
+                with controlled_executor(self.root, self.run_id, record_id):
+                    evidence = run_check(package, check_id, supplied_worktree, prior, workflow_limits=self.workflow["limits"])
+            except PreExecutionSnapshotError as exc:
+                if prepared_failure is not None:
+                    prepared_failure['reason'] = str(exc)
+                    self.record('check-preparation-failed', prepared_failure,
+                                'check-preparation-failed:' + hash_json(action_id), self._GATE_AUTHORITY)
+                raise
             try:
                 path = write_evidence_once(self.run_dir / "evidence", record_id, evidence)
             except EvidenceAlreadyExists as collision:
@@ -829,10 +846,12 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 or recorded["effective_contract_hash"] != execution["effective_contract_hash"]):
             raise CogitoError("controlled-check evidence does not match its recorded attempt")
         payload: CheckEvidenceRecordedPayload = {"check_id": check_id, "evidence_path": str(path), "evidence_hash": hash_json(recorded), "head_commit": recorded["head_commit"], "effective_contract_hash": recorded["effective_contract_hash"]}
-        return self._record_gate_event(
-            CheckEvidenceRecordedEvent(type="check-evidence-recorded", payload=payload), action_id,
-            request_hash=request_hash,
-        )
+        with project_lock(self.root):
+            validate_replacement(self, check_id, supplied_worktree, action_id)
+            return self._record_gate_event(
+                CheckEvidenceRecordedEvent(type="check-evidence-recorded", payload=payload), action_id,
+                request_hash=request_hash,
+            )
 
     @run_mutation
     def enter_correction(self, action_id: str | None = None) -> RunState:
@@ -988,15 +1007,24 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             self._validate_atomic_result(result, current['tasks'][result['task_id']], self._events.snapshot())
 
     @run_mutation
-    def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> RunState:
-        request_hash = request_fingerprint("retry", kind=kind, reason=reason)
+    def record_retry(self, kind: str, reason: str, action_id: str | None = None, *,
+                     check_action_id: str | None = None, replacement_action_id: str | None = None) -> RunState:
+        binding_args = {} if check_action_id is None and replacement_action_id is None else {
+            'check_action_id': check_action_id, 'replacement_action_id': replacement_action_id}
+        request_hash = request_fingerprint("retry", kind=kind, reason=reason, **binding_args)
         event = {"transient": "transient-retry", "format": "format-repair-recorded"}.get(kind)
         if event is None or not reason.strip():
             raise CogitoError("retry kind must be transient or format and include a reason")
-        payload = {"reason": reason}
+        payload: dict[str, Any] = {"reason": reason}
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
             return replay
+        if binding_args:
+            if (kind != 'transient' or not check_action_id or not replacement_action_id
+                    or action_id in {check_action_id, replacement_action_id}):
+                raise CogitoError('bound transient retry requires old and fresh replacement check action IDs, distinct from the retry action')
+            from cogito_check_retry import prepare_link
+            payload['check_retry'] = prepare_link(self, check_action_id, replacement_action_id)
         return self.record(event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
     @run_mutation

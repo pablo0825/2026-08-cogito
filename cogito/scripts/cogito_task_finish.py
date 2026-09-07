@@ -104,6 +104,8 @@ def select_task_evidence(store, task):
     snapshot = store._events.snapshot()
     # Unknown attempts must be resolved even if an older matching check passed.
     completed = {e.get('action_id') for e in snapshot.events if e['type'] == 'check-evidence-recorded'}
+    from cogito_check_retry import superseded_attempts
+    completed.update(superseded_attempts(store, snapshot.events))
     for path in (store.run_dir / 'check-actions').glob('*/started.json'):
         request = load_json(path.parent / 'request.json')
         if request['action_id'] not in completed:
