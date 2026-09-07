@@ -1,7 +1,7 @@
 """Conservative, pure eligibility rules for same-run review retention."""
 from typing import Any, Mapping, Sequence
 
-from cogito_common import CogitoError
+from cogito_common import CogitoError, hash_json
 from cogito_contract_fields import require_id, require_paths, require_string
 from cogito_contracts import path_allowed
 
@@ -100,3 +100,61 @@ def validate_candidate(task_id: str, tasks: Mapping[str, Any], touched_paths: Se
     paths.extend(entry['dependency_paths'])
     if any(path_allowed(path, paths) for path in touched_paths):
         raise CogitoError('retained Task or dependency was touched')
+
+
+def validate_recorded_retention(events, state, payload):
+    """Replay exact references without turning historical Results into new ones."""
+    record = payload['retention']
+    if not isinstance(record, dict) or set(record) != {'impact', 'binding', 'binding_hash', 'reviewer_id', 'assessment'}:
+        raise CogitoError('invalid recorded retention')
+    impact, binding = record['impact'], record['binding']
+    validate_impact(impact)
+    if not isinstance(binding, dict) or set(binding) != {
+        'run_id', 'verification', 'correction', 'effective_contract_hash', 'runtime',
+        'head', 'tree', 'sources', 'checks',
+    }:
+        raise CogitoError('invalid retention binding')
+    if record['binding_hash'] != hash_json({'impact': impact, 'binding': binding}):
+        raise CogitoError('recorded retention binding hash changed')
+    if (state['state'] != 'reviewing' or state.get('task_delivery') != 'atomic'
+            or binding['run_id'] != state['run_id']
+            or binding['effective_contract_hash'] != state['effective_contract_hash']):
+        raise CogitoError('retention is outside its recorded contract')
+    verifications = [e for e in events if e['type'] == 'verification-passed']
+    corrections = [e for e in events if e['type'] == 'review-fix-complete']
+    if (not verifications or not corrections
+            or binding['verification'] != reference(verifications[-1])
+            or binding['correction'] != reference(corrections[-1])
+            or corrections[-1]['sequence'] >= verifications[-1]['sequence']
+            or binding['runtime'] != verifications[-1]['payload'].get('review_runtime')):
+        raise CogitoError('retention references a different verification cycle')
+    validate_reviewer(impact, record['reviewer_id'], record['assessment'],
+                      [t.get('agent_id') for t in state['tasks'].values()])
+    retained = {i['task_id'] for i in impact['retained']}
+    if (not isinstance(binding['sources'], list) or any(not isinstance(s, dict) for s in binding['sources'])
+            or len(binding['sources']) != len(retained)
+            or {s.get('task_id') for s in binding['sources']} != retained):
+        raise CogitoError('retention source set differs from the reviewed proposal')
+    by_sequence = {e['sequence']: e for e in events}
+    for source in binding['sources']:
+        approval = source_review(events, source['task_id'], verifications[-1]['sequence'])
+        if source.get('review') != reference(approval):
+            raise CogitoError('retention approval was replaced')
+        for key, kind in (('implementation', 'agent-result-recorded'), ('verification', 'verification-passed')):
+            ref = source.get(key, {})
+            event = by_sequence.get(ref.get('event_sequence')) if isinstance(ref, dict) else None
+            if not event or event['type'] != kind or reference(event) != ref or event['sequence'] >= approval['sequence']:
+                raise CogitoError('retention history reference is invalid')
+        impl = by_sequence[source['implementation']['event_sequence']]['payload']['result']
+        review = approval['payload']['result']
+        if (impl.get('role') != 'implementer' or impl.get('status') != 'complete'
+                or impl.get('task_id') != source['task_id']
+                or impl.get('agent_id') != review.get('reviewed_implementer')
+                or any(impl.get(k) != review.get(k) for k in ('base_commit', 'head_commit'))):
+            raise CogitoError('retention implementation reference is invalid')
+    from cogito_gate_validation import derive_review_decision
+    current = {**state, 'agent_results': [e['payload']['result'] for e in events
+        if e['type'] == 'agent-result-recorded' and e['sequence'] > verifications[-1]['sequence']]}
+    decision = derive_review_decision({'kind': state['kind']}, current, retained_task_ids=retained)
+    if any(payload.get(k) != v for k, v in decision.items()) or payload.get('review_exemption'):
+        raise CogitoError('retention closure differs from its recorded reviews')

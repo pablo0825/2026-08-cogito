@@ -184,6 +184,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 raise CogitoError("cancel requires the dedicated disposition Gate")
         if event_type in self._PROTECTED_RECORD_EVENTS and _authority is not self._GATE_AUTHORITY:
             raise CogitoError(f"{event_type} requires its dedicated Gate operation")
+        if event_type == 'review-approved' and 'retention' in payload and _authority is not self._GATE_AUTHORITY:
+            raise CogitoError('retention requires validated review transition')
         request_hash = request_hash or request_fingerprint("record", event=event_type, payload=payload)
         replay = self._replay(action_id, event_type, request_hash)
         if replay is not None:
@@ -233,6 +235,16 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         replay = self._replay(action_id, event, request_hash)
         if replay is not None:
             return replay
+        if event == 'review-approved' and 'retention' in payload:
+            from cogito_execution_registry import quiescent_guard
+            with quiescent_guard(self.root, self.run_id, allow_external_receipts=True) as idle:
+                if not idle:
+                    raise CogitoError('retention requires stopped executors')
+                return self._apply_transition_request(event, payload, action_id, request_hash)
+        return self._apply_transition_request(event, payload, action_id, request_hash)
+
+    def _apply_transition_request(self, event, payload, action_id, request_hash):
+        from cogito_disposition_lock import current_authority
         payload = self._planning_preparation_payload(event, payload)
         self._validate_preparation_input(event, payload)
         current = self.load()
@@ -250,6 +262,13 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             payload["tasks_complete"] = bool(completed) and not active and not dispatchable and completed <= implemented
             payload["task_ids"] = sorted(completed)
         if event == "review-approved":
+            retained_ids: set[str] = set()
+            if 'retention' in payload:
+                if payload.get('review_exemption'):
+                    raise CogitoError('retention cannot exempt independent review')
+                from cogito_review_retention import validate_retention
+                payload['retention'] = validate_retention(self, payload['retention'])
+                retained_ids = {i['task_id'] for i in payload['retention']['impact']['retained']}
             review_state = current
             if payload.get("review_exemption") is not True:
                 events = self._events.read()
@@ -262,6 +281,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             decision = derive_review_decision(
                 self.approved_package(), review_state,
                 review_exemption=payload.get("review_exemption") is True,
+                retained_task_ids=retained_ids,
             )
             if payload.get("review_exemption") is not True:
                 worktrees = {Path(current["tasks"][task_id]["worktree"]) for task_id in decision["reviews"]}
@@ -271,7 +291,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             payload = {**payload, **decision}
         validate_transition(self.workflow, current["state"], event, payload, current["counters"])
         return self.record(
-            event, payload, action_id, request_hash=request_hash,
+            event, payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash,
             expected_previous_hash=current["last_event_hash"],
         )
 
@@ -715,6 +735,9 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         else:
             self._validate_evidence(package, evidence, snapshot=snapshot, phase="implementation")
         payload = {"passed": True, "evidence": [item["evidence_path"] for item in evidence]}
+        if package.get('task_delivery') == 'atomic':
+            from cogito_review_retention import runtime_binding
+            payload['review_runtime'] = runtime_binding(self.workflow)
         validate_transition(self.workflow, current["state"], "verification-passed", payload, current["counters"])
         return self.record(
             "verification-passed", payload, action_id, self._GATE_AUTHORITY,
@@ -1581,6 +1604,15 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             tree = self._require_atomic_clean(self.root, str(current_head), snapshot.state)
             if any(item["worktree_binding"].get("content_tree") != tree for item in evidence):
                 raise CogitoError("integration evidence does not match current delivery content")
+
+    @run_mutation
+    def prepare_review_retention(self, impact):
+        from cogito_review_retention import prepare_retention
+        from cogito_execution_registry import quiescent_guard
+        with quiescent_guard(self.root, self.run_id, allow_external_receipts=True) as idle:
+            if not idle:
+                raise CogitoError('retention requires stopped executors')
+            return prepare_retention(self, impact)
 
     def next_action(self) -> dict[str, Any]:
         from cogito_disposition_scope import dispositions

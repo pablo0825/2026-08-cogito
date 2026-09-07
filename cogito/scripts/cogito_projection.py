@@ -31,7 +31,9 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
     """Project recorded events using supplied workflow data, without file IO."""
     result_origins: dict[tuple[Any, Any], tuple[int, Mapping[str, Any]]] = {}
     projection: RunState | None = None
+    history: list[Mapping[str, Any]] = []
     for item in events:
+        history.append(item)
         event_type = item.get("type")
         payload = item.get("payload", {})
         if event_type == "run-created":
@@ -63,6 +65,9 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
             continue
         if projection is None:
             raise CogitoError("event log must begin with run-created")
+        if event_type == 'review-approved' and 'retention' in payload:
+            from cogito_review_retention_rules import validate_recorded_retention
+            validate_recorded_retention(history[:-1], projection, payload)
         guard_pending(projection, event_type, payload)
         guard_checkpoint(projection, event_type)
         guard_preparation(projection, event_type, payload)

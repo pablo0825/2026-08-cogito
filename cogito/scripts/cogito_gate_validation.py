@@ -82,6 +82,7 @@ def derive_review_decision(
     package: Mapping[str, Any],
     state: RunState,
     *, review_exemption: bool = False,
+    retained_task_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Return the current wave's Gate verdict without IO or input mutation.
 
@@ -121,6 +122,10 @@ def derive_review_decision(
         and result.get("agent_id")
         != state["tasks"].get(result.get("task_id"), missing_task).get("agent_id")
     }
+    retained = retained_task_ids or set()
+    if not retained <= expected or retained & set(latest):
+        raise CogitoError('retention cannot replace a current Reviewer Result')
+    closed |= retained
     if closed != expected:
         raise CogitoError(
             "every completed implementation task requires a Gate-recorded independent Reviewer Result"
