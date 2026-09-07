@@ -91,13 +91,16 @@ class PackageRevisionTests(GitTestCase):
                 revised_path.write_text(json.dumps(revised))
                 prepare = ("prepare-package", "--run-id", run_id, "--package")
                 initial = json.loads(self.invoke(repo, *prepare, str(first_path), "--action-id", "candidate-v1").stdout)["data"]
-                self.assertEqual(initial["next"]["candidate_package_hash"], package_hash(first))
+                self.assertNotIn("next", initial)
+                initial_next = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+                self.assertEqual(initial_next["candidate_package_hash"], package_hash(first))
                 store = RunStore(repo, run_id)
                 self.begin_revision(store, first)
                 revision_args = (*prepare, str(revised_path), "--action-id", "candidate-v2")
                 updated = json.loads(self.invoke(repo, *revision_args).stdout)["data"]
                 self.assertEqual(updated["state"], "awaiting-package-approval")
-                self.assertEqual(updated["next"]["candidate_package_hash"], package_hash(revised))
+                updated_next = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+                self.assertEqual(updated_next["candidate_package_hash"], package_hash(revised))
                 self.review_revision(store)
                 events_path = repo / ".cogito/runs" / run_id / "events.jsonl"
                 events_before = events_path.read_bytes()
@@ -106,7 +109,8 @@ class PackageRevisionTests(GitTestCase):
                 self.assertEqual(replayed["sequence"], current["sequence"])
                 self.assertEqual(replayed["last_event_hash"], current["last_event_hash"])
                 self.assertEqual(replayed["state"], current["state"])
-                self.assertEqual(replayed["next"]["candidate_package_hash"], package_hash(revised))
+                replayed_next = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+                self.assertEqual(replayed_next["candidate_package_hash"], package_hash(revised))
                 self.assertEqual(events_path.read_bytes(), events_before)
                 # An action id must remain bound to the original request, even
                 # when its event type and legal workflow state are unchanged.

@@ -16,7 +16,7 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已知 `input`、尚待 Agent 判斷的 `required_inputs`，以及檢查缺失或 `blockers`。將已知輸入與必要判斷保存成 JSON 檔，再替換 argv 中的 `<input.json>`／`<action-id>`；不要把佔位字串當真實參數。這是操作提示，執行時仍重新驗證。
 
-一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence`、`last_event_hash` 與 `next` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection 或歷史。`sequence` 與 `last_event_hash` 識別已落盤的權威位置，`next` 提供緊接工作所需的有界提示；需要完整操作 argv 或 blockers 時查 `next`，只有明確診斷完整 projection 時才查 `status`。`task-finish` 與 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。
+一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence` 與 `last_event_hash` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection、歷史或 `next`。Mutation 後需要決定路由時另查既有 `next`，讓 RP／DP、path amendment、fixed action 與 recovery 的即時 override 仍由 `RunStore.next_action` 單一入口判定；只有明確診斷完整 projection 時才查 `status`。`run-check` receipt 另保留精確的 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash`，重送舊 action 仍指向該 action 原本登錄的 evidence；`finalize` receipt 另保留一次性的 `cleanup.removed`、`cleanup.retained` 與存在時的 `cleanup.error`。`task-finish` 與 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。
 
 `status` 是一般 Run 的唯一完整 `RunState` 查詢；`next`、`report`、`delivery-summary`、planning history／compare／recover、RP／DP status 與其他唯讀查詢維持各自的資料 shape。相同 action ID 與輸入重送 mutation 時不追加事件，receipt 反映重送完成時的目前權威 projection；不要假設它會重現原 action 當時的 bytes。需要對照舊狀態時使用 append-only events，不從 mutation stdout 推測。
 

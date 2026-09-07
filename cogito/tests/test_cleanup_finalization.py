@@ -1,16 +1,29 @@
 """Accepted cleanup is recoverable without changing the delivery verdict."""
+import io
 import json
+import subprocess
+import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from cogito_test_support import GitTestCase, git
+from cogito_test_support import GitTestCase, SCRIPTS, git
 from cogito_common import CogitoError
 from cogito_contracts import package_hash
 from cogito_run_store import RunStore
+import cogito_gate as gate_module
 import test_atomic_task_verification as verification
 
 
 class CleanupFinalizationTests(GitTestCase):
+    @staticmethod
+    def finalize_cli_arguments(store, args):
+        return [
+            "finalize", "--run-id", store.run_id, "--result", args[0],
+            "--project-graph", args[1], "--final-commit", args[2],
+            "--action-id", args[3],
+        ]
+
     def finalizing(self):
         fixture = verification.AtomicVerificationTests()
         fixture.setUp()
@@ -55,9 +68,18 @@ class CleanupFinalizationTests(GitTestCase):
         self.assertEqual(store.completion_report(), report)
 
     def test_cleanup_failure_leaves_accepted_and_same_action_can_retry(self):
-        _, worker, store, args = self.finalizing()
-        with mock.patch('cogito_cleanup.cleanup_accepted', side_effect=OSError('busy')):
-            accepted = store.finalize(*args)
+        repo, worker, store, args = self.finalizing()
+        output = io.StringIO()
+        with mock.patch('cogito_cleanup.cleanup_accepted', side_effect=OSError('busy')), \
+                redirect_stdout(output):
+            code = gate_module.main([
+                "--repo", str(repo), *self.finalize_cli_arguments(store, args),
+            ])
+        self.assertEqual(code, 0)
+        accepted = json.loads(output.getvalue())["data"]
+        self.assertEqual(set(accepted), {
+            "run_id", "state", "sequence", "last_event_hash", "cleanup",
+        })
         self.assertEqual(accepted['state'], 'accepted')
         self.assertEqual(accepted['cleanup']['error'], 'busy')
         self.assertTrue(worker.exists())
@@ -66,6 +88,24 @@ class CleanupFinalizationTests(GitTestCase):
         self.assertEqual(store.events_path.read_bytes(), events)
         with self.assertRaises(CogitoError):
             store.finalize(args[0], args[1], '0' * 40, args[3])
+
+    def test_finalize_cli_retains_cleanup_result_without_full_state(self):
+        repo, worker, store, args = self.finalizing()
+        (worker / "local-secret.txt").write_text("keep\n")
+        result = subprocess.run(
+            [sys.executable, "-B", str(SCRIPTS / "cogito_gate.py"), "--repo", str(repo),
+             *self.finalize_cli_arguments(store, args)],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        receipt = json.loads(result.stdout)["data"]
+        self.assertEqual(set(receipt), {
+            "run_id", "state", "sequence", "last_event_hash", "cleanup",
+        })
+        self.assertEqual(receipt["cleanup"]["removed"], [])
+        self.assertEqual(receipt["cleanup"]["retained"][0]["worktree"], str(worker))
+        self.assertNotIn("tasks", receipt)
+        self.assertLess(len(result.stdout.encode()), 2 * 1024)
 
     def test_future_replan_captures_accepted_source_after_cleanup(self):
         from cogito_replan_store import ReplanStore

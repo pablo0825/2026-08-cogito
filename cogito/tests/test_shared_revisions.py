@@ -70,7 +70,7 @@ class SharedRevisionTests(GitTestCase):
         self.ready(HASH_A, "ready-a")
         revised = json.loads(self.ready(HASH_B, "ready-b").stdout)["data"]
         self.assertEqual(revised["state"], "awaiting-shared-confirmation")
-        self.assertEqual(revised["next"]["shared_understanding_hash"], HASH_B)
+        self.assertNotIn("next", revised)
         guidance = json.loads(self.invoke("next", "--run-id", self.run_id).stdout)["data"]
         self.assertEqual(guidance["next_action"], "request-shared-confirmation")
         self.assertEqual(guidance["shared_understanding_hash"], HASH_B)
@@ -89,7 +89,8 @@ class SharedRevisionTests(GitTestCase):
         latest_path.write_text(json.dumps(self.draft))
         prepared = json.loads(self.invoke("prepare-package", "--run-id", self.run_id, "--package", str(latest_path), "--action-id", "prepare-b").stdout)["data"]
         self.assertEqual(prepared["state"], "awaiting-package-approval")
-        self.assertEqual(prepared["next"]["candidate_package_hash"], package_hash(self.draft))
+        prepared_next = json.loads(self.invoke("next", "--run-id", self.run_id).stdout)["data"]
+        self.assertEqual(prepared_next["candidate_package_hash"], package_hash(self.draft))
 
     def test_replaying_old_revision_cannot_restore_hash_or_append_events(self) -> None:
         self.ready(HASH_A, "ready-a")
@@ -126,7 +127,8 @@ class SharedRevisionTests(GitTestCase):
         self.transition("block", {"reason": "clarify Shared Understanding"}, "block")
         resumed = json.loads(self.invoke("resume", "--run-id", self.run_id, "--action-id", "resume").stdout)["data"]
         self.assertEqual(resumed["state"], "awaiting-shared-confirmation")
-        self.assertEqual(resumed["next"]["shared_understanding_hash"], HASH_A)
+        resumed_next = json.loads(self.invoke("next", "--run-id", self.run_id).stdout)["data"]
+        self.assertEqual(resumed_next["shared_understanding_hash"], HASH_A)
         self.ready(HASH_B, "ready-b")
         self.transition("shared-understanding-confirmed", {"confirmed": True, "shared_understanding_hash": HASH_B}, "confirm-b")
         self.assertEqual(self.status()["state"], "boundary-analysis")

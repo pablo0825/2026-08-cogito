@@ -113,8 +113,33 @@ def build_mutation_receipt(projection: RunState) -> dict[str, Any]:
         "state": projection["state"],
         "sequence": projection["sequence"],
         "last_event_hash": projection["last_event_hash"],
-        "next": derive_next_action(projection),
     }
+
+
+def build_check_receipt(
+    projection: RunState, evidence: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return a bounded receipt for the exact controlled-check event."""
+    return {
+        **build_mutation_receipt(projection),
+        "check_id": evidence["check_id"],
+        "evidence_path": evidence["evidence_path"],
+        "evidence_hash": evidence["evidence_hash"],
+        "head_commit": evidence.get("head_commit"),
+        "effective_contract_hash": evidence.get("effective_contract_hash"),
+    }
+
+
+def build_finalization_receipt(projection: RunState) -> dict[str, Any]:
+    """Return accepted position plus transient cleanup outcome."""
+    cleanup = projection["cleanup"]
+    bounded_cleanup: dict[str, Any] = {
+        "removed": deepcopy(cleanup.get("removed", [])),
+        "retained": deepcopy(cleanup.get("retained", [])),
+    }
+    if "error" in cleanup:
+        bounded_cleanup["error"] = cleanup["error"]
+    return {**build_mutation_receipt(projection), "cleanup": bounded_cleanup}
 
 
 def build_completion_report(run_id: str, final_commit: str, result: Mapping[str, Any]) -> dict[str, Any]:

@@ -768,6 +768,19 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 return replay
             return self._capture_controlled_check(check_id, supplied_worktree, action_id, request_hash, started_path)
 
+    def check_evidence_receipt_payload(
+        self, check_id: str, action_id: str,
+    ) -> CheckEvidenceRecordedPayload:
+        """Return the evidence event bound to one completed run-check action."""
+        matches = [
+            event for event in self._events.read()
+            if event.get("action_id") == action_id
+            and event.get("type") == "check-evidence-recorded"
+        ]
+        if len(matches) != 1 or matches[0]["payload"].get("check_id") != check_id:
+            raise CogitoError("completed controlled-check evidence event is unavailable")
+        return cast(CheckEvidenceRecordedPayload, matches[0]["payload"])
+
     def _capture_controlled_check(
         self, check_id: str, supplied_worktree: Path, action_id: str,
         request_hash: str, started_path: Path,

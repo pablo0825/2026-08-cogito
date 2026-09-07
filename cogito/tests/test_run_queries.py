@@ -7,12 +7,16 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from cogito_common import CogitoError
-from cogito_run_queries import build_completion_report, build_mutation_receipt, derive_next_action
+from cogito_run_queries import (
+    build_check_receipt, build_completion_report, build_finalization_receipt,
+    build_mutation_receipt, derive_next_action,
+)
 
 
 class RunQueryTests(unittest.TestCase):
@@ -33,22 +37,45 @@ class RunQueryTests(unittest.TestCase):
             "evidence": {"large": "evidence" * 10_000},
         }
         before = copy.deepcopy(projection)
-        receipt = build_mutation_receipt(projection)
+        with mock.patch("cogito_run_queries.derive_next_action", side_effect=AssertionError):
+            receipt = build_mutation_receipt(projection)
         self.assertEqual(receipt, {
             "run_id": "DEV-receipt", "state": "awaiting-package-approval",
             "sequence": 12, "last_event_hash": "a" * 64,
-            "next": {
-                "state": "awaiting-package-approval",
-                "next_action": "request-package-approval",
-                "planning_round": 1,
-                "candidate_package_hash": "b" * 64,
-                "proposal_hash": "c" * 64,
-            },
         })
         self.assertLess(len(json.dumps({"ok": True, "data": receipt}).encode()), 2 * 1024)
         self.assertNotIn("files", json.dumps(receipt))
-        receipt["next"]["next_action"] = "changed"
         self.assertEqual(projection, before)
+
+    def test_special_receipts_keep_only_check_and_cleanup_results(self) -> None:
+        projection = {
+            "run_id": "DEV-receipt", "state": "verifying", "sequence": 14,
+            "last_event_hash": "a" * 64, "tasks": {"large": "x" * 100_000},
+        }
+        evidence = {
+            "check_id": "C-1", "evidence_path": "/evidence/C-1.json",
+            "evidence_hash": "b" * 64, "head_commit": "c" * 40,
+            "effective_contract_hash": "d" * 64, "ignored": "x" * 100_000,
+        }
+        check = build_check_receipt(projection, evidence)
+        self.assertEqual(set(check), {
+            "run_id", "state", "sequence", "last_event_hash", "check_id",
+            "evidence_path", "evidence_hash", "head_commit", "effective_contract_hash",
+        })
+        self.assertLess(len(json.dumps(check).encode()), 2 * 1024)
+        finalized = build_finalization_receipt({
+            **projection, "state": "accepted", "cleanup": {
+                "removed": ["/worktree/a"],
+                "retained": [{"path": "/worktree/b", "reason": "busy"}],
+                "error": "cleanup unavailable", "ignored": "x" * 100_000,
+            },
+        })
+        self.assertEqual(finalized["cleanup"], {
+            "removed": ["/worktree/a"],
+            "retained": [{"path": "/worktree/b", "reason": "busy"}],
+            "error": "cleanup unavailable",
+        })
+        self.assertLess(len(json.dumps(finalized).encode()), 2 * 1024)
 
     def test_preparation_distinguishes_mini_packages_and_rejects_unknown_states(self) -> None:
         for kind, action in (

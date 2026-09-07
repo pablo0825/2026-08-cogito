@@ -44,14 +44,14 @@ if __name__ == '__main__' and 'replan' in sys.argv[1:]:
     sys.meta_path.insert(0, _CogitoSourceFinder())
 
 from cogito_runtime import CogitoError, RunStore, effective_contract_hash, package_hash, render_project_graph_mermaid, render_workflow_mermaid, validate_agent_result, validate_package
-from cogito_run_queries import build_mutation_receipt
+from cogito_run_queries import build_check_receipt, build_finalization_receipt, build_mutation_receipt
 
 
 _RUN_MUTATION_COMMANDS = {
     "amend", "amend-paths", "agent-result", "approve", "correct-result-metadata",
-    "correction-complete", "correction-start", "finalize", "human", "human-approve",
+    "correction-complete", "correction-start", "human", "human-approve",
     "init", "integrate", "post-verify", "prepare-package", "resume", "retry",
-    "review-fix-complete", "review-fix-start", "run-check", "start", "task",
+    "review-fix-complete", "review-fix-start", "start", "task",
     "transition", "verify",
 }
 
@@ -338,7 +338,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "verify":
             output = RunStore(repo, args.run_id).complete_verification([_read_object(path) for path in args.evidence], args.action_id)
         elif args.command == "run-check":
-            output = RunStore(repo, args.run_id).run_controlled_check(args.check_id, args.worktree, args.action_id)
+            store = RunStore(repo, args.run_id)
+            projection = store.run_controlled_check(args.check_id, args.worktree, args.action_id)
+            output = build_check_receipt(
+                projection, store.check_evidence_receipt_payload(args.check_id, args.action_id),
+            )
         elif args.command == "correction-start":
             output = RunStore(repo, args.run_id).enter_correction(args.action_id)
         elif args.command == "correction-complete":
@@ -363,7 +367,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "human-approve":
             output = RunStore(repo, args.run_id).approve_human_gate(args.action_id)
         elif args.command == "finalize":
-            output = RunStore(repo, args.run_id).finalize(args.result, args.project_graph, args.final_commit, args.action_id)
+            projection = RunStore(repo, args.run_id).finalize(
+                args.result, args.project_graph, args.final_commit, args.action_id,
+            )
+            output = build_finalization_receipt(projection)
         elif args.command == "report":
             output = RunStore(repo, args.run_id).completion_report()
         elif args.command == "validate":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import threading
@@ -68,6 +69,15 @@ class ActionReplayTests(GitTestCase):
         self.store.run_controlled_check("C-1", self.repo, action_id)
         event = next(item for item in read_events(self.store.events_path) if item["action_id"] == action_id)
         return json.loads(Path(event["payload"]["evidence_path"]).read_text())
+
+    def invoke_cli(self, *arguments: str) -> tuple[dict, subprocess.CompletedProcess[str]]:
+        entry = Path(__file__).resolve().parents[1] / "scripts" / "cogito_gate.py"
+        result = subprocess.run(
+            [sys.executable, "-B", str(entry), "--repo", str(self.repo), *arguments],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)["data"], result
 
     def assert_replay(self, operation, *args, **kwargs) -> None:
         before = self.store.events_path.read_bytes()
@@ -148,6 +158,41 @@ class ActionReplayTests(GitTestCase):
         self.assertEqual(self.store.events_path.read_bytes(), before)
         for args in (("other.json", graph_rel, final), (result_rel, "other.json", final), (result_rel, graph_rel, self.head)):
             self.assert_conflict(self.store.finalize, *args, "finalize")
+
+    def test_run_check_cli_replay_keeps_exact_evidence_after_later_check(self) -> None:
+        command = (
+            "run-check", "--run-id", self.store.run_id, "--check-id", "C-1",
+            "--worktree", str(self.repo), "--action-id",
+        )
+        first, first_result = self.invoke_cli(*command, "check-first")
+        self.assertEqual(set(first), {
+            "run_id", "state", "sequence", "last_event_hash", "check_id",
+            "evidence_path", "evidence_hash", "head_commit", "effective_contract_hash",
+        })
+        self.assertLess(len(first_result.stdout.encode()), 2 * 1024)
+        evidence = json.loads(Path(first["evidence_path"]).read_text())
+        self.assertEqual(first["check_id"], evidence["check_id"])
+        self.assertEqual(first["head_commit"], evidence["head_commit"])
+        self.assertEqual(first["effective_contract_hash"], evidence["effective_contract_hash"])
+
+        later, _ = self.invoke_cli(*command, "check-later")
+        self.assertNotEqual(later["evidence_path"], first["evidence_path"])
+        events = self.store.events_path.read_bytes()
+        replayed, replay_result = self.invoke_cli(*command, "check-first")
+        for key in (
+            "check_id", "evidence_path", "evidence_hash", "head_commit",
+            "effective_contract_hash",
+        ):
+            self.assertEqual(replayed[key], first[key])
+        self.assertEqual(replayed["sequence"], later["sequence"])
+        self.assertEqual(self.store.events_path.read_bytes(), events)
+        self.assertLess(len(replay_result.stdout.encode()), 2 * 1024)
+        verified, _ = self.invoke_cli(
+            "verify", "--run-id", self.store.run_id,
+            "--evidence", first["evidence_path"], "--action-id", "verify-first",
+        )
+        self.assertEqual(verified["state"], "reviewing")
+        self.assertEqual(self.counter.read_text().splitlines(), ["executed", "executed"])
 
     def test_other_commands_cannot_reuse_a_completed_action_id(self) -> None:
         for operation, args in (

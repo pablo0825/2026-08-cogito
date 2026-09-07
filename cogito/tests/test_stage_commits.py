@@ -235,7 +235,8 @@ class StageCommitTests(GitTestCase):
         git(self.repo, 'commit', '-qm', info['commit_message'], '--only', '--', *info['paths'])
         state = invoke('checkpoint', 'record', '--run-id', run_id,
                        '--commit-id', git(self.repo, 'rev-parse', 'HEAD'), '--action-id', 'receipt')
-        self.assertEqual(state['next']['next_action'], 'run-boundary-gate')
+        self.assertNotIn('next', state)
+        self.assertEqual(invoke('next', '--run-id', run_id)['next_action'], 'run-boundary-gate')
         self.assertIsNone(invoke('status', '--run-id', run_id)['pending_checkpoint'])
 
 

@@ -1,8 +1,8 @@
 # Cogito Runtime 效率減法計畫
 
-日期：2026-09-07。基準：Cogito 3.6.1。狀態：待使用者確認相容性方向後實作。
+日期：2026-09-07。基準：Cogito 3.6.1。狀態：實作中；第一版獨立審查後修正 receipt 邊界，待模擬驗收。
 
-本文件記錄 repository maintenance 的修改計畫，不是 Cogito Run、Package 或 Gate 授權。本輪只建立計畫，不修改 runtime、後端產品、DEV-002 ledger 或既有歷史事件。
+本文件記錄 repository maintenance 的修改計畫與實作邊界，不是 Cogito Run、Package 或 Gate 授權。本案不修改後端產品、DEV-002 ledger 或既有歷史事件。
 
 ## 1. 結論：本輪只保留一個必要修改
 
@@ -24,7 +24,7 @@
 - `state.json`：900,374 bytes。
 - `events.jsonl`：937,620 bytes，82 筆事件。
 - 目前 CLI 包裝完整最終 state：904,377 bytes。
-- 等價的最小 receipt（run、state、sequence、event hash、next）：282 bytes，輸出減少約 99.97%。
+- 等價的通用四欄 receipt（run、state、sequence、event hash）：194 bytes，輸出減少約 99.98%。
 - 30 次本機唯讀量測中位數：讀取 events 4.562 ms、projection 6.512 ms、完整 JSON 序列化 1.912 ms；三者合計約 13 ms。
 
 因此目前證據支持「大型 stdout 進入 Agent context」是必要修正；不支持為約 13 ms 的本機處理成本立即引入新的 snapshot artifact lifecycle。FS-039 約 103 分鐘的最大延誤來自 interrupted-check recovery 修補，不是 JSON replay。
@@ -60,11 +60,7 @@
     "run_id": "DEV-002",
     "state": "executing",
     "sequence": 35,
-    "last_event_hash": "<hash>",
-    "next": {
-      "state": "executing",
-      "next_action": "dispatch-ready-workers"
-    }
+    "last_event_hash": "<hash>"
   }
 }
 ```
@@ -73,8 +69,10 @@
 
 - receipt 使用該 mutation 已產生的 projection，不為輸出再讀一次 events 或 state cache。
 - `sequence` 與 `last_event_hash` 讓呼叫者確認實際落盤位置；不複製 tasks、planning、history、agent results、evidence 或完整 Package。
-- `next` 沿用既有 `derive_next_action`，只提供繼續工作必需的資料；大型內容以既有檔案／事件引用表示，不塞回 receipt。
+- 通用 receipt 不含 `next`。`RunStore.next_action` 還會套用 RP／DP、path amendment、fixed action 與 recovery overrides，不能由純 `derive_next_action` 取代；mutation 後需要路由時另查既有 `next`。
 - 已有專用 receipt 的 `task-finish`、`review-fix-start` 等命令保留其必要欄位，不先轉回完整 state 再裁切。
+- `run-check` 使用 action ID 精確綁定其 `check-evidence-recorded` event，專用 receipt 加回 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash`；重送舊 action 不得改指向較新的 evidence。
+- `finalize` 專用 receipt 加回不可由 `status` 重建的 transient `cleanup.removed`、`cleanup.retained` 與存在時的 `cleanup.error`，讓 Coordinator 能按既有 finalization 流程回報或重試。
 - action replay 不追加事件；receipt 反映重送完成時的目前權威 projection。既有 replay 本來就回傳目前 state，因此不新增儲存去保證兩次 receipt bytes 完全相同。
 - 失敗維持 stderr 的 `{ "ok": false, "error": ... }` 與 exit code `2`，不為本案另建錯誤格式。
 
@@ -104,21 +102,21 @@
 
 | Task | 單一責任 | 預計 production／文件範圍 | 驗收重點 |
 | --- | --- | --- | --- |
-| T-001 | 建立單一 mutation receipt formatter，讓一般 Run mutations 在 CLI 邊界裁切輸出 | `cogito/scripts/cogito_run_queries.py`、`cogito/scripts/cogito_gate.py`；相關 tests | receipt shape、action replay、錯誤輸出、query 不變、不得額外 replay |
+| T-001 | 建立通用四欄 formatter 與必要的 check／finalize 專用 receipt，讓 Run mutations 在 CLI 邊界裁切輸出 | `cogito/scripts/cogito_run_queries.py`、`cogito/scripts/cogito_run_store.py`、`cogito/scripts/cogito_gate.py`；相關 tests | receipt shape、精確 evidence replay、cleanup、錯誤輸出、query 不變、通用 formatter 不推導路由 |
 | T-002 | 更新唯一輸出規則文件、操作範例與版本 | `cogito/references/runtime-interface.md`、必要的 `SKILL.md` 短提醒、`cogito/VERSION`；相關 tests | 文件只有一份完整規則、範例不要求 Agent 讀 mutation full state、版本符合不相容變更 |
 
 若 T-001 顯示某個 mutation 只有完整 state 才能安全判斷下一步，先縮小成該命令的必要 receipt 欄位；不因此恢復全部 state。若必要欄位無法有界化，停止並回報該命令，不擴張成通用查詢語言。
 
 ## 7. Acceptance Criteria
 
-- AC-01：使用 DEV-002 規模（至少 30 份 planning 文件、約 900 KB projection）的 fixture，代表性的一般 mutation 成功 stdout 小於 2 KiB；專用 fixed-operation receipts 依其既有必要欄位另驗，不用靜默截斷達成上限。
+- AC-01：使用 DEV-002 規模（至少 30 份 planning 文件、約 900 KB projection）的 fixture，代表性的一般 mutation 成功 stdout 小於 2 KiB；check、finalize 與 fixed-operation 專用 receipts 依其必要欄位另驗，不用靜默截斷達成上限。
 - AC-02：同一組操作在修改前後產生相同的權威 events、event hashes、projected state 與 state cache；只允許 CLI stdout 不同。
 - AC-03：`status` 仍回傳完整 state；`next` 與其他 query 的既有資料不被 receipt formatter 裁切。
-- AC-04：第一次成功 receipt 的 `sequence`、`last_event_hash`、`state` 與 mutation 後 projection 一致；相同 action ID 重送不重複事件，並清楚回報重送時的目前 projection，不假稱是原始時點的 state。
-- AC-05：`task-finish`、`review-fix-start` 既有專用 receipt 的必要 commit、evidence、amendment、task 與 next 資訊不遺失。
+- AC-04：第一次成功 receipt 的 `sequence`、`last_event_hash`、`state` 與 mutation 後 projection 一致；通用 receipt 不含 `next` 或自行推導 RP／DP 等路由；相同 action ID 重送不重複事件，並清楚回報重送時的目前 projection，不假稱是原始時點的 state。
+- AC-05：`task-finish`、`review-fix-start` 既有專用 receipt 的必要 commit、evidence、amendment、task 與 next 資訊不遺失；`run-check` 重送精確回傳原 action evidence，`finalize` 回傳 cleanup outcome。
 - AC-06：成功輸出不含 `planning.candidate.files`、完整 tasks、agent results 或 evidence collection。
 - AC-07：失敗輸出、exit code、UTF-8 JSON 與無 traceback 規則維持不變。
-- AC-08：Agent 能只靠 receipt／`next` 繼續正常流程；只有診斷或明確查詢時才使用 `status`。
+- AC-08：Agent 在 mutation 後需要路由時查 `next` 即能繼續正常流程；只有診斷或明確查詢時才使用 `status`。
 
 ## 8. 測試與驗證
 
@@ -127,8 +125,9 @@ T-001 先跑直接相關的純 formatter 與黑箱 CLI tests，至少涵蓋：
 - 一個一般 mutation、專用 fixed-operation receipt、action replay、失敗路徑。
 - `status`、`next`、`report` 等 query 不變。
 - 大型 planning candidate 的輸出 bytes regression。
-- receipt formatter 不修改傳入 projection。
-- EventRepository read/project 呼叫次數不因格式化增加。
+- receipt formatter 不修改傳入 projection，通用 formatter 不呼叫 `derive_next_action` 或 `RunStore.next_action`。
+- 通用 receipt 不增加 EventRepository read/project；`run-check` 只以 action ID 精確讀取已登錄 event，不用 latest/max 推測 evidence。
+- 真 CLI 的 `run-check` 首次、較晚重送與 `verify` 交接，以及 `finalize` cleanup retained/error 的可觀察性。
 
 再跑受 CLI 輸出影響的既有 `test_gate_cli_contract`、`test_task_finish`、`test_review_fix_start`、`test_planning_cli`、`test_package_revisions`、`test_check_retry` 與 action replay 測試。由於 CLI 成功輸出橫跨一般 Run mutations，整批完成後執行全套 `unittest` regression；mypy、skill format、文件引用與 `git diff --check` 分開報告。測試失敗不能以更新 assertion 掩蓋必要 receipt 欄位或權威狀態差異。
 

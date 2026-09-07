@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 import hashlib
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from cogito_test_support import GitTestCase, COGITO, git, init_repo, minimal_package, atomic_package
 from cogito_common import hash_json
 from cogito_contracts import package_hash
+import cogito_gate as gate_module
 
 
 GATE = COGITO / "scripts" / "cogito_gate.py"
@@ -63,7 +67,7 @@ class GateCliContractTests(GitTestCase):
             first = self.invoke(repo, *arguments)
             receipt = json.loads(first.stdout)["data"]
             self.assertLess(len(first.stdout.encode()), 2 * 1024)
-            self.assertEqual(set(receipt), {"run_id", "state", "sequence", "last_event_hash", "next"})
+            self.assertEqual(set(receipt), {"run_id", "state", "sequence", "last_event_hash"})
             self.assertNotIn("tasks", receipt)
             self.assertNotIn("planning", receipt)
             events = repo / ".cogito/runs" / run_id / "events.jsonl"
@@ -77,6 +81,26 @@ class GateCliContractTests(GitTestCase):
             replayed = self.invoke(repo, *arguments)
             self.assertEqual(json.loads(replayed.stdout)["data"], receipt)
             self.assertEqual(events.read_bytes(), authoritative)
+
+    def test_mutation_receipt_does_not_call_next_action_override(self) -> None:
+        projection = {
+            "run_id": "DEV-next-override", "state": "blocked", "sequence": 2,
+            "last_event_hash": "a" * 64,
+        }
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(gate_module.RunStore, "transition", return_value=projection), \
+                mock.patch.object(gate_module.RunStore, "next_action", return_value={
+                    "state": "blocked", "next_action": "continue-replan", "replan_id": "RP-1",
+                }) as next_action, redirect_stdout(output):
+            code = gate_module.main([
+                "--repo", directory, "transition", "--run-id", "DEV-next-override",
+                "--event", "block", "--payload-json", '{"reason":"pause"}',
+                "--action-id", "block-1",
+            ])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue())["data"], projection)
+        next_action.assert_not_called()
 
     def test_canonical_approval_start_and_resume_cannot_skip_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -163,9 +187,10 @@ class GateCliContractTests(GitTestCase):
             additional_block = ("transition", "--run-id", run_id, "--event", "block",
                                 "--payload-json", '{"reason":"another finding"}', "--action-id", "block-2")
             blocked = json.loads(self.invoke(repo, *additional_block).stdout)["data"]
-            self.assertEqual(set(blocked), {"run_id", "state", "sequence", "last_event_hash", "next"})
+            self.assertEqual(set(blocked), {"run_id", "state", "sequence", "last_event_hash"})
             self.assertEqual(blocked["state"], "blocked")
-            self.assertEqual(blocked["next"], {
+            blocked_next = json.loads(self.invoke(repo, "next", "--run-id", run_id).stdout)["data"]
+            self.assertEqual(blocked_next, {
                 "state": "blocked", "next_action": "resolve-and-run-resume-gate",
             })
             events_path = repo / ".cogito/runs" / run_id / "events.jsonl"
