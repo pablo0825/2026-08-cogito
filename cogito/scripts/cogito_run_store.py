@@ -17,6 +17,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from cogito_path_amendment import PathAmendmentMixin
 from cogito_result_metadata import ResultMetadataMixin
 from cogito_task_finish import TaskFinishMixin
+from cogito_review_fix_start import ReviewFixStartMixin
 from cogito_path_amendment_state import EVENTS as PATH_EVENTS, guard_pending
 from cogito_checkpoints import CheckpointMixin, guard_checkpoint
 from cogito_disposition_run import DispositionRunMixin
@@ -68,7 +69,7 @@ from cogito_workflow import load_workflow, validate_transition
 _load_json = load_json
 
 
-class RunStore(TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
+class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
     _GATE_AUTHORITY = object()
     _PROTECTED_RECORD_EVENTS = {
         *PATH_EVENTS, *PLANNING_EVENTS, *HUMAN_EVENTS, "human-review-mandated", "stage-committed", "disposition-resumed",
@@ -892,19 +893,21 @@ class RunStore(TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, Checkpo
         return {"completion_mode": "working-tree", "content_tree": tree}
 
     @run_mutation
-    def enter_review_fix(self, action_id: str | None = None) -> RunState:
-        request_hash = request_fingerprint("review-fix-start")
+    def enter_review_fix(self, action_id: str | None = None, *, finding_reference=None) -> RunState:
+        request_hash = (request_fingerprint("review-fix-start") if finding_reference is None
+                        else request_fingerprint('review-fix-start', finding=finding_reference))
         replay = self._replay(action_id, "review-fix-required", request_hash)
         if replay is not None:
             return replay
         current = self.load()
         if current["state"] != "reviewing":
             raise CogitoError("review fix is not legal in the current state")
-        findings = [item for item in current["agent_results"] if item.get("role") == "reviewer" and item.get("status") == "needs-fix" and item.get("requested_transition") == "review-fix"]
-        if not findings:
-            raise CogitoError("review fix requires a Gate-recorded Reviewer Result with needs-fix")
-        finding = findings[-1]
+        from cogito_correction_rules import current_review_finding
+        event = current_review_finding(current, self._events.read(), finding_reference)
+        finding = event['payload']['result']
         payload = {"scope_within_contract": True, "review_task_id": finding["task_id"], "reviewer": finding["agent_id"], "review_head": finding["head_commit"]}
+        if finding_reference is not None:
+            payload.update(finding_event_sequence=event['sequence'], finding_event_hash=event['event_hash'])
         validate_transition(self.workflow, current["state"], "review-fix-required", payload, current["counters"], current["limits"])
         return self.record("review-fix-required", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash)
 
@@ -924,6 +927,8 @@ class RunStore(TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, Checkpo
         if package["kind"] == "maintenance":
             payload.update(self._maintenance_correction_snapshot(package, events, commit_id))
         else:
+            if package.get('task_delivery') == 'atomic':
+                self._validate_review_fix_delivery(amendment_id, commit_id, events, current)
             self._git("cat-file", "-e", f"{commit_id}^{{commit}}")
             if f"Cogito-Amendment: {amendment_id}" not in self._git("show", "-s", "--format=%B", commit_id):
                 raise CogitoError("review fix commit is missing the Cogito-Amendment trailer")
@@ -932,6 +937,32 @@ class RunStore(TaskFinishMixin, ResultMetadataMixin, PathAmendmentMixin, Checkpo
             "review-fix-complete", payload, action_id, self._GATE_AUTHORITY, request_hash=request_hash,
             expected_previous_hash=current["last_event_hash"],
         )
+
+    def _validate_review_fix_delivery(self, amendment_id, commit_id, events, current):
+        from cogito_projection import project_events
+        amendment = next(e['payload']['amendment'] for e in events
+                         if e['type'] == 'technical-amendment-added'
+                         and e['payload']['amendment']['id'] == amendment_id)
+        latest: dict[Path, tuple[int, dict[str, Any]]] = {}
+        for definition in amendment['added_tasks']:
+            matches = [(i, e['payload']['result']) for i, e in enumerate(events)
+                       if e['type'] == 'agent-result-recorded'
+                       and e['payload']['result'].get('task_id') == definition['id']
+                       and e['payload']['result'].get('role') == 'implementer']
+            index, result = matches[-1]
+            history = events[:index]
+            snapshot = EventSnapshot(history, project_events(history, self.workflow))
+            task = snapshot.state['tasks'][definition['id']]
+            self._validate_historical_result(result, task, snapshot, self._approved_package_from_state(snapshot.state))
+            worktree = Path(task['worktree'])
+            if f'Cogito-Amendment: {amendment_id}' not in self._git_at(worktree, 'show', '-s', '--format=%B', result['head_commit']):
+                raise CogitoError('review fix task commit is missing the Cogito-Amendment trailer')
+            if worktree not in latest or latest[worktree][0] < index:
+                latest[worktree] = (index, result)
+        if commit_id not in {value[1]['head_commit'] for value in latest.values()}:
+            raise CogitoError('review fix completion must name a final correction Task tip')
+        for _, result in latest.values():
+            self._validate_atomic_result(result, current['tasks'][result['task_id']], self._events.snapshot())
 
     @run_mutation
     def record_retry(self, kind: str, reason: str, action_id: str | None = None) -> RunState:

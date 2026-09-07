@@ -8,6 +8,32 @@ from cogito_state_types import RunState
 from cogito_common import CogitoError
 
 
+def current_review_finding(state, events, reference=None):
+    boundary = max((e['sequence'] for e in events
+                    if e['type'] in {'verification-passed', 'review-fix-complete'}), default=0)
+    latest = {}
+    for event in events:
+        if event['type'] == 'agent-result-recorded' and event['sequence'] > boundary:
+            result = event['payload']['result']
+            if result.get('role') == 'reviewer':
+                latest[result.get('task_id')] = event
+    candidates = []
+    for event in latest.values():
+        result = event['payload']['result']
+        task = state['tasks'].get(result['task_id'])
+        if (task and result.get('status') == 'needs-fix'
+                and result.get('requested_transition') == 'review-fix'
+                and result.get('reviewed_implementer') == task.get('agent_id')
+                and result.get('agent_id') != task.get('agent_id')):
+            candidates.append(event)
+    if reference is not None:
+        candidates = [e for e in candidates if e['sequence'] == reference['event_sequence']
+                      and e.get('event_hash') == reference['event_hash']]
+    if not candidates or (reference is not None and len(candidates) != 1):
+        raise CogitoError('review fix requires a current, unreplaced independent Reviewer finding')
+    return max(candidates, key=lambda e: e['sequence'])
+
+
 def _tasks_complete(state: RunState, task_ids: set[str]) -> bool:
     missing_task: Mapping[str, Any] = {}
     return all(

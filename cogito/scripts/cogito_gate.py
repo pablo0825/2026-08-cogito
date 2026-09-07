@@ -171,6 +171,7 @@ def parser() -> argparse.ArgumentParser:
     review_fix = commands.add_parser("review-fix-start")
     review_fix.add_argument("--run-id", required=True)
     review_fix.add_argument("--action-id", required=True)
+    review_fix.add_argument('--input')
     review_fix_done = commands.add_parser("review-fix-complete")
     review_fix_done.add_argument("--run-id", required=True)
     review_fix_done.add_argument("--amendment-id", required=True)
@@ -313,7 +314,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "correction-complete":
             output = RunStore(repo, args.run_id).complete_correction(args.amendment_id, args.commit_id, args.action_id)
         elif args.command == "review-fix-start":
-            output = RunStore(repo, args.run_id).enter_review_fix(args.action_id)
+            store = RunStore(repo, args.run_id)
+            output = (store.start_review_fix_with_amendment(_read_object(args.input), args.action_id)
+                      if args.input else store.enter_review_fix(args.action_id))
         elif args.command == "review-fix-complete":
             output = RunStore(repo, args.run_id).complete_review_fix(args.amendment_id, args.commit_id, args.action_id)
         elif args.command == "integrate":
