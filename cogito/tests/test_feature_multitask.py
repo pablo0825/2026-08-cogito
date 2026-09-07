@@ -129,8 +129,9 @@ class FeatureMultitaskTests(GitTestCase):
         self.assertEqual(state["state"], "integrating")
         git(repo, "merge", "--no-ff", "-qm", "integrate both Slice tasks", "codex/fs-1")
         integration = git(repo, "rev-parse", "HEAD")
-        state = store.complete_integration(integration, "FS-1")
-        self.assertEqual(state["state"], "post-integration-verification")
+        receipt = store.complete_integration(integration, "FS-1")
+        self.assertEqual(receipt["state"], "post-integration-verification")
+        state = store.load()
         for task_id in ("T-1", "T-2"):
             self.assertEqual(state["tasks"][task_id]["status"], "integrated")
         post = corrections.MaintenanceCorrectionTests.check(store, repo, "post")
