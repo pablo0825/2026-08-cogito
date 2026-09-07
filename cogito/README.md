@@ -1,6 +1,6 @@
-# Cogito 3.0
+# Cogito
 
-Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill。3.0 是 clean break：單一狀態機取代 Blueprint 與舊執行模式，Project Graph 表達 Slice DAG，Development Package 是唯一正式開發核准；實作、測試、獨立審查與受控修正可自動前進，只有適用的 human gate 會中途通知使用者。
+Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill；目前版本以 [`VERSION`](VERSION) 為準。3.x workflow 是 clean break：單一狀態機取代 Blueprint 與舊執行模式，Project Graph 表達 Slice DAG，Development Package 是唯一正式開發核准；實作、測試、獨立審查與受控修正可自動前進，只有適用的 human gate 會中途通知使用者。既有 workflow 與 JSON contract 仍使用 `3.0` schema，檔名維持 `workflows/cogito-v3.json`。
 
 ## 結構
 
@@ -32,6 +32,28 @@ Controlled runner 以獨立的暫存 Git index 記錄工作樹的 `content_tree`
 Maintenance 每個新 task lease 保存 index 與 working tree 的起始快照，Result 只核對該 task 的增量，整體交付仍檢查 Package 範圍。任務中斷後釋放並重新 lease 時保留原始快照，避免接手者漏算半成品；任務間未登錄的修改則拒絕帶入新 lease。獨立 review 使用該 task 的完成快照並綁定本輪已驗證內容。舊 lease 沒有快照時維持原本保守的累積範圍檢查，不倒填歷史資料。
 
 Gate 事件另存原始命令與參數的 `request_hash`，不以衍生 verdict 比對重送請求。同一 `action_id` 與相同輸入可返回目前狀態，不重做已完成操作；不同命令或輸入則拒絕。舊事件仍可讀取，但缺少指紋的舊 action 不會自動重播，需先確認既有結果。Controlled check 以每個 action 的鎖與不可變 attempt 紀錄防止重複執行；證據已發布而事件未追加時可補登錄，程序可能已執行卻沒有證據時則回報結果未知，必須先人工確認，不能盲目重跑。
+
+## 從已接受 Slice 準備下一份 Package
+
+準備結構相近的 Development Package 時，可先明確指定一個已 accepted 的單一 Slice，產生唯讀 inventory：
+
+```sh
+python3 cogito/scripts/cogito_gate.py --repo <root> slice-inventory \
+  --source-run DEV-002 \
+  --source-slice FS-039
+```
+
+輸出集中提供：
+
+- final commit、Package hash 與 effective contract hash 的來源綁定。
+- 凍結的 approved paths、Tasks、Checks、Spec／Plan 引用與 source registry。
+- `paths.implementer_reported`：有效投影中 Implementer Results 回報的路徑與逐筆來源。
+- `paths.start_to_final`：Start Gate 到 final commit 的完整 Git diff；不把它誤稱為 Implementer 或產品路徑。
+- 依 event sequence 排列的 amendments，以及已接受 Result 的 checks、reviews、human gate 與 remaining risks 摘要。
+
+Inventory 只提供歷史事實與候選清單，不搜尋目標 repository、不自動選擇相似 Slice、不產生 Package skeleton，也不判斷候選是否適用或完整。Coordinator 仍須依目標 application type 追蹤實際整合面，逐項判斷沿用、新增或不適用。
+
+此查詢不讀取或修復 `state.json` cache，不建立 lock、event 或草稿。它只接受可由事件歷史與 committed Package／Result 對帳的 accepted Development run；不支援的歷史事件、hash／receipt 不一致、非單一 Slice 或超過 1 MiB 的 CLI JSON 都會 fail closed。完整規則見 [Package Authoring](references/package-authoring.md) 與 [Runtime Interface](references/runtime-interface.md)。
 
 ## 契約與 JSON 資料
 
