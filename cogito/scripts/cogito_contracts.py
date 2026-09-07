@@ -15,6 +15,9 @@ from cogito_contract_fields import (
     require_object, require_path, require_paths, require_string, require_strings,
     safe_repo_path, validate_document,
 )
+from cogito_path_amendment_contract import (
+    apply_path_additions, validate_path_additions, validate_path_additions_shape,
+)
 from cogito_scheduler import ready_tasks, slice_dependencies, tasks_with_dependencies
 from cogito_workflow import load_workflow
 
@@ -392,7 +395,7 @@ def _validate_policy_snapshot(package: Mapping[str, Any]) -> None:
 
 
 def _validate_amendment_shape(amendment: Any) -> None:
-    allowed = {"id", "reason", "added_checks", "added_tasks", "path_fixes", "commit_id"}
+    allowed = {"id", "reason", "added_checks", "added_tasks", "path_fixes", "commit_id", "path_additions"}
     require_object(amendment, "amendment", "id", "reason")
     if set(amendment) - allowed:
         raise CogitoError(f"amendment attempts forbidden changes: {sorted(set(amendment) - allowed)}")
@@ -407,6 +410,7 @@ def _validate_amendment_shape(amendment: Any) -> None:
         _validate_task(task)
         require_id(task["slice_id"], "added task.slice_id")
     require_paths(amendment.get("path_fixes", []), "path_fixes")
+    validate_path_additions_shape(amendment)
 
 
 def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, Any]], amendment: Mapping[str, Any]) -> None:
@@ -418,8 +422,9 @@ def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, 
 
 def _validate_amendment_changes(effective: Mapping[str, Any], amendment: Mapping[str, Any]) -> None:
     """Check a shaped amendment against the already validated effective prefix."""
-    if not any(amendment.get(key) for key in ("added_checks", "added_tasks", "path_fixes")):
+    if not any(amendment.get(key) for key in ("added_checks", "added_tasks", "path_fixes", "path_additions")):
         raise CogitoError("amendment must add a check/task or record an in-scope path fix")
+    validate_path_additions(effective, amendment)
     existing_checks = {item["id"] for item in effective["checks"]}
     for check in amendment.get("added_checks", []):
         if check["id"] in existing_checks:
@@ -479,6 +484,7 @@ def materialize_contract_with_limits(
         _validate_amendment_changes(effective, amendment)
         addition = json.loads(json.dumps(amendment))
         effective["checks"].extend(addition.get("added_checks", []))
+        apply_path_additions(effective, addition)
         dag = effective["execution_dag"]
         dag["tasks"].extend(addition.get("added_tasks", []))
         dag["edges"].extend(
@@ -500,6 +506,7 @@ def materialize_contract_with_limits(
 def validate_agent_result(
     result: Mapping[str, Any], package: Mapping[str, Any] | None = None, *,
     workflow_limits: Mapping[str, int] | None = None,
+    approved_paths: Sequence[str] | None = None,
 ) -> None:
     required_fields = {"schema_version", "run_id", "task_id", "agent_id", "role", "status", "base_commit", "head_commit", "changed_paths", "evidence", "risks", "requested_transition"}
     require_object(result, "agent result", *required_fields)
@@ -528,5 +535,6 @@ def validate_agent_result(
             validate_package_with_limits(package, workflow_limits)
         if result["run_id"] != package["run_id"]:
             raise CogitoError("agent result run_id does not match package")
-        if any(not path_allowed(str(path), package["approved_paths"]) for path in result["changed_paths"]):
+        result_paths = package["approved_paths"] if approved_paths is None else approved_paths
+        if any(not path_allowed(str(path), result_paths) for path in result["changed_paths"]):
             raise CogitoError("agent changed a path outside the approved package")

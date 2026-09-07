@@ -265,6 +265,12 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
             expected_previous_hash=current["last_event_hash"],
         )
 
+    def effective_package(self) -> dict[str, Any]:
+        """Materialize execution scope while keeping the approved Package intact."""
+        amendments = [e['payload']['amendment'] for e in self._events.read()
+                      if e['type'] == 'technical-amendment-added']
+        return materialize_contract_with_limits(self.approved_package(), amendments, self.workflow['limits'])
+
     def approved_package(self) -> dict[str, Any]:
         return self._approved_package_from_state(self.load())
 
@@ -968,6 +974,8 @@ class RunStore(CheckpointMixin, PlanningMixin, HumanMixin, DispositionRunMixin):
 
     @run_mutation
     def add_amendment(self, amendment: Mapping[str, Any], action_id: str | None = None) -> RunState:
+        if amendment.get("path_additions"):
+            raise CogitoError("path additions require amend-paths proposal and independent review")
         request_hash = request_fingerprint("amend", amendment=amendment)
         replay = self._replay(action_id, "technical-amendment-added", request_hash)
         if replay is not None:
