@@ -134,7 +134,13 @@ Feature／Change／Correction／Documentation 的 Reviewer Result 使用該 task
 
 ### 啟動審查修正
 
-Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`，取得 `prepare-review-fix` 的精確 finding reference。Coordinator 判斷修正仍在已核准範圍，撰寫新增修正 Task 與 checks 的 Amendment，保存輸入：
+Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先彙整已完成審查中同一 Slice 的相關 findings，再查 `next` 取得 `prepare-review-fix` 的精確 finding reference。預設每輪、每個受影響 Slice 使用一個修正 Task，沿用其 branch/worktree；不按每個問題建立 Task 或分支，也不為單純修正建立 RP。不同 Slice 不合併責任範圍。
+
+Coordinator 在既有 Amendment 的 `reason`／Task `responsibility` 引用本輪相關 Reviewer Result 與問題，說明修正範圍及選測理由；不另外建立修正清單 schema、流程單或核准關卡。`finding` 是本輪的啟動依據，不代表只能處理該筆 Result 的一個問題。Task 的 `check_ids` 僅列必要的相關檢查，不直接複製整份 Package 的 integration checks；原 required checks 不刪除，仍在其適用階段驗證。
+
+尚未完成的修正 Task 又發現相關問題時，在原 paths、責任與核准語意內繼續修正、保留失敗 evidence 並以新 action ID 重跑相關 checks，不重建 Task 或 lease。需補授權時先依下節辦理；超出原產品契約時才評估 RP，不能以「同一輪」放寬 API、資料或安全邊界。完成的 Task／Result 不重開或改寫；完成後又有新 finding，依正常複審進入下一輪修正。
+
+Coordinator 撰寫本輪修正 Task 與 checks 的 Amendment，保存輸入：
 
 ```json
 {
@@ -159,7 +165,9 @@ Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`�
 
 ### 審查修正中的必要檔案補列
 
-限同一 Atomic Development Run、整合前的 `review-fix`：本輪 finding 所需的檔案漏列，且 Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任均不變。補正只授權本次新增的修正 Tasks，全部屬於該 finding 的 Slice；不更改已完成 Task 的 paths、checks、commit 或 Result。真正超出核准契約時使用 [Replanning](replanning.md)。
+限同一 Atomic Development Run、整合前的 `review-fix`：本輪 finding 所需的檔案漏列，且 Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任均不變。補正可授權本次新增的修正 Tasks，或本輪已新增且尚未完成的修正 Task，全部屬於該 finding 的 Slice；不更改已完成 Task 的 paths、checks、commit 或 Result。真正超出核准契約時使用 [Replanning](replanning.md)。
+
+以下步驟用於首次建立修正 Task；已有本輪未完成 Task 時，直接依本節末段補列，不再次啟動 review-fix 或新增 Task。
 
 1. Coordinator 或 Implementer 先說明原 finding、未超出範圍的理由、精確檔案及相關 checks。引用原規格與 finding，不重新撰寫完整 Package。以 `next` 提供的 `finding` 單獨作為 `review-fix-start --input` 的輸入，例如 `{"finding": {"event_sequence": 54, "event_hash": "<實值>"}}`，先進入既有修正階段；不要把尚未覆核的路徑補列放進合併啟動輸入。
 2. 停妥受影響 Worker 與 controlled checks，保留原本已驗證的 checkout；尚未授權的檔案不可先改。向既有 `amend-paths propose` 提交以下形式：
@@ -186,6 +194,8 @@ Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`�
    IDs 使用實值。`added_tasks.paths` 是修正 Task 的完整範圍；`path_additions.paths` 只列需要補授權的精確檔案，且其 paths／checks 必須包含在對應新 Task。每個新 Task 都須有對應補列，不混入其他任務。必要時在同一 Amendment 增加 `added_checks`；原 required checks 仍保留。禁止目錄、glob、symlink、凍結來源、控制文件、高風險 hotspot 或其他 Task／Slice 所有的補列路徑；跨 Slice 前置任務須已 integrated，不能改變原 Slice 相依。
 3. **由原本的獨立 Reviewer 在既有審查中確認範圍即可**，不固定增加第三位 Agent 或使用者核准。Reviewer 不得是 proposal 作者或受影響 Implementer。沿用[路徑覆核的輸入與重送規則](#實作中補列必要路徑)，以 `amend-paths review` 保存具體範圍判斷與選測理由；通過後一筆 Amendment 同時登記檔案授權與新修正 Tasks。覆核前不建立可執行的新 Task。
 4. 依上節完成修正 Task、相關檢查、commit、`task-finish` 與 `review-fix-complete`，再驗證目前內容並複審。原 Reviewer 聚焦確認原 finding、新增／受影響 Task 與連帶影響；符合下節條件的未受影響 approval 可採認。無法證明不受影響時擴大複審，不因補列檔案而自動重開 run。
+
+本輪 Task 尚未完成時又發現漏列檔案，沿用相同 `amend-paths propose/review`，只提交指向該 Task 的 `path_additions` 與必要的 `added_checks`，省略 `added_tasks`。先停止受影響執行者，再提案；可保留 Task 原 paths 內未完成的修改，不得先改新檔案。Gate 保留 Task ID、lease base、分支及原修正 Amendment，追加授權後取得新 effective contract 的必要 evidence，再繼續同一 Task。`review-fix-complete` 仍引用建立該 Task 的 Amendment ID；後續純路徑補正另按 `proposal_hash` 記錄，不取代原修正完成紀錄。前一輪 Task 或已登記完成 Result 不適用。
 
 Proposal 綁定本次 review-fix finding、有效契約與 checkout；變更後重新 propose／review。撤回不發布新 Task 或授權，仍留在原修正階段。中斷後依 `next` 重送原 action，不重建修正 Task；原 Package、已完成成果與歷史 evidence 不改寫。
 
