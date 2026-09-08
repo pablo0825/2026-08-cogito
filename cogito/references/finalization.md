@@ -71,6 +71,10 @@ Gate 驗證提交內容、範圍、Result、Graph 與事件。通過後才把 fi
 
 `finalize` 回應的 `cleanup.removed`／`cleanup.retained` 列出移除項目與保留原因；清理故障不會撤回 `accepted`。排除保留原因後，重送原本相同參數與 `--action-id` 的 `finalize` 即可重試，不重做驗收或追加結案事件。已清理的 worktree 直接略過。Run 內的 `cleanup.json` 留存與 accepted 事件綁定的清理憑據，供中斷恢復及後續 RP／DP 辨識已清理的歷史 worktree；不改寫原事件、evidence、Result 或結案報告。沒有額外清理命令、branch 刪除或 runtime 到期刪除政策。
 
+accepted 後的 `next.cleanup` 重新觀察 `removable`／`retained`，不是清理成功 receipt；查詢不移除資源或建立清理 refs、receipt、registry lock。真正重送 `finalize` 時仍在原鎖定及 executor 保護下重新評估，查詢後新增的使用者資料也會保留。只有 finalization event 能還原的參數與 action ID 精確符合原 request fingerprint，`next.operations` 才提供可執行重送；缺指紋或原字面路徑無法還原時，依 blocker 找回原請求，不改用新 ID 冒充。
+
+其他 Run 的引用檢查不修復其 state cache。accepted history 優先使用 final commit 的 Package；一般歷史確實沒有該 blob 時，仍可讀取符合原 frozen hash 的 Package 副本。已知 `controlled-check-attempt-resolved` 歷史必須具有 committed artifacts，並通過 replacement、契約/check hash 與 Result receipt 對帳；不恢復舊寫入命令。Task（包含 adoption）、worker 與 carryover 引用均保護；symlink、未知事件、損壞 hash 或缺必要資料回 `reference_unknown`，不能證明無關就保留可能受影響 worktrees。
+
 ## 失敗時如何恢復
 
 任一步失敗都先停止操作、查詢 Gate 與既有提交，確認事件是否已落盤。commit 已成功而事件尚未登記時，使用原 commit ID、相同參數與 action ID 重送 `finalize`，不再次 commit。已是 `accepted` 而清理保留時，同樣重送原請求只重試清理。

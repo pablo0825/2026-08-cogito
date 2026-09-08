@@ -118,7 +118,11 @@ Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後�
 
 ### Check 重送
 
+新 attempt 在建立 `started.json` 前，先驗證合法 checkout、cwd、必要的程序 identity／group inspection 與實際 Git snapshot 能力；不安裝依賴、不建立 `.env` 或重建資料庫。`env_allowlist` 是允許傳入的名稱，不代表必填變數。前置拒絕時 command 未啟動，修復環境後使用原 action ID 與原輸入重送，不消耗 transient retry；原 `request.json` 保留以防同 ID 改輸入。啟動當下仍重新檢查 snapshot、fence 與實際程序登錄，前置成功不是稍後安全的證明。
+
 Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改 check、worktree 或執行契約。已發布 evidence 可在事件追加失敗後補登錄。若 attempt 已開始但沒有完整 evidence，結果視為未知，先確認程序與外部副作用再處理，不以自動重跑假裝恢復成功。
+
+已完成 action replay 與已發布 evidence 補登錄不重新做啟動能力 probe。marker 後原 runner pre-snapshot 的正式失敗證明，仍僅依[受控重試](#執行前-snapshot-失敗的受控重試)恢復；spawn 後 registry 失敗、post-snapshot 中斷及空 registry 都不能視為未啟動。先讀 `next.check_recovery`，無合法命令時保留現場，不刪 marker 或另造 resolver。
 
 ## 獨立審查
 
@@ -178,6 +182,8 @@ Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`�
 歷史 evidence 不改綁新的 tree 或契約；受影響檢查必須對應當前內容，較新失敗、未知或未完成 attempt 不能退回舊成功。無法證明安全、提案漂移或捷徑成本高於重審時，提交正常本輪 review 即可，不需另建 Run 或採認恢復流程。採認者及理由隨 [交付摘要](finalization.md#2-取得交付摘要) 保存，必要整合檢查照常執行。
 
 ## 串行整合
+
+Atomic Development 可先使用 `next.integration_choices`：提示從正式 Task Results 推導 source tip，核對 delivery branch／HEAD、祖先與核准範圍。首版只產生可確定的 `git merge --ff-only <source-sha>` 與既有 `integrate` 命令，不做普通 merge 預演、不提供 cherry-pick。多個選項一次只執行一個，完成後重查 `next`；Git 已 fast-forward 而尚未登記時可只補 `integrate`。非 fast-forward、delivery 漂移或缺少資料會回 blocker，改依下方原有整合程序檢查，不能把提示當成無衝突保證或新授權。
 
 每一執行波依 `complete -> verified -> reviewed -> integrated` 推進；Reviewer closure 逐 task 計算，不能用一筆結果關閉整個 Slice。Coordinator 串行記錄每個 Slice 的 source heads、前一 delivery head 與 integration commit。相依 Slice 只在這一步完成後解鎖。
 

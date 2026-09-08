@@ -18,6 +18,12 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 Atomic 執行與審查修正的 `next` 可附 `operations`，提供 argv、已知 `input`、尚待 Agent 判斷的 `required_inputs`，以及檢查缺失或 `blockers`。將已知輸入與必要判斷保存成 JSON 檔，再替換 argv 中的 `<input.json>`／`<action-id>`；不要把佔位字串當真實參數。這是操作提示，執行時仍重新驗證。
 
+`operations` 明列絕對 repo/script 路徑與 `cwd`。`<new-action-id>`、`<retry-action-id>`、`<replacement-action-id>` 也都是待填的不同 ID；已填實際 ID 的恢復命令則沿用原值。驗證階段提供 `eligible_evidence`、`missing_checks`、`stale_checks` 與已填 evidence 路徑的 `verify`／`post-verify` argv；無法驗證完整組合時不提供 closure。`check_recovery` 區分未啟動、已發布 evidence、已綁替代檢查及未知結果；不阻塞的未啟動請求只列 `optional_recovery_operations`，不取代正常驗證。必要候選或待處理 attempt 超過 50 項時明列範圍限制，不以截斷清單宣稱可完成。
+
+Atomic 整合的 `integration_choices` 一次只選一個 Slice，操作後重新查 `next`；適用範圍與停止規則見 [串行整合](execution-policy.md#串行整合)。accepted 的 `cleanup` 是當下觀察，原 `finalize` 重送條件見 [Worktree 清理](finalization.md#worktree-清理)。新提示不追加事件或建立 action、cleanup receipt／refs、executor registry／lock；既有 `next` 的 state cache refresh 與既有流程預驗證仍保留，不能把整個命令當成零寫入。RP／DP、checkpoint、human、path amendment 與 fixed-action 的既有路由優先。
+
+`run-check` receipt 另回傳原 action 的 `check_status`、`exit_code`、`timed_out`、`output_limit_exceeded`、`termination_degraded`、`worktree_changed_during_check`，不包含 stdout/stderr。`ok: true` 與 CLI exit code `0` 只代表 Gate 操作成功；是否通過看 `check_status`，不得把 evidence 登錄成功當成 check 通過。Evidence schema 與原 hashes 不變。
+
 一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence` 與 `last_event_hash` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection、歷史或 `next`。Mutation 後需要決定路由時另查既有 `next`，讓 RP／DP、path amendment、fixed action 與 recovery 的即時 override 仍由 `RunStore.next_action` 單一入口判定；只有明確診斷完整 projection 時才查 `status`。`run-check` receipt 另保留精確的 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash`，重送舊 action 仍指向該 action 原本登錄的 evidence；`finalize` receipt 另保留一次性的 `cleanup.removed`、`cleanup.retained` 與存在時的 `cleanup.error`。`task-finish` 與 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。
 
 `status` 是一般 Run 的唯一完整 `RunState` 查詢；`next`、`report`、`delivery-summary`、planning history／compare／recover、RP／DP status 與其他唯讀查詢維持各自的資料 shape。相同 action ID 與輸入重送 mutation 時不追加事件，receipt 反映重送完成時的目前權威 projection；不要假設它會重現原 action 當時的 bytes。需要對照舊狀態時使用 append-only events，不從 mutation stdout 推測。

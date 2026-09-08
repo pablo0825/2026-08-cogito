@@ -15,3 +15,7 @@ Gate 先將 immutable base Package 與有序 append-only Amendments materialize 
 內容快照複製 Git index 時，從同一個開啟的檔案取得內容與時間戳，保留時間戳於可寫的暫存副本，讓 Git 仍能重新檢查同秒、同長度的檔案修改。只更新暫存 index，不改動使用者 index 的內容、修改時間或權限。
 
 升級前產生且缺少目前 Evidence Contract 欄位的 evidence 不得補寫或遷移，必須由 controlled runner 重跑。
+
+啟動前 probe 重用真實 snapshot adapter，因此會建立 Git objects 與 temporary index，但不改使用者 staging；它不產生 evidence，不能取代原 pre/post snapshots。Popen 與 registry publication 之間仍有中斷空窗，本批不新增未知結果解除機制。
+
+`next` 的新增 Atomic 內容觀察使用臨時 object directory、原 object store 的 alternates 與 private index，取得 tree hash／變更路徑後清除自己建立的暫存區。候選分類沿用 evidence validator 的 query-only inspection；正式 closure 仍檢查完整 required set。`select_task_evidence` 與提示共用按 check＋checkout 的 latest-attempt 收集，未知 started 仍採原本全 Run 阻擋範圍。
