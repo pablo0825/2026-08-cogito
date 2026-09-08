@@ -168,10 +168,14 @@ class ActionReplayTests(GitTestCase):
         self.assertEqual(set(first), {
             "run_id", "state", "sequence", "last_event_hash", "check_id",
             "evidence_path", "evidence_hash", "head_commit", "effective_contract_hash",
+            "check_status", "exit_code", "timed_out", "output_limit_exceeded",
+            "termination_degraded", "worktree_changed_during_check",
         })
         self.assertLess(len(first_result.stdout.encode()), 2 * 1024)
         evidence = json.loads(Path(first["evidence_path"]).read_text())
         self.assertEqual(first["check_id"], evidence["check_id"])
+        self.assertEqual(first["check_status"], evidence["status"])
+        self.assertEqual(first["exit_code"], evidence["exit_code"])
         self.assertEqual(first["head_commit"], evidence["head_commit"])
         self.assertEqual(first["effective_contract_hash"], evidence["effective_contract_hash"])
 

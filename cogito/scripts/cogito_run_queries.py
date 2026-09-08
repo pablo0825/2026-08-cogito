@@ -127,6 +127,10 @@ def build_check_receipt(
         "evidence_hash": evidence["evidence_hash"],
         "head_commit": evidence.get("head_commit"),
         "effective_contract_hash": evidence.get("effective_contract_hash"),
+        **{key: evidence[key] for key in (
+            "check_status", "exit_code", "timed_out", "output_limit_exceeded",
+            "termination_degraded", "worktree_changed_during_check",
+        ) if key in evidence},
     }
 
 

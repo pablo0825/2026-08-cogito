@@ -770,7 +770,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
 
     def check_evidence_receipt_payload(
         self, check_id: str, action_id: str,
-    ) -> CheckEvidenceRecordedPayload:
+    ) -> dict[str, Any]:
         """Return the evidence event bound to one completed run-check action."""
         matches = [
             event for event in self._events.read()
@@ -779,7 +779,17 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         ]
         if len(matches) != 1 or matches[0]["payload"].get("check_id") != check_id:
             raise CogitoError("completed controlled-check evidence event is unavailable")
-        return cast(CheckEvidenceRecordedPayload, matches[0]["payload"])
+        payload = matches[0]["payload"]
+        evidence = _load_json(Path(payload["evidence_path"]))
+        validate_check_evidence(evidence)
+        if hash_json(evidence) != payload["evidence_hash"]:
+            raise CogitoError("completed controlled-check evidence hash changed")
+        return {**payload, "check_status": evidence["status"], **{
+            key: evidence[key] for key in (
+                "exit_code", "timed_out", "output_limit_exceeded",
+                "termination_degraded", "worktree_changed_during_check",
+            )
+        }}
 
     def _capture_controlled_check(
         self, check_id: str, supplied_worktree: Path, action_id: str,
@@ -787,24 +797,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
     ) -> RunState:
         package = self.approved_package()
         state = self.load()
-        if state["state"] in {"post-integration-verification", "human-correction-verifying"}:
-            if supplied_worktree != self.root:
-                raise CogitoError("post-integration checks must run in the delivery checkout")
-        elif state["state"] == "verifying":
-            eligible = {Path(str(task.get("worktree", ""))).resolve() for task in state["tasks"].values() if task.get("status") == "complete"}
-            if supplied_worktree not in eligible:
-                raise CogitoError("verification checks must run in a completed Package Slice worktree")
-        elif package.get("task_delivery") == "atomic" and state["state"] in {
-            "executing", "technical-correction", "review-fix", "post-integration-correction", "human-correction",
-        }:
-            active = [task for task in state["tasks"].values()
-                      if task.get("status") == "running"
-                      and Path(str(task.get("worktree", ""))).resolve() == supplied_worktree
-                      and check_id in task.get("check_ids", [])]
-            if len(active) != 1:
-                raise CogitoError("task checks require the running task's checkout and targeted check ID")
-        else:
-            raise CogitoError("controlled checks are not legal in the current state")
+        from cogito_runner import validate_check_target
+        validate_check_target(package, state, check_id, supplied_worktree, self.root)
         prior = [item["payload"]["amendment"] for item in self._events.read() if item["type"] == "technical-amendment-added"]
         effective = materialize_contract_with_limits(package, prior, self.workflow["limits"])
         checks = [check for check in effective["checks"] if check["id"] == check_id]
@@ -812,7 +806,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             raise CogitoError(f"expected exactly one check named {check_id!r}")
         execution = {"request_hash": request_hash, "check_hash": hash_json(checks[0]), "effective_contract_hash": effective["effective_contract_hash"]}
         try:
-            from cogito_runner import EvidenceAlreadyExists, PreExecutionSnapshotError, run_check, write_evidence_once
+            from cogito_runner import EvidenceAlreadyExists, PreExecutionSnapshotError, preflight_check, run_check, write_evidence_once
         except ImportError as exc:  # pragma: no cover - installation failure
             raise CogitoError(f"controlled runner is unavailable: {exc}") from exc
         record_id = f"{check_id}-{hash_json({'action_id': action_id})[:16]}"
@@ -822,6 +816,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         from cogito_check_retry import validate_replacement
         with project_lock(self.root):
             validate_replacement(self, check_id, supplied_worktree, action_id)
+        if not started_path.exists():
+            preflight_check(package, checks[0], supplied_worktree)
         if not atomic_create_json(started_path, execution):
             if _load_json(started_path) != execution:
                 raise CogitoError("controlled-check contract changed since this action started")

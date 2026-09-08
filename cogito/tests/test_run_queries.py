@@ -56,11 +56,16 @@ class RunQueryTests(unittest.TestCase):
             "check_id": "C-1", "evidence_path": "/evidence/C-1.json",
             "evidence_hash": "b" * 64, "head_commit": "c" * 40,
             "effective_contract_hash": "d" * 64, "ignored": "x" * 100_000,
+            "check_status": "failed", "exit_code": 1, "timed_out": False,
+            "output_limit_exceeded": False, "termination_degraded": False,
+            "worktree_changed_during_check": False,
         }
         check = build_check_receipt(projection, evidence)
         self.assertEqual(set(check), {
             "run_id", "state", "sequence", "last_event_hash", "check_id",
             "evidence_path", "evidence_hash", "head_commit", "effective_contract_hash",
+            "check_status", "exit_code", "timed_out", "output_limit_exceeded",
+            "termination_degraded", "worktree_changed_during_check",
         })
         self.assertLess(len(json.dumps(check).encode()), 2 * 1024)
         finalized = build_finalization_receipt({

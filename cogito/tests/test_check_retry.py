@@ -36,6 +36,39 @@ class CheckRetryTests(GitTestCase):
         return store.record_retry('transient', 'snapshot unavailable', action,
                                   check_action_id=original, replacement_action_id=replacement)
 
+    def test_preflight_rejection_preserves_request_and_index_without_started_marker(self):
+        for target in ('cogito_execution_registry.process_identity',
+                       'cogito_execution_registry._group_alive',
+                       'cogito_evidence_binding.working_tree_binding'):
+            with self.subTest(target=target):
+                _, worker, store = self.ready()
+                index = Path(subprocess.check_output(
+                    ['git', '-C', str(worker), 'rev-parse', '--git-path', 'index'], text=True).strip())
+                before = index.read_bytes()
+                with patch(target, side_effect=CogitoError('capability denied')):
+                    with patch('cogito_runner.run_bounded_process') as process:
+                        with self.assertRaisesRegex(CogitoError, 'preflight rejected before start'):
+                            store.run_controlled_check('C-a', worker, 'probe')
+                        process.assert_not_called()
+                directory = store.run_dir / 'check-actions' / hash_json('probe')
+                self.assertTrue((directory / 'request.json').exists())
+                self.assertFalse((directory / 'started.json').exists())
+                self.assertEqual(index.read_bytes(), before)
+                with self.assertRaises(CogitoError):
+                    store.run_controlled_check('C-b', worker, 'probe')
+                store.run_controlled_check('C-a', worker, 'probe')
+                self.assertFalse(any(e['type'] in ('transient-retry', 'check-preparation-failed')
+                                     for e in store._events.read()))
+
+    def test_completed_replay_skips_probe_and_reports_exact_action(self):
+        _, worker, store = self.ready()
+        store.run_controlled_check('C-a', worker, 'first')
+        expected = store.check_evidence_receipt_payload('C-a', 'first')
+        self.assertEqual(expected['check_status'], 'passed')
+        with patch('cogito_runner.preflight_check', side_effect=AssertionError('must not probe')):
+            store.run_controlled_check('C-a', worker, 'first')
+        self.assertEqual(store.check_evidence_receipt_payload('C-a', 'first'), expected)
+
     def test_preparation_retry_finishes_task_and_allows_next_lease(self):
         _, worker, store = self.ready()
         directory = self.preparation_failure(store, worker)

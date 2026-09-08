@@ -47,6 +47,48 @@ class PreExecutionSnapshotError(CogitoError):
     """Only the snapshot before invoking the check may produce this proof."""
 
 
+def validate_check_target(package, state, check_id, worktree, root):
+    """Shared legal checkout selection for execution and advisory recovery."""
+    if state['state'] in {'post-integration-verification', 'human-correction-verifying'}:
+        if worktree != root:
+            raise CogitoError('post-integration checks must run in the delivery checkout')
+    elif state['state'] == 'verifying':
+        eligible = {Path(str(t.get('worktree', ''))).resolve() for t in state['tasks'].values()
+                    if t.get('status') == 'complete'}
+        if worktree not in eligible:
+            raise CogitoError('verification checks must run in a completed Package Slice worktree')
+    elif package.get('task_delivery') == 'atomic' and state['state'] in {
+            'executing', 'technical-correction', 'review-fix', 'post-integration-correction', 'human-correction'}:
+        active = [t for t in state['tasks'].values() if t.get('status') == 'running'
+                  and Path(str(t.get('worktree', ''))).resolve() == worktree and check_id in t.get('check_ids', [])]
+        if len(active) != 1:
+            raise CogitoError("task checks require the running task's checkout and targeted check ID")
+    else:
+        raise CogitoError('controlled checks are not legal in the current state')
+
+
+def preflight_check(package: Mapping[str, Any], check: Mapping[str, Any], worktree: Path) -> None:
+    """Probe required capabilities before an attempt is marked as started.
+
+    This is not execution evidence. The runner must repeat its snapshots and
+    register the actual child at launch. Optional environment names are not
+    interpreted as required settings.
+    """
+    from cogito_evidence_binding import working_tree_binding
+    from cogito_execution_registry import process_identity, _group_alive
+
+    try:
+        validate_check_environment(check, package["policy_snapshot"].get("allowed_environment", []))
+        _safe_cwd(worktree, str(check.get("cwd", ".")))
+        identity = process_identity(os.getpid())
+        if identity is None or not _group_alive(identity["pgid"]):
+            raise CogitoError("runner process identity/group is unavailable")
+        working_tree_binding(worktree)
+    except (CogitoError, OSError) as exc:
+        raise CogitoError("check preflight rejected before start; repair the environment and resend "
+                          "the same action ID and inputs: " + str(exc)) from exc
+
+
 def run_check(
     package: Mapping[str, Any], check_id: str, worktree: str | Path,
     amendments: Sequence[Mapping[str, Any]] = (), output_cap: int = OUTPUT_CAP,
