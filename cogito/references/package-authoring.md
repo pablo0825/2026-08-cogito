@@ -47,6 +47,8 @@ AI 以 Shared Understanding 與專案證據提出結構化判斷：`single-slice
 - correction/review-fix/retry 上限與 stop conditions。
 - 適用的 global/project policy snapshot，包括 `max_check_output_bytes`；預設為 10 MiB，Package 只能採用相同或更嚴格的上限。
 
+核准前，從已通過 `prepare-package` 的同一份草稿呈現上述範圍、文件、checks 與風險；核准與執行綁定同一 candidate hash。顯示不補預設值或改寫契約；候選變動依[核准前修訂](#package-核准前修訂)重新準備、驗證與確認核准。
+
 Package approval 是唯一正式開發核准。核准後 Package JSON 不可變；任何後續 overlay 必須是 Technical Amendment。Package 不包含文件 status/approval metadata，也不包含 Commit Plan。
 
 任務依賴以 `execution_dag.edges` 為準，`from` 是前置任務、`to` 是後續任務。Task 可省略 `depends_on`；若提供，其集合必須與 edges 的入邊一致，Gate 不會默默覆蓋矛盾的宣告。Mini Package 的 task 可省略 `slice_id` 或使用 `mini-package`，兩者都代表同一個工作單位。
@@ -55,13 +57,19 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。可獨立驗證允許依賴前置 Task；多個 Task 可由同一 Worker 在同一 worktree 依序完成。共享檔案或不適合平行執行，不足以作為合併理由。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分；無法拆分時，在既有 Plan 說明必須共同成立的行為或一致性條件。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
 
-核准前，若有同型且已 accepted 的單一 Slice，Coordinator 先用唯讀 `slice-inventory --source-run <RUN> --source-slice <SLICE>` 取得該次凍結路徑、amendment 補列、實際提交路徑、Result 摘要、Tasks、Checks、Spec／Plan 引用與 source registry，作為候選清單；來源必須由呼叫端明確指定，不由工具猜測相似度。Inventory 只是歷史事實，不證明本次適用性或完整性，也不產生 Package skeleton。Coordinator 再沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試，只檢查實際適用的層次，並逐項標記沿用、新增或不適用。沒有合適 accepted Slice 時直接進行這段目標追蹤，不做全 repository 內容搜尋作為預設起點。
+核准前，若有同型且已 accepted 的單一 Slice，Coordinator 先明確指定來源，以[歷史 Slice 查詢](#歷史-slice-查詢)取得候選清單，再判斷本次適用性。Coordinator 再沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試，只檢查實際適用的層次，並逐項標記沿用、新增或不適用。沒有合適 accepted Slice 時直接進行這段目標追蹤，不做全 repository 內容搜尋作為預設起點。
 
 確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Policy](execution-policy.md#實作中補列必要路徑) 判斷是否符合輕量補正。
 
 新 `init` 的開發 run 會要求 atomic Package；歷史 run 與已凍結的 RP successor 保留原契約，沒有標記的舊 Package 不補寫、不改 hash。Maintenance／Documentation 維持原流程。
 
 `stop_conditions` 是隨 Package hash 凍結的停止政策。每筆可為非空文字，或包含 `id`、`condition`、`outcome` 的物件；`outcome` 可為 `blocked`、`awaiting-human`、`cancelled`。應寫明可觀察的情況、所需證據與預期處理方式，供 Coordinator 判讀。`cogito_contracts._validate_stop_conditions()` 只驗證格式，runtime 不解析條件文字、不持續監看，也不因 `outcome` 自動跳轉或取得取消授權。執行方式見 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。
+
+### 歷史 Slice 查詢
+
+`slice-inventory --source-run <RUN> --source-slice <SLICE>` 只接受明確指定且已 accepted 的單一 Development Slice，提供 final commit、Package／effective contract hashes、Tasks／Checks、Spec／Plan 與 source registry 引用及 Result 的 checks／reviews／human gate／remaining risks。Amendments 按 event sequence 列出 path additions／fixes、Tasks 與 Checks；`implementer_results`／`paths.implementer_reported` 是有效投影中的 Implementer 回報，`paths.start_to_final` 則是完整 Start-to-final Git diff，不能互相冒充或把所有 diff 都稱為產品路徑。
+
+查詢不讀取或修復 state cache，不建立 lock、event 或草稿；它只提供歷史事實，不搜尋目標 repository、不判斷相似度、不產生 Package skeleton，也不證明本次候選適用或完整。歷史或 committed artifacts 無法對帳、含不支援事件，或 CLI JSON 輸出超過 1 MiB 時 fail closed，由 Coordinator 直接檢視已接受 artifacts。歷史投影的相容性細節見 [Runtime Internals](runtime-internals.md#查詢receipt-與事件儲存)。
 
 ## Package 核准前修訂
 

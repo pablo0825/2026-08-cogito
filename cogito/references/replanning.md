@@ -25,11 +25,12 @@ Atomic 開發 Package 的 successor 仍須保留 `task_delivery: "atomic"`。本
 
 ## 停止與保存
 
-1. 每個 Worker 取得 lease 後，以 `register-executor` 記錄真正的執行 handle 或獨立 process group 的 PID，再讓它進入 running。ID 必須對應 task lease 的 agent ID。Coordinator 必須在派工前後查詢 Gate，不能在已要求停止後再啟動工作。
-2. 發現契約變更，使用 `begin`。它先寫入執行限制，再登錄 block 與最長 60 秒的停止期限；不等待 60 秒才阻止新派工。
-3. Coordinator 透過實際 executor 工具要求 Worker 停止開發，只保存與交接。期限內不新增功能、測試或整合；逾時使用 executor 的中斷操作。OS registry 只會對身分仍吻合的獨立程序群組執行逾時中斷，不誤殺共用群組或重用 PID。
-4. 外部 Agent 的停止須取得真正 executor 回報，再提交 `executor-receipt`。receipt 包含 `provider`、`control_tool`、`event_id`、`handle`、`status` 與 `raw_response`；adapter 回應須明確對應同一 handle 與 completed/interrupted 狀態。Coordinator 必須保留工具證據，不能自行填寫停止結果。
-5. 使用 `stop` 確認執行者停止，保存各 worktree 的 HEAD、branch、index tree、content tree、原契約 hash、event hash 與 Graph。連續捕捉不一致，或執行者未停妥，保持 stopping。
+Worker 的 executor 身分在[正常派工](execution-policy.md#派發與隔離)時登錄。契約變更後：
+
+1. 發現契約變更，使用 `begin`。它先寫入執行限制，再登錄 block 與最長 60 秒的停止期限；不等待 60 秒才阻止新派工。
+2. Coordinator 透過實際 executor 工具要求 Worker 停止開發，只保存與交接。期限內不新增功能、測試或整合；逾時使用 executor 的中斷操作。OS registry 只會對身分仍吻合的獨立程序群組執行逾時中斷，不誤殺共用群組或重用 PID。
+3. 外部 Agent 的停止須取得真正 executor 回報，再提交 `executor-receipt`。receipt 包含 `provider`、`control_tool`、`event_id`、`handle`、`status` 與 `raw_response`；adapter 回應須明確對應同一 handle 與 completed/interrupted 狀態。Coordinator 必須保留工具證據，不能自行填寫停止結果。
+4. 使用 `stop` 確認執行者停止，保存各 worktree 的 HEAD、branch、index tree、content tree、原契約 hash、event hash 與 Graph。連續捕捉不一致，或執行者未停妥，保持 stopping。
 
 外部 receipt 是 executor 的停止聲明，由 Coordinator 確認工具來源；CLI 的欄位驗證不提供 provider 身分認證。未知 handle、無回報、OS inspection 無權限或程序身分不一致，都不能宣稱停妥。begin 會拒絕尚未登錄 executor 的 active Worker；Coordinator 先停止派工並取得真正 handle，補登錄後再開始。不能編造 PID 或修改 registry 清除問題。
 

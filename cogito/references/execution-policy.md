@@ -1,6 +1,6 @@
 # Execution Policy
 
-本檔按 Start Gate → Task → 正式驗證 → 獨立審查 → 整合的順序說明操作。依目前 `next_action` 閱讀對應小節；狀態轉移仍由 Gate 決定。共通 CLI、action ID 與停止／重送規則見 [Runtime Interface](runtime-interface.md)。
+正常執行依 Start Gate → 派工／Task → 正式驗證 → 獨立審查 → 整合推進。首次派工先讀「Start Gate 前」「派發與隔離」及適用 Task 小節；遇到修正再讀「自動修正」的共通邊界與該修正程序。其餘依 `next_action` 讀取完整對應小節及其必要引用，狀態轉移仍由 Gate 決定。共通 CLI、action ID 與停止／重送規則見 [Runtime Interface](runtime-interface.md)。
 
 ## Start Gate 前
 
@@ -10,9 +10,23 @@ Package checkpoint 登記成功後才通過 Start Gate，再派工。Maintenance
 
 ## 派發與隔離
 
-Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；Atomic Task 依下一節完成後才開始下一項。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
+Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；Atomic Task 依[完成 Task](#完成-task)流程完成後才開始下一項。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
+
+每個 Worker 取得 lease 後，先以 `replan register-executor --run-id <ID> --agent-id <lease-agent-id>` 登錄真正的執行身分，再進入 `task running`：外部 Agent 提供 `--handle <executor-handle>`，OS executor 提供獨立 process group 的 `--pid <PID>`。命令沿用 `replan` 命名，但正常派工不執行 `replan begin`。Coordinator 在派工前後查詢 Gate，已要求停止後不得啟動工作；不能編造 handle／PID。需要停止時依 [executor 停止與憑據](replanning.md#停止與保存) 保留真正工具回報，只更新 Task status 不代表程序已停。
 
 Worker 在完成、失敗、阻塞或預期明顯延遲時主動回報。Coordinator 優先等待通知；較長工作可約定下次確認時間，未收到預期回報時主動詢問。進度回報先提供足以判斷繼續等待、協助或推進的摘要，資訊不足或異常時再讀相關細節。
+
+## 自動修正
+
+Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停止。這些條件是凍結的政策文字，Gate 不會自動求值或依 `outcome` 轉移狀態；停止派工、登錄 `block`、取消授權與 Human Gate 的處理依 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。
+
+測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash。
+
+一般 Technical Amendment 在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。只有[實作中補列必要路徑](#實作中補列必要路徑)與[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)可經獨立覆核擴充精確路徑；一般修正不得藉此擴張範圍。不得刪除或降級 required checks、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment: <ID>` trailer；Maintenance 的延後提交依[修正完成方式](#maintenance-修正完成)。
+
+Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanning](replanning.md) 限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
+
+Atomic 的產品 correction 必須使用新增 Task；只增加檢查可直接重新 verify，不開啟無任務的產品修正。新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
 
 ## 完成 Task
 
@@ -20,7 +34,7 @@ Worker 在完成、失敗、阻塞或預期明顯延遲時主動回報。Coordin
 
 Atomic Task 依下列順序完成，才能開始下一項 Task：
 
-1. 登記 `task leased`，再登記 `task running`。
+1. 登記 `task leased`，依[派發與隔離](#派發與隔離)完成 executor 登錄，再登記 `task running`。
 2. 實作該 Task，使用 `run-check` 執行其 targeted checks。
 3. 建立該 Task 的獨立 commit。
 4. 執行 `task-finish --run-id <ID> --task-id <ID> --input <finish.json> --action-id <ID>`，輸入為 `{ "risks": [] }`，有剩餘風險時如實填寫字串陣列。Gate 一次登記 Implementer Result 與 Task complete；成功後依既有 lease 流程接續下一項。
@@ -31,45 +45,35 @@ Atomic Task 依下列順序完成，才能開始下一項 Task：
 
 ### 實作中補列必要路徑
 
-本節處理未完成 Task；審查才發現缺漏時，使用[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)。
+僅限 `executing` 中的 Atomic Development Package：原規格所需的 mapper、response contract 或測試檔漏列時，可在同一 Run、Slice、branch 與已存在的 worktree 追加精確檔案路徑。只補入同一 Slice 未完成 Task，不新增需求、Task、successor 或改 DAG；已完成 Task 的 commit、Result 與歷史 evidence 不改寫，若需改變已完成行為，使用新增修正 Task。審查才發現缺漏時，改讀[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)。
 
-僅限 `executing` 中的 Atomic Development Package：原規格所需的 mapper、response contract 或測試檔漏列時，可在同一 Run、Slice、branch 與已存在的 worktree 追加精確檔案路徑。這是修改授權的補正，不新增需求、不建立 successor，也不新增 Task 或改 DAG。若變更 Acceptance、公開 API 語意、資料模型、安全邊界或 Slice 責任，依 [Replanning](replanning.md) 處理；不能只靠檔名判斷是否改變契約。
+先依[路徑補列的共通程序](#路徑補列的共通程序)確認範圍並停妥受影響 Worker／checks，保留原授權路徑內未完成的內容；不得先修改未授權路徑再申請補正。Coordinator 準備以下 proposal，再依共通程序 propose／review：
 
-只可補入同一 Slice 未完成 Task 的路徑；已登錄完成的 Implementer Result 也不可改寫。不得以目錄或 glob 放寬範圍、跨用其他 Task／Slice 的責任路徑，或加入 symlink、控制文件、凍結來源及高風險 hotspot。新增檔案可以尚不存在，但所屬 worktree 必須已建立。不得先修改未授權路徑再申請補正。
+```json
+{
+  "author_id": "coordinator-1",
+  "amendment": {
+    "id": "AM-path-1",
+    "reason": "原核准查詢流程漏列 mapper 與相關測試",
+    "path_additions": [{
+      "task_id": "T-002",
+      "paths": ["src/query_mapper.py", "tests/test_query_mapper.py"],
+      "reason": "輸出 Spec 已核准的欄位並驗證轉換",
+      "check_ids": ["C-query-mapper"]
+    }],
+    "added_checks": [{
+      "id": "C-query-mapper",
+      "argv": ["python3", "-m", "unittest", "tests.test_query_mapper"],
+      "required": true,
+      "phase": "task"
+    }]
+  }
+}
+```
 
-1. 停妥受影響 Slice 的實際 Worker 與所有 controlled checks。沿用 [Replanning 的 executor 登錄與停止證據](replanning.md#停止與保存) 介面 `replan register-executor`／`replan executor-receipt`，不執行 `replan begin`。登錄身分須對應 lease 的 agent ID；外部停止 receipt 必須來自真正 executor 回應，不能自行宣告。只更新 Task status 不代表程序已停。保留目前原授權範圍內的未完成內容。
-2. Coordinator 建立 proposal JSON：
+已有適用 required check 時省略 `added_checks`。此類 amendment 不混用 `added_tasks`、`path_fixes` 或 `commit_id`。
 
-   ```json
-   {
-     "author_id": "coordinator-1",
-     "amendment": {
-       "id": "AM-path-1",
-       "reason": "原核准查詢流程漏列 mapper 與相關測試",
-       "path_additions": [{
-         "task_id": "T-002",
-         "paths": ["src/query_mapper.py", "tests/test_query_mapper.py"],
-         "reason": "輸出 Spec 已核准的欄位並驗證轉換",
-         "check_ids": ["C-query-mapper"]
-       }],
-       "added_checks": [{
-         "id": "C-query-mapper",
-         "argv": ["python3", "-m", "unittest", "tests.test_query_mapper"],
-         "required": true,
-         "phase": "task"
-       }]
-     }
-   }
-   ```
-
-   `check_ids` 引用既有或本次新增的 required checks；已有適用檢查時省略 `added_checks`。新增檢查仍受凍結環境政策限制。此類 amendment 不混用 `added_tasks`、`path_fixes` 或 `commit_id`。
-3. 執行 `amend-paths propose --run-id <ID> --input <proposal.json> --action-id <ID>`。Gate 綁定 effective contract、受影響 Task、checkout 內容及 executor 身分，回傳 `proposal_hash`。等待覆核期間，受影響 Slice 與 controlled checks 不可繼續；其他 Slice 可繼續不受影響的 Task 操作。
-4. 由不同於 proposal 作者及受影響 Implementer 的 Reviewer 閱讀核准規格、必要依賴、目前 diff、完整 proposal 與檢查定義，產生 review JSON：`proposal_hash`、`reviewer_id`、`decision: "within-approved-scope"`、`assessment` 與 `findings: []`。`assessment` 必須含 `requirements`、`api`、`data_model`、`security`、`slice`、`checks`，各自用具體非空說明支持邊界不變及選測充分。存在問題時不提交通過判定；修訂 proposal 並重新覆核，或撤回後走 RP。
-5. 執行 `amend-paths review --run-id <ID> --input <review.json> --action-id <ID>`。通過即追加 Technical Amendment，同步擴充有效 Package、Worker、Task 路徑與 Task checks，不再請使用者核准。原 Package 與歷史紀錄不改寫。Gate 封存已停止 executor 的 registry 紀錄後，原 leased／running Task 可重新登錄 executor 並繼續實作、相關檢查與獨立 commit。
-
-Proposal 或其綁定內容改變，必須重新 propose 並取得新的獨立覆核；不要沿用舊 `proposal_hash`。撤回使用 `amend-paths withdraw --run-id <ID> --input <withdraw.json> --action-id <ID>`，輸入為 `{ "proposal_hash": "<hash>", "reason": "<撤回原因>" }`。撤回也會封存已停止的 executor，完成後可依原授權範圍重新登錄；改提另一 Slice 的補正前先撤回目前提案。操作部分失敗時，以相同輸入及 action ID 重送；review 或 withdraw 事件已寫入但 executor 封存尚未完成時，`next` 回傳 `retry-path-amendment` 與原操作輸入、action ID；保持 Worker 停止並完成原操作重送，不另建新 amendment。
-
-已完成 Task 的 commit、Result 與歷史 evidence 保留，不要求重新交付；若需改變已完成行為，使用新增修正 Task。補正後目前所需的檢查必須取得綁定新 effective contract 的 evidence，歷史通過不能代替目前驗證。此處只補授權，沒有獨立的產品修正 commit；Result 的記錄方式見 [Finalization](finalization.md)。
+覆核生效且 executor 封存完成後，原 leased／running Task 可重新登錄 executor，繼續實作、相關檢查與獨立 commit；目前必要 evidence 須綁定新 effective contract。已完成 Task 不要求重新交付。純路徑補正沒有獨立的產品修正 commit，Result 使用 [Finalization](finalization.md#3-準備-result-與-project-graph) 的 `proposal_hash` 記錄。
 
 ### Maintenance 任務快照
 
@@ -104,9 +108,13 @@ Gate 先 materialize 核准 Package 與有序 Amendments，runner 只使用該 e
 
 runner 只保存有界 head/tail 輸出。合計輸出超過凍結的 `max_check_output_bytes` 時終止檢查並判定失敗；`output_limit_exceeded` 或 `termination_degraded` 不得當成通過 evidence。缺少目前必要 evidence 欄位時重新執行，不補寫舊證據。程序等待、快照與發布細節供維護者查閱 [Runtime Internals](runtime-internals.md)。
 
+`run-check` receipt 回傳原 action 的 `check_status`、`exit_code`、`timed_out`、`output_limit_exceeded`、`termination_degraded`、`worktree_changed_during_check`，不含 stdout/stderr。`ok: true`／exit code `0` 只代表 Gate 操作成功，是否通過看 `check_status`。Receipt 的 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash` 精確指向該 action 原本登錄的 evidence，重送不改指向新 evidence；schema 與 hashes 不變。
+
 ### 本波驗證與整合後驗證
 
 先確認 `task_delivery`。以下表格與跨狀態證據沿用規則只適用 `task_delivery: "atomic"`。非 Atomic（包含目前的 Maintenance／Documentation Mini Package）依本輪完成事件與驗證階段檢查全部 required checks；不能只因 HEAD／內容／契約相同，就沿用完成事件之前的 evidence。歷史 Package 也保留其原驗證規則。
+
+`next` 的驗證提示列出 `eligible_evidence`、`missing_checks`、`stale_checks` 與已填 evidence 的 `verify`／`post-verify` argv；完整組合無法驗證時不提供 closure。提示有範圍限制時，不能以截斷清單宣稱可完成。
 
 Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後再執行 `post-verify`。兩者核對的內容不同：
 
@@ -122,11 +130,28 @@ Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後�
 
 ### Check 重送
 
+先讀 `next.check_recovery` 的操作與 blockers：Gate 區分未啟動、已發布 evidence、已綁替代檢查與未知結果。非阻塞的未啟動請求僅列在 `optional_recovery_operations`，不取代正常驗證；不自行依 marker 猜測資格或另造 resolver。以下說明各種提示的處理界線。
+
 新 attempt 在建立 `started.json` 前，先驗證合法 checkout、cwd、必要的程序 identity／group inspection 與實際 Git snapshot 能力；不安裝依賴、不建立 `.env` 或重建資料庫。`env_allowlist` 是允許傳入的名稱，不代表必填變數。前置拒絕時 command 未啟動，修復環境後使用原 action ID 與原輸入重送，不消耗 transient retry；原 `request.json` 保留以防同 ID 改輸入。啟動當下仍重新檢查 snapshot、fence 與實際程序登錄，前置成功不是稍後安全的證明。
 
 Controlled check 重送使用同一 action_id 與相同輸入；同 ID 不得改 check、worktree 或執行契約。已發布 evidence 可在事件追加失敗後補登錄。若 attempt 已開始但沒有完整 evidence，結果視為未知，先確認程序與外部副作用再處理，不以自動重跑假裝恢復成功。
 
-已完成 action replay 與已發布 evidence 補登錄不重新做啟動能力 probe。marker 後原 runner pre-snapshot 的正式失敗證明，仍僅依[受控重試](#執行前-snapshot-失敗的受控重試)恢復；spawn 後 registry 失敗、post-snapshot 中斷及空 registry 都不能視為未啟動。先讀 `next.check_recovery`，無合法命令時保留現場，不刪 marker 或另造 resolver。
+已完成 action replay 與已發布 evidence 補登錄不重新做啟動能力 probe。marker 後原 runner pre-snapshot 的正式失敗證明，仍僅依[受控重試](#執行前-snapshot-失敗的受控重試)恢復；spawn 後 registry 失敗、post-snapshot 中斷及空 registry 都不能視為未啟動。無合法恢復命令時保留現場，不刪 marker。
+
+### 執行前 snapshot 失敗的受控重試
+
+Atomic Task 執行中，只有 Gate 在檢查命令啟動前捕捉 snapshot 失敗，並追加 `check-preparation-failed`，才可使用此恢復路徑。先確認失敗原因已排除，再登錄既有 transient retry，明確綁定原 action 與全新的替代 action：
+
+```sh
+python3 cogito/scripts/cogito_gate.py --repo <root> retry --run-id <ID> --kind transient --reason "<已排除的原因>" --check-action-id <原-check-action> --replacement-action-id <新-check-action> --action-id <retry-action>
+python3 cogito/scripts/cogito_gate.py --repo <root> run-check --run-id <ID> --check-id <原-check-id> --worktree <原-worktree> --action-id <新-check-action>
+```
+
+Gate 驗證相同 Task lease、worktree、check 定義與有效契約；替代檢查登錄有效的成功 evidence 後，原未完成 marker 才不再阻擋結案。原 marker、事件與 evidence 全數保留，這不會免除其他失敗或過期檢查。
+
+替代檢查若實際執行失敗，修正後可在剩餘 transient retry 額度內，將同一原 action 綁定另一個全新 action；Gate 會確認上一替代檢查有失敗 evidence 且 executor 已停止。若替代檢查也在啟動前失敗，則以該替代 action 作為下一次 retry 的來源。沒有 outcome、仍在執行或已成功的替代檢查不可重綁。
+
+只有理由文字的舊 retry、歷史上無法確認執行階段的 marker，以及命令執行後的 snapshot 失敗，都維持未知結果的阻擋；不得手動補造失敗紀錄或刪除 marker。
 
 ## 獨立審查
 
@@ -172,7 +197,7 @@ Coordinator 撰寫本輪修正 Task 與 checks 的 Amendment，保存輸入：
 以下步驟用於首次建立修正 Task；已有本輪未完成 Task 時，直接依本節末段補列，不再次啟動 review-fix 或新增 Task。
 
 1. Coordinator 或 Implementer 先說明原 finding、未超出範圍的理由、精確檔案及相關 checks。引用原規格與 finding，不重新撰寫完整 Package。以 `next` 提供的 `finding` 單獨作為 `review-fix-start --input` 的輸入，例如 `{"finding": {"event_sequence": 54, "event_hash": "<實值>"}}`，先進入既有修正階段；不要把尚未覆核的路徑補列放進合併啟動輸入。
-2. 停妥受影響 Worker 與 controlled checks，保留原本已驗證的 checkout；尚未授權的檔案不可先改。向既有 `amend-paths propose` 提交以下形式：
+2. 停妥受影響 Worker 與 controlled checks，保留原本已驗證的 checkout；尚未授權的檔案不可先改。依[路徑補列的共通程序](#路徑補列的共通程序)準備並 propose 以下形式：
 
    ```json
    {
@@ -193,13 +218,13 @@ Coordinator 撰寫本輪修正 Task 與 checks 的 Amendment，保存輸入：
    }
    ```
 
-   IDs 使用實值。`added_tasks.paths` 是修正 Task 的完整範圍；`path_additions.paths` 只列需要補授權的精確檔案，且其 paths／checks 必須包含在對應新 Task。每個新 Task 都須有對應補列，不混入其他任務。必要時在同一 Amendment 增加 `added_checks`；原 required checks 仍保留。禁止目錄、glob、symlink、凍結來源、控制文件、高風險 hotspot 或其他 Task／Slice 所有的補列路徑；跨 Slice 前置任務須已 integrated，不能改變原 Slice 相依。
-3. **由原本的獨立 Reviewer 在既有審查中確認範圍即可**，不固定增加第三位 Agent 或使用者核准。Reviewer 不得是 proposal 作者或受影響 Implementer。沿用[路徑覆核的輸入與重送規則](#實作中補列必要路徑)，以 `amend-paths review` 保存具體範圍判斷與選測理由；通過後一筆 Amendment 同時登記檔案授權與新修正 Tasks。覆核前不建立可執行的新 Task。
+   IDs 使用實值。`added_tasks.paths` 是修正 Task 的完整範圍；`path_additions.paths` 只列需要補授權的精確檔案，且其 paths／checks 必須包含在對應新 Task。每個新 Task 都須有對應補列，不混入其他任務。必要時在同一 Amendment 增加 `added_checks`；原 required checks 仍保留。路徑須符合下方[共通限制](#路徑補列的共通程序)；跨 Slice 前置任務須已 integrated，不能改變原 Slice 相依。
+3. **由原本的獨立 Reviewer 在既有審查中確認範圍即可**，不固定增加第三位 Agent 或使用者核准。Reviewer 不得是 proposal 作者或受影響 Implementer。依共通程序以 `amend-paths review` 保存具體範圍判斷與選測理由；通過後一筆 Amendment 同時登記檔案授權與新修正 Tasks。覆核前不建立可執行的新 Task。
 4. 依上節完成修正 Task、相關檢查、commit、`task-finish` 與 `review-fix-complete`，再驗證目前內容並複審。原 Reviewer 聚焦確認原 finding、新增／受影響 Task 與連帶影響；符合下節條件的未受影響 approval 可採認。無法證明不受影響時擴大複審，不因補列檔案而自動重開 run。
 
-本輪 Task 尚未完成時又發現漏列檔案，沿用相同 `amend-paths propose/review`，只提交指向該 Task 的 `path_additions` 與必要的 `added_checks`，省略 `added_tasks`。先停止受影響執行者，再提案；可保留 Task 原 paths 內未完成的修改，不得先改新檔案。Gate 保留 Task ID、lease base、分支及原修正 Amendment，追加授權後取得新 effective contract 的必要 evidence，再繼續同一 Task。`review-fix-complete` 仍引用建立該 Task 的 Amendment ID；後續純路徑補正另按 `proposal_hash` 記錄，不取代原修正完成紀錄。前一輪 Task 或已登記完成 Result 不適用。
+本輪 Task 尚未完成時又發現漏列檔案，依[共通程序](#路徑補列的共通程序)執行 `amend-paths propose/review`，只提交指向該 Task 的 `path_additions` 與必要的 `added_checks`，省略 `added_tasks`。先停止受影響執行者，再提案；可保留 Task 原 paths 內未完成的修改，不得先改新檔案。Gate 保留 Task ID、lease base、分支及原修正 Amendment，追加授權後取得新 effective contract 的必要 evidence，再繼續同一 Task。`review-fix-complete` 仍引用建立該 Task 的 Amendment ID；後續純路徑補正另按 `proposal_hash` 記錄，不取代原修正完成紀錄。前一輪 Task 或已登記完成 Result 不適用。
 
-Proposal 綁定本次 review-fix finding、有效契約與 checkout；變更後重新 propose／review。撤回不發布新 Task 或授權，仍留在原修正階段。中斷後依 `next` 重送原 action，不重建修正 Task；原 Package、已完成成果與歷史 evidence 不改寫。
+此入口的 proposal 另綁定本次 review-fix finding。撤回不發布新 Task 或授權，仍留在原修正階段；修訂、撤回與中斷重送依共通程序，不重建修正 Task。
 
 ### 保留未受影響審查
 
@@ -249,32 +274,22 @@ Atomic 整合另以 Git `merge-tree --write-tree` 比對前一 delivery HEAD 與
 
 人工退回依 [Human Acceptance](human-acceptance.md) 的分類、修正與結案授權操作；Maintenance 人工修正仍需本輪獨立 review。Gate 進入 `finalizing` 後改讀 [Finalization](finalization.md)。
 
-## 自動修正
+## 路徑補列的共通程序
 
-Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停止。這些條件是凍結的政策文字，Gate 不會自動求值或依 `outcome` 轉移狀態；停止派工、登錄 `block`、取消授權與 Human Gate 的處理依 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)。
+本節供[執行中補列](#實作中補列必要路徑)與[審查修正補列](#審查修正中的必要檔案補列)共用；適用狀態、Task 是否新增及完成方式依各入口。補列只修正原規格所需的檔案授權，Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任必須不變。不能只靠檔名判斷；超出契約時走 [Replanning](replanning.md)。
 
-測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash；commit 加上 `Cogito-Amendment: <ID>` trailer。
+路徑必須是精確檔案，不得使用目錄、glob、symlink、控制文件、凍結來源、高風險 hotspot，或跨用其他 Task／Slice 的責任路徑。新檔案可尚不存在，但所屬 worktree 必須已建立；已完成 Task／Result 不改寫。Checks 只引用既有或本次新增的 required checks，新增檢查仍受凍結環境政策限制，不刪除原 required checks。
 
-一般 Technical Amendment 在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。只有[實作中補列必要路徑](#實作中補列必要路徑)與[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)可經獨立覆核擴充精確路徑；一般修正不得藉此擴張範圍。不得刪除或降級 required checks、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
+1. 停妥受影響 Slice 的實際 Worker 與所有 controlled checks，保留原授權範圍內未完成的內容；未授權檔案不可先改。使用[正常登錄](#派發與隔離)與 [executor 停止憑據](replanning.md#停止與保存)的 `replan register-executor`／`replan executor-receipt`，不執行 `replan begin`。身分須對應 lease agent ID；receipt 來自真正 executor 回應，只更新 Task status 不代表已停。
+2. 依原入口準備 proposal JSON，執行 `amend-paths propose --run-id <ID> --input <proposal.json> --action-id <ID>`。Gate 綁定 effective contract、受影響 Task、checkout 內容及 executor 身分，回傳 `proposal_hash`。等待覆核期間，受影響 Slice 與 controlled checks 不可繼續；其他 Slice 可繼續不受影響的 Task 操作。
+3. 不同於 proposal 作者及受影響 Implementer 的 Reviewer 閱讀核准規格、必要依賴、目前 diff、完整 proposal 與檢查定義。Review JSON 包含 `proposal_hash`、`reviewer_id`、`decision: "within-approved-scope"`、`assessment` 與 `findings: []`；assessment 的 `requirements`、`api`、`data_model`、`security`、`slice`、`checks` 各用具體非空說明支持邊界不變與選測充分。存在問題時不提交通過判定；修訂 proposal 重新覆核，或撤回後走 RP。
+4. 執行 `amend-paths review --run-id <ID> --input <review.json> --action-id <ID>`。通過即追加 Technical Amendment，擴充有效 Package／Worker／Task 路徑與 checks，並依入口登記適用的新修正 Tasks；不再請使用者核准。原 Package 與歷史紀錄不改寫。Gate 封存已停止 executor 的 registry 後，依原入口續接 Task；目前必要 checks 須取得新 effective contract 的 evidence，歷史通過不能代替目前驗證。
 
-Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanning](replanning.md) 限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
+Proposal 或綁定內容改變時，重新 propose 並取得新的獨立覆核，不沿用舊 `proposal_hash`。撤回使用 `amend-paths withdraw --run-id <ID> --input <withdraw.json> --action-id <ID>`，輸入為 `{ "proposal_hash": "<hash>", "reason": "<撤回原因>" }`。撤回也封存已停止 executor，完成後可依原授權範圍重新登錄；改提另一 Slice 前先撤回目前提案。
 
-Atomic 的產品 correction 必須使用新增 Task；只增加檢查可直接重新 verify，不開啟無任務的產品修正。新增任務以 `depends_on` 指定前置任務，可引用 base Package、先前 Amendment 或同批新增的任務。Gate 在追加事件前合併完整任務圖，拒絕未知節點、自我依賴與循環；effective contract 的 edges 會包含這些依賴，原始文件與 hash 不變。追加不能修改既有任務依賴或新增跨 Slice 的依賴關係；沿用已核准跨 Slice 關係時，前置任務必須已 `integrated`，避免修正流程等待自身完成後才能進行的整合。
+部分失敗以相同輸入及 action ID 重送。Review 或 withdraw 事件已寫入但 executor 尚未封存時，`next` 回傳 `retry-path-amendment` 與原操作輸入、action ID；保持 Worker 停止並完成原操作，不另建 Amendment。
 
-### 執行前 snapshot 失敗的受控重試
-
-Atomic Task 執行中，只有 Gate 在檢查命令啟動前捕捉 snapshot 失敗，並追加 `check-preparation-failed`，才可使用此恢復路徑。先確認失敗原因已排除，再登錄既有 transient retry，明確綁定原 action 與全新的替代 action：
-
-```sh
-python3 cogito/scripts/cogito_gate.py --repo <root> retry --run-id <ID> --kind transient --reason "<已排除的原因>" --check-action-id <原-check-action> --replacement-action-id <新-check-action> --action-id <retry-action>
-python3 cogito/scripts/cogito_gate.py --repo <root> run-check --run-id <ID> --check-id <原-check-id> --worktree <原-worktree> --action-id <新-check-action>
-```
-
-Gate 驗證相同 Task lease、worktree、check 定義與有效契約；替代檢查登錄有效的成功 evidence 後，原未完成 marker 才不再阻擋結案。原 marker、事件與 evidence 全數保留，這不會免除其他失敗或過期檢查。
-
-替代檢查若實際執行失敗，修正後可在剩餘 transient retry 額度內，將同一原 action 綁定另一個全新 action；Gate 會確認上一替代檢查有失敗 evidence 且 executor 已停止。若替代檢查也在啟動前失敗，則以該替代 action 作為下一次 retry 的來源。沒有 outcome、仍在執行或已成功的替代檢查不可重綁。
-
-只有理由文字的舊 retry、歷史上無法確認執行階段的 marker，以及命令執行後的 snapshot 失敗，都維持未知結果的阻擋；不得手動補造失敗紀錄或刪除 marker。
+## 修正完成與額度
 
 ### 修正與重試額度
 

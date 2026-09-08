@@ -36,9 +36,9 @@ Coordinator 按依賴派發工作並串行整合。Feature／Change／Correction
 
 ## 啟動與操作迴圈
 
-1. 首次操作 Gate 先讀 [Runtime Interface](references/runtime-interface.md) 的共通 CLI、輸入、停止與重送規則。使用 `cogito/scripts/cogito_gate.py` 查詢或建立 run；一般 `init` 保留預設的階段提交，有效 RP successor 依其凍結交接流程處理。未確認草稿放在 `.cogito/runs/<run-id>/drafts/`。
+1. 首次操作 Gate 先讀 [Runtime Interface](references/runtime-interface.md) 開頭至「停止條件與狀態操作」的共通 CLI、輸入、儲存與重送規則；後面的固定操作恢復與其他查詢依需要讀取。使用 `cogito/scripts/cogito_gate.py` 查詢或建立 run；一般 `init` 保留預設的階段提交，有效 RP successor 依其凍結交接流程處理。未確認草稿放在 `.cogito/runs/<run-id>/drafts/`。
 2. 準備文件前先按 [Package Authoring](references/package-authoring.md#選擇-package-類型) 選 `kind`。完整 Package 經摘要確認、Boundary 與 Slice／Spec／Plan；Mini 不建立這些文件，只準備 Package。Maintenance 單一交付 commit 從 Start Gate HEAD 起算。
-3. 查詢 `next --run-id <ID>`，按下表找到目前流程。首次進入該流程時完整讀取其操作文件與必要輸入；同一流程內後續步驟查閱對應小節，資料或規則改變時補讀。不要預載無關流程或維護者實作說明。
+3. 查詢 `next --run-id <ID>`，按下表找到目前流程。首次進入時完整讀取目前流程小節、其明列的前置規則與必要輸入；操作文件有入口說明時先依其選擇適用小節。同一流程後續步驟按需查閱，資料或規則改變時補讀，不因同一文件包含其他流程而預載無關分支或維護者實作說明。
 4. 完成當前 action，以結構化 payload 回報。格式錯誤最多修復兩次，只修結構，不更改實際 code、evidence 或 risk。一般 mutation receipt 不含路由；需要繼續工作時另查 `next`，只有明確診斷才查完整 `status`，專用 receipt 見 [Runtime Interface](references/runtime-interface.md#json-輸入與顯示)。`commit-stage-artifacts` 必須先完成並登記精確文件提交。
 5. 恢復時依事件歷史與現有成果核對，再續接合法下一步；計數器不因 resume 或換 Agent 重設。`cancelled`、`accepted`、`superseded` 是終態，不能用普通 resume 重新開發。
 

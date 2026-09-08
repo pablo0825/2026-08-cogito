@@ -1,100 +1,28 @@
 # Cogito
 
-Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill；目前版本以 [`VERSION`](VERSION) 為準。3.x workflow 是 clean break：單一狀態機取代 Blueprint 與舊執行模式，Project Graph 表達 Slice DAG，Development Package 是唯一正式開發核准；實作、測試、獨立審查與受控修正可自動前進，只有適用的 human gate 會中途通知使用者。既有 workflow 與 JSON contract 仍使用 `3.0` schema，檔名維持 `workflows/cogito-v3.json`。
+Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill；目前版本以 [`VERSION`](VERSION) 為準。Development Package 凍結正式開發授權，Agent 負責需求理解、實作與語意判斷，Gate 根據契約、狀態與證據決定能否前進。既有 workflow 與 JSON contract 使用 `3.0` schema，檔名維持 `workflows/cogito-v3.json`。
 
-## 結構
+## 使用入口
 
-```text
-cogito/
-├── SKILL.md
-├── VERSION
-├── agents/openai.yaml
-├── workflows/cogito-v3.json
-├── scripts/
-├── references/
-├── tests/
-└── evals/
-```
+明確呼叫 `$cogito` 後，依 [SKILL.md](SKILL.md) 的啟動條件、操作迴圈與 `next_action` 路由閱讀文件。各操作程序位於 `references/`，不需預先讀取全部文件。
 
-- `SKILL.md`：精簡的語意政策與 progressive-disclosure 路由。
-- `workflows/`：狀態、合法轉移、guard 與重試上限。
-- `scripts/`：Python executable contracts、Gate runtime 與 controlled runner。
-- `references/`：依 `next_action` 才載入的作業規則與模板。
-- `tests/`：可執行的 Python 回歸測試，涵蓋狀態機、邊界與端到端流程。
-- `evals/evals.json`：14 個 Agent 行為評測情境規格，保存 prompt、預期行為與驗收條件。
+既有專案依 [Project Bootstrap](references/project-bootstrap.md) 採納本次必要來源。準備相近的 Package 時，可明確指定已 accepted 的單一 Development Slice，以唯讀 `slice-inventory` 取得歷史候選清單；適用性仍由 Coordinator 判斷。操作、輸出與限制見 [Package Authoring](references/package-authoring.md#歷史-slice-查詢)。
 
-3.0 不讀取或遷移舊 Blueprint。既有 `docs/project/`、舊 Spec 與其他文件保持原位並作為 read-only sources；第一次觸及相關能力時，以 lazy adoption 在同一 Package 收編必要來源，不建立額外核准點，也不搬移無關文件。
+## 結構與維護
 
-Runtime 不接受 Agent 自行宣告核准、驗證通過或獨立審查成立；這些 verdict 由 CLI 從 Package、lease/result identity 與不可變 machine evidence 計算。Technical Amendments 先 materialize 為 effective contract，才能執行或驗證。Final commit 包含 Result 與 Project Graph，而該 commit 的 ID 由後續 event 與結案報告記錄，避免 Result 自我引用。
+| 位置 | 責任 |
+|---|---|
+| `SKILL.md`、`agents/openai.yaml`、`VERSION` | 操作入口、Agent metadata 與版本 |
+| `workflows/cogito-v3.json` | 合法狀態、轉移、guards 與重試上限 |
+| `scripts/` | Python executable contracts、Gate runtime 與 controlled runner |
+| `references/` | 按目前工作讀取的操作程序與模板 |
+| `tests/`、`mypy.ini` | 自動化測試及靜態型別檢查 |
+| `evals/` | Agent 情境定義與有範圍限制的執行紀錄 |
 
-Controlled runner 以獨立的暫存 Git index 記錄工作樹的 `content_tree`，不改動使用者的 staging 狀態。結案必須與最後驗證的內容一致，僅允許該 run 的 Result 與 Project Graph 在驗證後更新；Spec／Plan 變更必須在最後驗證前完成。Maintenance／documentation 的未提交內容也必須完整對應此快照。舊 evidence 缺少 `content_tree`，或本機快照 Git objects 已不可用時，必須重跑 checks，不補寫既有證據。
+Repository 維護、測試選擇與版本政策依 [AGENTS.md](../AGENTS.md)。Python executable contracts 是資料驗證的唯一權威；模組責任見 contributor guide，實作與相容性細節見 [Runtime Internals](references/runtime-internals.md)。[RP 設計紀錄](RP-SUBTRACTIVE-REDESIGN.md) 保存分期設計歷史，不取代目前操作規則。
 
-Maintenance 每個新 task lease 保存 index 與 working tree 的起始快照，Result 只核對該 task 的增量，整體交付仍檢查 Package 範圍。任務中斷後釋放並重新 lease 時保留原始快照，避免接手者漏算半成品；任務間未登錄的修改則拒絕帶入新 lease。獨立 review 使用該 task 的完成快照並綁定本輪已驗證內容。舊 lease 沒有快照時維持原本保守的累積範圍檢查，不倒填歷史資料。
+## 驗證紀錄
 
-Gate 事件另存原始命令與參數的 `request_hash`，不以衍生 verdict 比對重送請求。同一 `action_id` 與相同輸入可返回目前狀態，不重做已完成操作；不同命令或輸入則拒絕。舊事件仍可讀取，但缺少指紋的舊 action 不會自動重播，需先確認既有結果。Controlled check 以每個 action 的鎖與不可變 attempt 紀錄防止重複執行；證據已發布而事件未追加時可補登錄，程序可能已執行卻沒有證據時則回報結果未知，必須先人工確認，不能盲目重跑。
+個別閱讀模擬與 Gate 執行紀錄保存在 [evals/reports/](evals/reports/)，例如 [2026-09-06 閱讀流程整理](evals/reports/2026-09-06-skill-readability/REPORT.md)；各結果只支持報告記錄的版本、環境與範圍，不驗證後續變更。
 
-## 從已接受 Slice 準備下一份 Package
-
-準備結構相近的 Development Package 時，可先明確指定一個已 accepted 的單一 Slice，產生唯讀 inventory：
-
-```sh
-python3 cogito/scripts/cogito_gate.py --repo <root> slice-inventory \
-  --source-run DEV-002 \
-  --source-slice FS-039
-```
-
-輸出集中提供：
-
-- final commit、Package hash 與 effective contract hash 的來源綁定。
-- 凍結的 approved paths、Tasks、Checks、Spec／Plan 引用與 source registry。
-- `paths.implementer_reported`：有效投影中 Implementer Results 回報的路徑與逐筆來源。
-- `paths.start_to_final`：Start Gate 到 final commit 的完整 Git diff；不把它誤稱為 Implementer 或產品路徑。
-- 依 event sequence 排列的 amendments，以及已接受 Result 的 checks、reviews、human gate 與 remaining risks 摘要。
-
-Inventory 只提供歷史事實與候選清單，不搜尋目標 repository、不自動選擇相似 Slice、不產生 Package skeleton，也不判斷候選是否適用或完整。Coordinator 仍須依目標 application type 追蹤實際整合面，逐項判斷沿用、新增或不適用。
-
-此查詢不讀取或修復 `state.json` cache，不建立 lock、event 或草稿。它只接受可由事件歷史與 committed Package／Result 對帳的 accepted Development run；不支援的歷史事件、hash／receipt 不一致、非單一 Slice 或超過 1 MiB 的 CLI JSON 都會 fail closed。完整規則見 [Package Authoring](references/package-authoring.md) 與 [Runtime Interface](references/runtime-interface.md)。
-
-## 契約與 JSON 資料
-
-Python 驗證函式是唯一契約規則來源，不再維護手寫 JSON Schema。Package、Result、Project Graph 與 Agent Result 仍以 JSON 保存與交接；Spec／Plan 維持 Markdown。核准摘要與其他顯示 view 從同一份已驗證資料衍生，不另定規則，也不修改待核准內容。
-
-- `cogito_contracts.py`：Package、Amendment、check、Agent Result、Project Policy；Gate 與 runner 共用。
-- `cogito_project_graph.py`：Project Graph 驗證及衍生圖。
-- `cogito_result_contract.py`、`cogito_evidence_contract.py`：Result 與 evidence 的純資料驗證；Git／event history 綁定另外由 Gate 驗證。
-- `cogito_projection.py`：Run state 由事件重建，不另讀取外部 Run Schema。
-- `cogito_state_types.py`：內部 RunState、TaskState、AgentResult 等型別，描述必填、選填與可為空值的欄位；不取代執行時驗證，也不轉換或補寫 JSON。
-
-驗證不做型別轉換、不補欄位、不排序、不移除擴充資料，因此不改既有 JSON 與 hash。保留既有 optional defaults、一般 artifacts 的擴充欄位、簡化 Graph metadata，以及 Result review 可省略 `outcome` 的行為；Amendment 與 evidence 繼續拒絕未知欄位。錯誤型別、非法 ID／路徑、無法執行的 check 定義改為提早回報 `CogitoError`。舊資料若含這些錯誤會被拒絕，不會自動改寫已核准文件；應修正草稿並重新核准，或依既有 correction／blocked 流程處理。
-
-已移除的六份 `schemas/*.schema.json` 可由 Git 歷史取回；外部工具若曾直接依賴它們，需改用 Python contract。方案 A 不提供 Schema generator；若未來有明確需求，再從單一可描述的 Python 模型衍生，不能從任意驗證函式猜測生成。
-
-證據驗證由 Gate 一次取得同一份事件歷史與狀態快照，讀取必要的不可變 evidence，再交給純資料規則判斷；整合前與整合後階段明確指定。寫入驗證結果時會比對快照的事件版本，若歷史已變更則拒絕並要求以相同 action_id 重試。整合後驗證的 evidence 與事件使用同一個 HEAD，寫入前再次確認 HEAD 未變更。
-
-`RunStore` 可用 keyword-only 的 `event_repository`／`git_repository` 注入依賴，省略時使用原本的檔案與 Git adapter。介面定義於 `cogito_ports.py`：事件 adapter 必須回傳已驗證的權威歷史、以相同 workflow 建立 snapshot，並在 append 時遵守 expected hash 衝突檢查；approval recovery 的 read 必須取得最新歷史。RunStore 仍管理 run 與 runner attempt 的檔案目錄，注入事件儲存不會取消這些保護。
-
-整合決策由 `cogito_integration_rules.py` 根據已收集的狀態與事件，判定目標任務、來源 commits、前次 delivery HEAD 與下一個整合事件；`RunStore` 負責 Git 事實驗證與事件提交。純規則可直接用資料測試，Git ancestry 與 action replay 仍由整合測試保護。
-
-Controlled runner 的 `run_check()` 收集時間、環境與前後工作樹快照，並執行程序；`cogito_runner_evidence.build_evidence()` 只用這些資料判定通過／失敗、遮罩輸出並組裝 evidence。結果判定可不建立 Git repository 或啟動程序就完成單元測試，程序終止與不可變 evidence 發布仍有獨立整合測試。
-
-純契約入口 `validate_package_with_limits(package, workflow_limits)`、`materialize_contract_with_limits(package, amendments, workflow_limits)` 與純 projection `project_events(events, workflow)` 都明確接收設定，不自行讀檔。`RunStore` 將已載入的 workflow limits 傳入驗證、runner 與結案流程。原本的 `validate_package()`、`materialize_contract()` 及省略 workflow 的 `reduce_events()` 保留為會載入預設設定的便利入口；JSON 格式與 hash 計算不變。
-
-`cogito_event_types.py` 描述 task update、Agent Result、check evidence 與三種 integration 事件的 payload，以 Literal 事件種類組成 `TypedGateEvent` union。Gate 產生端與 projection 消費端共用這些型別，靜態範例檢查缺欄位、非法 task status 與事件／payload 不匹配。型別只描述內部交接，不取代既有 runtime 驗證，也不改寫舊事件、擴充欄位或 hash。
-
-執行回歸測試：`python3 -m unittest discover -s cogito/tests -v`。測試涵蓋非法輸入、相容資料與 hash、CLI／Gate 邊界及端到端流程。建立 Git repository 的測試繼承 `cogito_test_support.GitTestCase`，並以 `init_repo()` 初始化；測試期間隔離個人 Git 設定與繼承的 Git 環境變數，停用簽章與 hooks，結束後還原環境。覆寫 `setUp()` 時必須呼叫 `super().setUp()`。
-
-本 repo 尚未提供 Agent 行為評測的執行工具或結果紀錄；`evals/evals.json` 的情境不能計入已通過的測試。需要評估 Agent 行為時，依情境執行並另行保存使用的環境、實際輸出與逐項判定。
-
-核心狀態資料流另提供靜態型別檢查：在 repo 根目錄使用 mypy 1.20.2 執行 `python3 -m mypy --config-file cogito/mypy.ini`。範圍由設定檔列出，包含拒絕錯誤欄位與狀態值的靜態範例；尚未將全部 JSON 邊界與測試程式納入型別檢查。mypy 僅為開發工具，執行 Cogito 不需要安裝。
-
-維護時執行上述 Python 回歸測試；skill 格式驗證與 Agent 行為評測若另有工具，分別執行並回報結果，未執行的項目明確標示。狀態轉移的正確性應由程式測試證明，不以文字斷言代替。
-
-## 契約變更與重新規劃
-
-Package 核准前使用同一 run 的規劃輪次：先保存舊方案並暫停核准，按影響回到需求確認、Boundary 或文件準備，保留每輪文件快照與比較，再經獨立覆核及使用者核准。不同候選不能直接替換；撤回需要明確授權與原方案有效性檢查，中斷可由同一事件歷史恢復。CLI 與限制見 [核准前規劃修訂](references/planning-revisions.md)。
-
-超出 Technical Amendment 的變更使用獨立 `RP-*` 單：全體停止並保存、分析差異、獨立覆核、使用者核准新 Package，再由新 run 承接成果。核准與正式啟用分離，交接各步可對帳恢復；accepted 原紀錄保持不變。使用方法與第一版證據沿用限制見 [重新規劃](references/replanning.md)。
-
-人工驗收退回在同一 run 使用專用分類、修正、驗證及審查階段，與開發修正分開累計最多三輪。未表示驗收完成時先修正再等人工確認；明確授權「其餘接受、修好即可」時，通過正式 checks 及獨立審查可直接結案。混合變更整批走 RP，除非使用者明確要求分批；修正中影響擴大立即停止，變更 successor 必須重新人工驗收。CLI、範例與授權／版本綁定見 [人工驗收退回](references/human-acceptance.md)。
-
-取消及核准方案撤回使用獨立 `DP-*`：保存成果、釋放執行佔用、限定受影響範圍，再由 Agent 提案與使用者審核後執行移除／保留／恢復。原任務取消與後續處置完成分開追蹤，支援中斷續作、核准後改變決定及人工來源重新驗收。見 [成果處置](references/dispositions.md)。
+自動化測試、skill 格式驗證、合成 Agent 閱讀模擬與實際使用者驗收分別回報。執行方式與檢查範圍依 contributor guide，不以歷史報告或情境定義代替本次驗證。
