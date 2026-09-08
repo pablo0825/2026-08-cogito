@@ -155,12 +155,38 @@ class ReplanStore:
         state = state or self.load()
         source = RunStore(self.root, state['source_run_id'])
         package = source.approved_package()
-        documents = [d for sl in package['slices'] for d in (sl['spec'], sl['plan'])]
-        documents.extend(package.get('source_registry', []))
+        from cogito_contracts import path_allowed
+        approved_paths = source.effective_package()['approved_paths']
+        contracts = [d for sl in package['slices'] for d in (sl['spec'], sl['plan'])]
         if package.get('shared_understanding', {}).get('path'):
-            documents.append(package['shared_understanding'])
+            contracts.append(package['shared_understanding'])
+        contract_paths = {d['path'] for d in contracts}
+        documents = [*contracts, *package.get('source_registry', [])]
+        product_sources = set()
         for document in documents:
-            source._validate_content_hash(document['path'], document['hash'])
+            # Product sources bind the planning baseline, not their authorized
+            # implementation. Contract documents always retain their exact hash.
+            if document['path'] in contract_paths or not path_allowed(document['path'], approved_paths):
+                source._validate_content_hash(document['path'], document['hash'])
+            else:
+                product_sources.add(document['path'])
+        if product_sources:
+            from cogito_evidence_binding import working_tree_content_tree
+            tree = working_tree_content_tree(self.root)
+            for relative in sorted(product_sources):
+                path = self.root / relative
+                entry = source._git('ls-tree', tree, '--', relative)
+                if not path.exists() and not path.is_symlink() and not entry:
+                    continue  # An authorized deletion is represented by absence.
+                if path.resolve() != path or not path.is_file():
+                    raise CogitoError(f'product source must be a regular snapshot file: {relative}')
+                fields = entry.split('\t', 1)[0].split()
+                blob = source._git('hash-object', '--path=' + relative, '--', relative)
+                mode = '100755' if path.stat().st_mode & 0o111 else '100644'
+                if fields != [mode, 'blob', blob]:
+                    raise CogitoError(f'product source is not covered by the Git snapshot: {relative}')
+        # Keep even approved product sources protected from runtime exclusions;
+        # the existing complete Git-tree checkpoint freezes their current bytes.
         protected = {d['path'] for d in documents}
         return ReplanRuntime(self.root, state, protected)
 

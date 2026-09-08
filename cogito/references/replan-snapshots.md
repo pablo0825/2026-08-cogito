@@ -4,6 +4,10 @@ RP 的停止快照同時保存產品、原 Worker 與執行證據，但不使用
 
 ## 分類與驗證
 
+停止時先區分契約文件與產品來源：原 Spec／Plan、Shared Understanding，以及不在有效 `approved_paths` 內的 source registry 文件，仍須符合規劃時保存的 hash。位於有效核准範圍的產品來源可保存已核准實作後的內容；有效範圍由原 Package 與合法 Amendments 推導，不改寫原始 hash。文件同時是契約與產品來源時，契約的嚴格 hash 檢查優先。
+
+核准產品來源須能由 Git content tree 保存當前內容；Git 忽略且未追蹤、從 index 移除後仍被忽略，或 skip-worktree 隱藏變更等情況會拒絕停止／續接。Gate 比對目前檔案與快照 blob，不自動 stage 或改動使用者 index；已核准刪除可由快照中的缺席保存。所有上述文件仍保留在受保護路徑中，不能因位於 runtime 草稿目錄而被排除。停止快照保存當前 Git index／content trees；保存後的產品變動仍由快照比對拒絕。這不是新的修改授權，也不變更 RP 提案、覆核或核准流程。
+
 | 內容 | 驗證方式 |
 |---|---|
 | delivery 產品與未列入例外的檔案 | 比較停止時與目前的 index／content trees；仍只放行既有規則允許的新控制文件 |
