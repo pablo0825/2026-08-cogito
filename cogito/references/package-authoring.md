@@ -53,7 +53,7 @@ Package approval 是唯一正式開發核准。核准後 Package JSON 不可變�
 
 新的 Feature／Change／Correction Package 使用 `task_delivery: "atomic"`。每個 Task 必須有非空 `responsibility`、`paths`、`check_ids`；checks 使用 `phase: "task"` 或 `"integration"`（省略時為 integration）。`check_ids` 引用 required checks，Acceptance IDs 與選測理由寫在對應 check／Plan，不再另建 Commit Plan。至少保留一項 required integration check 驗證最終整合內容；最後一個 Task 可以引用並執行這項檢查。完整 regression 交由 CI，不列為例行本地檢查；既有 Project Policy 明定的 required checks 不可藉此降級。
 
-Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分，無法拆分的理由寫在既有 Plan。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
+Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗證的使用情境合併。一項 Task 包含其行為實作、相關測試與必要文件，也可以是一項必要的共同基礎。可獨立驗證允許依賴前置 Task；多個 Task 可由同一 Worker 在同一 worktree 依序完成。共享檔案或不適合平行執行，不足以作為合併理由。每個 Task 必須獨立 commit；不能只允許分批。預計超過 15 個 production files 或涵蓋多個可分離流程時重新檢視拆分；無法拆分時，在既有 Plan 說明必須共同成立的行為或一致性條件。檔案數與責任是否單一由 Coordinator 判斷，不新增數量 Gate 或例外審批。
 
 核准前，若有同型且已 accepted 的單一 Slice，Coordinator 先用唯讀 `slice-inventory --source-run <RUN> --source-slice <SLICE>` 取得該次凍結路徑、amendment 補列、實際提交路徑、Result 摘要、Tasks、Checks、Spec／Plan 引用與 source registry，作為候選清單；來源必須由呼叫端明確指定，不由工具猜測相似度。Inventory 只是歷史事實，不證明本次適用性或完整性，也不產生 Package skeleton。Coordinator 再沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試，只檢查實際適用的層次，並逐項標記沿用、新增或不適用。沒有合適 accepted Slice 時直接進行這段目標追蹤，不做全 repository 內容搜尋作為預設起點。
 
