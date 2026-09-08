@@ -71,7 +71,7 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
         guard_pending(projection, event_type, payload)
         guard_checkpoint(projection, event_type)
         guard_preparation(projection, event_type, payload)
-        if project_path_amendment(projection, event_type, payload):
+        if project_path_amendment(projection, event_type, payload, history[:-1]):
             pass
         elif event_type == "stage-committed":
             project_checkpoint(projection, item)
@@ -184,7 +184,7 @@ def project_events(events: Iterable[Mapping[str, Any]], workflow: Mapping[str, A
         elif event_type == "technical-amendment-added":
             if projection.get("package_hash") is None or projection["state"] in workflow["terminal_states"]:
                 raise CogitoError("amendments require an approved package on an active run")
-            apply_path_projection(projection, payload)
+            apply_path_projection(projection, payload, history[:-1])
             projection.setdefault("amendments", []).append(dict(payload))
             projection["effective_contract_hash"] = payload.get("effective_contract_hash")
             for task in payload.get("amendment", {}).get("added_tasks", []):

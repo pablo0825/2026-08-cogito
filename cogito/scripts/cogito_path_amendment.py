@@ -80,7 +80,7 @@ class PathAmendmentMixin:
         materialize_contract_with_limits(store.approved_package(), [*prior, amendment], store.workflow['limits'])
         if not amendment.get('path_additions'):
             raise CogitoError('path correction requires path_additions')
-        target_tasks = path_targets(current, amendment)
+        target_tasks = path_targets(current, amendment, store._events.read())
         ids = [r['task_id'] for r in amendment['path_additions']]
         slice_id = target_tasks[ids[0]]['slice_id']
         finding_binding = {}
@@ -116,7 +116,7 @@ class PathAmendmentMixin:
             if any(not path_allowed(p, allowed) for p in changes if p not in controls and not p.startswith('.cogito/')):
                 raise CogitoError('checkout already contains changes outside the existing Task paths')
             binding = dict(head=head, index_tree=index, content_tree=tree)
-            if current['state'] == 'review-fix':
+            if current['state'] == 'review-fix' and (amendment.get('added_tasks') or not active):
                 store._validate_review_content(worktree, tree)
         for row in amendment['path_additions']:
             for relative in row['paths']:

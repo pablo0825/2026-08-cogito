@@ -1829,12 +1829,19 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     input_value={'finding': {'event_sequence': finding['sequence'], 'event_hash': finding['event_hash']}}))
                 operations[-1]['optional_inputs'] = ['amendment']
                 output['scope_correction'] = {
+                    'batching': 'Group related findings in one correction Task per Slice and review cycle; keep its existing branch/worktree and use related checks.',
                     'within_existing_paths': 'Add amendment to the review-fix-start input.',
                     'omitted_files': 'Start with finding only, then amend-paths propose/review with new correction tasks; the existing independent Reviewer may review.',
                     'changed_boundary': 'Use replanning for changes beyond the approved contract.',
                 }
         if state['state'] == 'review-fix' and state.get('path_amendment'):
             return
+        if state['state'] == 'review-fix':
+            output['correction_guidance'] = {
+                'related_findings': 'Continue an unfinished correction Task for related in-scope findings; do not open a Task or branch per finding.',
+                'omitted_files': 'Use amend-paths on an unfinished Task introduced in this review cycle; preserve its original correction amendment for closure.',
+                'checks': 'Run related checks; do not automatically copy all integration checks into the correction Task.',
+            }
         if state['state'] == 'review-fix' and not running:
             from cogito_task_finish import preflight_store
             events = self._events.read()

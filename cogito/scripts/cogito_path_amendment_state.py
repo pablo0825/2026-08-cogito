@@ -5,14 +5,19 @@ EVENTS = {'path-amendment-proposed', 'path-amendment-withdrawn'}
 ASSESSMENTS = {'requirements', 'api', 'data_model', 'security', 'slice', 'checks'}
 
 
-def path_targets(state, amendment):
+def path_targets(state, amendment, events=()):
     """Resolve unfinished execution tasks or new review correction tasks."""
     from cogito_path_amendment_contract import validate_path_additions_shape
     validate_path_additions_shape(amendment)
     added = amendment.get('added_tasks', [])
     if state['state'] == 'review-fix':
         if not added:
-            raise CogitoError('review path correction requires new correction tasks')
+            start = max((e['sequence'] for e in events if e['type'] == 'review-fix-required'), default=0)
+            correction_ids = {task['id'] for e in events
+                              if e['type'] == 'technical-amendment-added' and e['sequence'] > start
+                              for task in e['payload']['amendment'].get('added_tasks', [])}
+            if not start or any(row['task_id'] not in correction_ids for row in amendment['path_additions']):
+                raise CogitoError('review path correction requires new correction tasks or unfinished tasks from this review cycle')
     elif state['state'] != 'executing' or added:
         raise CogitoError('path correction requires executing tasks or new review-fix tasks')
     tasks = dict(state['tasks'])
@@ -52,14 +57,14 @@ def review_binding(pending, review):
         raise CogitoError('resolve path review findings before applying; revise or withdraw proposal')
 
 
-def project_path_amendment(state, event, payload):
+def project_path_amendment(state, event, payload, events=()):
     if event == 'path-amendment-proposed':
         if not state.get('package_hash'):
             raise CogitoError('path correction requires an approved package')
         body = {k: v for k, v in payload.items() if k != 'proposal_hash'}
         if hash_json(body) != payload.get('proposal_hash') or payload.get('base_contract_hash') != state['effective_contract_hash']:
             raise CogitoError('invalid path proposal binding')
-        path_targets(state, payload['amendment'])
+        path_targets(state, payload['amendment'], events)
         state['path_amendment'] = dict(payload)
         return True
     if event == 'path-amendment-withdrawn':
@@ -71,7 +76,7 @@ def project_path_amendment(state, event, payload):
     return False
 
 
-def apply_path_projection(state, payload):
+def apply_path_projection(state, payload, events=()):
     amendment = payload.get('amendment', {})
     if not amendment.get('path_additions'):
         return
@@ -80,7 +85,7 @@ def apply_path_projection(state, payload):
             or pending['base_contract_hash'] != state['effective_contract_hash']):
         raise CogitoError('path additions require the exact pending reviewed proposal')
     review_binding(pending, payload.get('scope_review'))
-    path_targets(state, amendment)
+    path_targets(state, amendment, events)
     added_ids = {task['id'] for task in amendment.get('added_tasks', [])}
     for row in amendment['path_additions']:
         if row['task_id'] in added_ids:
