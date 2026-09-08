@@ -49,7 +49,7 @@ Coordinator 按依賴派發工作並串行整合。Feature／Change／Correction
 | 需求問答、`draft-shared-understanding`、摘要呈現／確認／修訂 | [Grilling Workflow](references/grilling-workflow.md)；產出時讀其摘要格式 |
 | `assess-mini-package-eligibility`、Boundary、Package 草擬／核准 | [Package Authoring](references/package-authoring.md)；需要 Spec／Plan 時讀對應 template |
 | `commit-stage-artifacts` | [Stage Commits](references/stage-commits.md) |
-| Start Gate、派工、Task、checks、review、integration、範圍內修正、`complete-implementation`、`prepare-review-fix`、`complete-review-fix`、`review-path-amendment`、`retry-path-amendment`、實作中漏列必要路徑 | [Execution Policy](references/execution-policy.md) |
+| Start Gate、派工、Task、checks、review、integration、範圍內修正、`complete-implementation`、`prepare-review-fix`、`complete-review-fix`、`review-path-amendment`、`retry-path-amendment`、實作或審查中漏列必要路徑 | [Execution Policy](references/execution-policy.md) |
 | `retry-fixed-action`、`recover-result-metadata` | [Runtime Interface](references/runtime-interface.md#固定操作與歷史登記恢復) |
 | Package 核准前的規劃輪次、比較、覆核或撤回 | [Planning Revisions](references/planning-revisions.md) |
 | 超出 Amendment 的已核准契約變更、`prepare-human-feedback-replan` | [Replanning](references/replanning.md) |

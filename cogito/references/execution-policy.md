@@ -29,6 +29,8 @@ Atomic Task 依下列順序完成，才能開始下一項 Task：
 
 ### 實作中補列必要路徑
 
+本節處理未完成 Task；審查才發現缺漏時，使用[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)。
+
 僅限 `executing` 中的 Atomic Development Package：原規格所需的 mapper、response contract 或測試檔漏列時，可在同一 Run、Slice、branch 與已存在的 worktree 追加精確檔案路徑。這是修改授權的補正，不新增需求、不建立 successor，也不新增 Task 或改 DAG。若變更 Acceptance、公開 API 語意、資料模型、安全邊界或 Slice 責任，依 [Replanning](replanning.md) 處理；不能只靠檔名判斷是否改變契約。
 
 只可補入同一 Slice 未完成 Task 的路徑；已登錄完成的 Implementer Result 也不可改寫。不得以目錄或 glob 放寬範圍、跨用其他 Task／Slice 的責任路徑，或加入 symlink、控制文件、凍結來源及高風險 hotspot。新增檔案可以尚不存在，但所屬 worktree 必須已建立。不得先修改未授權路徑再申請補正。
@@ -91,7 +93,7 @@ Atomic 下一個 Task 取得 lease 前仍會檢查 checkout，避免任務間隙
 
 ### 選擇與執行 checks
 
-Atomic Package 本地只執行變更行為與受影響依賴的相關檢查，完整 regression 交給 CI，不固定在本地執行完整 build／lint／migration；其中任一項若是 Task 或整合的必要驗證，仍列為相關 check。Coordinator 在 Plan 記錄選測理由，影響擴大時依 Amendment 補充，不只看哪些測試檔被修改。Gate 不自動推算測試影響範圍，也不以本地通過宣稱 CI 已通過；合併依既有 CI 要求，未執行／等待／失敗如實回報。
+Atomic Package（包含審查退回的修正 Task）本地只執行變更行為與受影響依賴的相關檢查，完整 regression 集中於最終整合版本並交給 CI，不固定在本地執行完整 build／lint／migration；其中任一項若是 Task 或整合的必要驗證，仍列為相關 check。Coordinator 在 Plan 記錄選測理由，影響擴大時依 Amendment 補充，不只看哪些測試檔被修改。Gate 不自動推算測試影響範圍，也不以本地通過宣稱 CI 已通過；合併依既有 CI 要求，未執行／等待／失敗如實回報。
 
 - 所有正式 checks 由 controlled runner 以 argv array 執行，不預設 shell；cwd 限於 worktree，套用 timeout、輸出上限、redaction 與 env allowlist。
 - `fetch_allowed` 是 Coordinator 應遵守的授權政策；runner 沒有網路隔離機制，設為 false 不會阻止 check 程序連網。需要網路限制時，由執行環境提供並驗證。
@@ -112,7 +114,7 @@ Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後�
 | `verify --evidence` | 本波每個 checkout 最新完整內容；不能拿早期 Task evidence 代替目前內容 |
 | `post-verify --evidence` | 最新 delivery HEAD 的 required integration checks，至少一項作為最後內容依據 |
 
-早期 Task 的 required evidence 已由 Result 驗證並保留，不要求在後續 HEAD 重跑。最後 Task 的提交前 evidence 若與提交後完整內容一致，可用於本輪驗證及該 Task Result 綁定的 review。相同 HEAD、完整 content tree 與 effective contract 的 evidence 可跨狀態沿用；任一綁定變更時重跑必要的相關 checks。
+早期 Task 的 required evidence 已由 Result 驗證並保留，不要求在後續 HEAD 重跑。最後 Task 的提交前 evidence 若與提交後完整內容一致，可用於本輪驗證及該 Task Result 綁定的 review。相同 HEAD、完整 content tree 與 effective contract 的 evidence 可跨狀態沿用；階段切換本身不要求重跑。任一綁定變更時重跑必要的相關 checks，不改綁或補寫歷史 evidence。
 
 `Result.checks` 記錄最後整合驗證採用的 checks；Task checks 保留在 Implementer Results 與 delivery summary。不建立純跑測試的 Task 或空 commit。舊 Package 維持原驗證規則。
 
@@ -154,6 +156,38 @@ Atomic Development 的本輪 Reviewer 已登記 `needs-fix` 時，先查 `next`�
 啟動成功後依一般 Atomic Task 流程實作、相關檢查、獨立 commit 與 `task-finish`；每項修正 commit 保留 `Cogito-Amendment: <ID>` trailer。修正 Tasks 完成後依 `next` 執行 `review-fix-complete`，再正式驗證及本輪獨立審查；未受影響的原 approval 可依下節採認。正式審查仍在實作與驗證後進行，不與後續實作並行。
 
 既有分開的 `review-fix-start` → `amend` 仍支援，包括非 Atomic 流程。新操作不得在 `reviewing` 先用 `amend` 加修正 Tasks；一般 check-only 等其他合法 Amendment 不受此限制。已被舊版接受的錯序恢復見 [Runtime Interface](runtime-interface.md#固定操作與歷史登記恢復)。
+
+### 審查修正中的必要檔案補列
+
+限同一 Atomic Development Run、整合前的 `review-fix`：本輪 finding 所需的檔案漏列，且 Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任均不變。補正只授權本次新增的修正 Tasks，全部屬於該 finding 的 Slice；不更改已完成 Task 的 paths、checks、commit 或 Result。真正超出核准契約時使用 [Replanning](replanning.md)。
+
+1. Coordinator 或 Implementer 先說明原 finding、未超出範圍的理由、精確檔案及相關 checks。引用原規格與 finding，不重新撰寫完整 Package。以 `next` 提供的 `finding` 單獨作為 `review-fix-start --input` 的輸入，例如 `{"finding": {"event_sequence": 54, "event_hash": "<實值>"}}`，先進入既有修正階段；不要把尚未覆核的路徑補列放進合併啟動輸入。
+2. 停妥受影響 Worker 與 controlled checks，保留原本已驗證的 checkout；尚未授權的檔案不可先改。向既有 `amend-paths propose` 提交以下形式：
+
+   ```json
+   {
+     "author_id": "coordinator",
+     "amendment": {
+       "id": "TA-mapper", "reason": "修正本輪 finding：補齊原需求的年度欄位",
+       "added_tasks": [{
+         "id": "T-mapper", "slice_id": "FS-043",
+         "paths": ["src/response_mapper.ts"],
+         "responsibility": "回傳原規格要求的年度",
+         "depends_on": ["T-query"], "check_ids": ["C-year"]
+       }],
+       "path_additions": [{
+         "task_id": "T-mapper", "paths": ["src/response_mapper.ts"],
+         "reason": "原核准欄位所需的 mapper 漏列", "check_ids": ["C-year"]
+       }]
+     }
+   }
+   ```
+
+   IDs 使用實值。`added_tasks.paths` 是修正 Task 的完整範圍；`path_additions.paths` 只列需要補授權的精確檔案，且其 paths／checks 必須包含在對應新 Task。每個新 Task 都須有對應補列，不混入其他任務。必要時在同一 Amendment 增加 `added_checks`；原 required checks 仍保留。禁止目錄、glob、symlink、凍結來源、控制文件、高風險 hotspot 或其他 Task／Slice 所有的補列路徑；跨 Slice 前置任務須已 integrated，不能改變原 Slice 相依。
+3. **由原本的獨立 Reviewer 在既有審查中確認範圍即可**，不固定增加第三位 Agent 或使用者核准。Reviewer 不得是 proposal 作者或受影響 Implementer。沿用[路徑覆核的輸入與重送規則](#實作中補列必要路徑)，以 `amend-paths review` 保存具體範圍判斷與選測理由；通過後一筆 Amendment 同時登記檔案授權與新修正 Tasks。覆核前不建立可執行的新 Task。
+4. 依上節完成修正 Task、相關檢查、commit、`task-finish` 與 `review-fix-complete`，再驗證目前內容並複審。原 Reviewer 聚焦確認原 finding、新增／受影響 Task 與連帶影響；符合下節條件的未受影響 approval 可採認。無法證明不受影響時擴大複審，不因補列檔案而自動重開 run。
+
+Proposal 綁定本次 review-fix finding、有效契約與 checkout；變更後重新 propose／review。撤回不發布新 Task 或授權，仍留在原修正階段。中斷後依 `next` 重送原 action，不重建修正 Task；原 Package、已完成成果與歷史 evidence 不改寫。
 
 ### 保留未受影響審查
 
@@ -209,7 +243,7 @@ Coordinator 依 Package 的 `stop_conditions` 與執行證據判讀是否應停�
 
 測試缺漏、內部程式錯誤或已核准路徑內的低風險調整，不改變核准的行為、公開契約、資料模型、安全邊界、DAG 或 Slice 責任時，可建立 append-only Technical Amendment 後自動修正。每個 Amendment 有穩定 ID、理由、增量任務/checks、允許路徑及 effective contract hash；commit 加上 `Cogito-Amendment: <ID>` trailer。
 
-一般 Technical Amendment 在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。只有[實作中補列必要路徑](#實作中補列必要路徑)可經獨立覆核擴充精確路徑；一般修正不得藉此擴張範圍。不得刪除或降級 required checks、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
+一般 Technical Amendment 在已核准路徑內增加 checks、tests、tasks，或修正內部實作；新增 check 的 `env_allowlist` 不得超出 Package 凍結的 `allowed_environment`。只有[實作中補列必要路徑](#實作中補列必要路徑)與[審查修正中的必要檔案補列](#審查修正中的必要檔案補列)可經獨立覆核擴充精確路徑；一般修正不得藉此擴張範圍。不得刪除或降級 required checks、改 Acceptance、公開 API、資料模型、安全邊界、依賴或 DAG。有效契約 hash 由 base Package 與有序 amendments 計算；相關 commit 使用 `Cogito-Amendment` trailer。
 
 Amendment 只能單調增加或加強工作。超出上述邊界時依 [Replanning](replanning.md) 限制全體執行、保存現場，再提出新的核准契約與 successor 承接方案。
 

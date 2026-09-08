@@ -24,7 +24,7 @@ Atomic 整合的 `integration_choices` 一次只選一個 Slice，操作後重�
 
 `run-check` receipt 另回傳原 action 的 `check_status`、`exit_code`、`timed_out`、`output_limit_exceeded`、`termination_degraded`、`worktree_changed_during_check`，不包含 stdout/stderr。`ok: true` 與 CLI exit code `0` 只代表 Gate 操作成功；是否通過看 `check_status`，不得把 evidence 登錄成功當成 check 通過。Evidence schema 與原 hashes 不變。
 
-一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence` 與 `last_event_hash` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection、歷史或 `next`。Mutation 後需要決定路由時另查既有 `next`，讓 RP／DP、path amendment、fixed action 與 recovery 的即時 override 仍由 `RunStore.next_action` 單一入口判定；只有明確診斷完整 projection 時才查 `status`。`run-check` receipt 另保留精確的 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash`，重送舊 action 仍指向該 action 原本登錄的 evidence；`finalize` receipt 另保留一次性的 `cleanup.removed`、`cleanup.retained` 與存在時的 `cleanup.error`。`task-finish` 與 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。
+一般 Run mutation 成功時，`data` 只回傳 `run_id`、mutation 後的 `state`、`sequence` 與 `last_event_hash` receipt；不回傳完整 tasks、planning snapshot、Agent Results、evidence collection、歷史或 `next`。Mutation 後需要決定路由時另查既有 `next`，讓 RP／DP、path amendment、fixed action 與 recovery 的即時 override 仍由 `RunStore.next_action` 單一入口判定；只有明確診斷完整 projection 時才查 `status`。`run-check` receipt 另保留精確的 `check_id`、`evidence_path`、`evidence_hash`、`head_commit` 與 `effective_contract_hash`，重送舊 action 仍指向該 action 原本登錄的 evidence；`finalize` receipt 另保留一次性的 `cleanup.removed`、`cleanup.retained` 與存在時的 `cleanup.error`。`task-finish` 與帶 `amendment` 的 `review-fix-start --input` 保留各自的 commit、evidence、amendment、task 與 next 專用 receipt，不改套一般 receipt。只有 `finding` 的 `review-fix-start --input` 使用一般 mutation receipt；適用步驟見[審查必要檔案補列](execution-policy.md#審查修正中的必要檔案補列)。
 
 `status` 是一般 Run 的唯一完整 `RunState` 查詢；`next`、`report`、`delivery-summary`、planning history／compare／recover、RP／DP status 與其他唯讀查詢維持各自的資料 shape。相同 action ID 與輸入重送 mutation 時不追加事件，receipt 反映重送完成時的目前權威 projection；不要假設它會重現原 action 當時的 bytes。需要對照舊狀態時使用 append-only events，不從 mutation stdout 推測。
 
@@ -50,7 +50,7 @@ Package／Result JSON 繼續用於保存、交接與顯示，Spec／Plan 維持 
 
 ## 固定操作與歷史登記恢復
 
-`task-finish` 與 `review-fix-start --input` 只串接各自固定的兩項登記。`.cogito/runs/<run-id>/fixed-actions/` 保存不可變的輸入、起始契約／事件、內容與子事件綁定；完成與否以權威事件核對，不以 cache 或可改写的 done flag 判定。不得手動修改或刪除這些綁定來重試。
+`task-finish` 與帶 `amendment` 的 `review-fix-start --input` 只串接各自固定的兩項登記。`.cogito/runs/<run-id>/fixed-actions/` 保存不可變的輸入、起始契約／事件、內容與子事件綁定；完成與否以權威事件核對，不以 cache 或可改写的 done flag 判定。不得手動修改或刪除這些綁定來重試。
 
 一部分事件成功、後續寫入或回應失敗時，停止接續派工與檢查，查 `next` 的 `retry-fixed-action`，以原輸入及原 action ID 重送。工具只完成缺少的登記，不重新選 commit、finding 或 evidence，也不重計修正次數。若已 `blocked`，先處理原阻塞並通過既有 Resume Gate，再重送；重送不能穿透 blocked、RP、DP 或 human 限制。契約、內容、事件或身分無法對帳時保持停止，不自行改工具放行。
 
