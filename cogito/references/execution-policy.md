@@ -12,6 +12,8 @@ Package checkpoint 登記成功後才通過 Start Gate，再派工。Maintenance
 
 Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；Atomic Task 依下一節完成後才開始下一項。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
 
+Worker 在完成、失敗、阻塞或預期明顯延遲時主動回報。Coordinator 優先等待通知；較長工作可約定下次確認時間，未收到預期回報時主動詢問。進度回報先提供足以判斷繼續等待、協助或推進的摘要，資訊不足或異常時再讀相關細節。
+
 ## 完成 Task
 
 ### Atomic Task
