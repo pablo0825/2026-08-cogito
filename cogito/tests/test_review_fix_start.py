@@ -108,7 +108,8 @@ class ReviewFixStartTests(GitTestCase):
         hint = store.next_action()['operations'][0]
         self.assertEqual(hint['operation'], 'review-fix-start')
         self.assertEqual(hint['input']['finding'], original['finding'])
-        self.assertEqual(hint['required_inputs'], ['amendment'])
+        self.assertEqual(hint['required_inputs'], [])
+        self.assertEqual(hint['optional_inputs'], ['amendment'])
         for mode in ('finding', 'paths', 'empty', 'dependency'):
             request = copy.deepcopy(original)
             if mode == 'finding':

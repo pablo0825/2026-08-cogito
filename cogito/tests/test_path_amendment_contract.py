@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from cogito_common import CogitoError
 from cogito_contracts import materialize_contract, package_hash, validate_agent_result
 from test_atomic_task_contract import atomic_package
+from cogito_path_amendment_state import path_targets, project_path_amendment, apply_path_projection, ASSESSMENTS
+from cogito_common import hash_json
 
 
 def path_package():
@@ -27,6 +29,78 @@ def path_amendment():
 
 
 class PathAmendmentContractTests(unittest.TestCase):
+    @staticmethod
+    def correction():
+        amendment = path_amendment()
+        amendment['path_additions'][0]['task_id'] = 'T-fix'
+        amendment['added_tasks'] = [{'id': 'T-fix', 'slice_id': 'FS-1',
+            'paths': ['src/original.py', 'src/mapper.py', 'tests/test_mapper.py'],
+            'responsibility': 'Complete approved response', 'check_ids': ['C-1'],
+            'depends_on': ['T-1']}]
+        # Use the owning Slice ID from the fixture, not a second responsibility.
+        amendment['added_tasks'][0]['slice_id'] = path_package()['slices'][0]['id']
+        return amendment
+
+    def test_new_correction_materializes_without_changing_original_task(self):
+        package, amendment = path_package(), self.correction()
+        before = copy.deepcopy((package, amendment))
+        effective = materialize_contract(package, [amendment])
+        self.assertEqual(effective['execution_dag']['tasks'][0], package['execution_dag']['tasks'][0])
+        self.assertEqual(effective['execution_dag']['tasks'][-1], amendment['added_tasks'][0])
+        self.assertIn('src/mapper.py', effective['approved_paths'])
+        self.assertIn('src/mapper.py', effective['slices'][0]['worker']['allowed_paths'])
+        self.assertEqual((package, amendment), before)
+        changed = copy.deepcopy(amendment)
+        changed['added_tasks'][0]['responsibility'] = 'Revised explanation'
+        self.assertNotEqual(effective['effective_contract_hash'],
+                            materialize_contract(package, [changed])['effective_contract_hash'])
+
+    def test_correction_rejects_missing_grants_and_unrelated_or_reused_tasks(self):
+        for field, value in [('paths', ['src/original.py']), ('paths', ['src/mapper.py', 'tests/test_mapper.py', 'unapproved.py']),
+                             ('check_ids', ['C-missing']), ('id', 'T-1'), ('slice_id', 'FS-missing')]:
+            with self.subTest(field=field, value=value):
+                amendment = self.correction()
+                amendment['added_tasks'][0][field] = value
+                with self.assertRaises(CogitoError):
+                    materialize_contract(path_package(), [amendment])
+        amendment = self.correction()
+        extra = {**amendment['added_tasks'][0], 'id': 'T-extra'}
+        amendment['added_tasks'].append(extra)
+        with self.assertRaisesRegex(CogitoError, 'exactly'):
+            materialize_contract(path_package(), [amendment])
+
+    def test_review_projection_checks_stage_and_preserves_completed_task(self):
+        original = {**path_package()['execution_dag']['tasks'][0], 'status': 'complete'}
+        state = {'state': 'review-fix', 'package_hash': 'a' * 64,
+                 'effective_contract_hash': 'a' * 64, 'tasks': {'T-1': original}, 'agent_results': []}
+        amendment = self.correction()
+        proposal = {'amendment': amendment, 'author_id': 'coordinator', 'executor_ids': ['worker'],
+                    'base_contract_hash': 'a' * 64}
+        proposal['proposal_hash'] = hash_json(proposal)
+        with self.assertRaisesRegex(CogitoError, 'review-fix'):
+            path_targets({**state, 'state': 'executing'}, amendment)
+        with self.assertRaisesRegex(CogitoError, 'new correction'):
+            path_targets(state, path_amendment())
+        project_path_amendment(state, 'path-amendment-proposed', proposal)
+        before = copy.deepcopy(state['tasks'])
+        review = {'proposal_hash': proposal['proposal_hash'], 'reviewer_id': 'reviewer',
+                  'decision': 'within-approved-scope', 'assessment': {k: 'unchanged' for k in ASSESSMENTS}, 'findings': []}
+        apply_path_projection(state, {'amendment': amendment, 'scope_review': review})
+        self.assertEqual(state['tasks'], before)
+        self.assertNotIn('path_amendment', state)
+        with self.assertRaisesRegex(CogitoError, 'pending'):
+            apply_path_projection(state, {'amendment': amendment, 'scope_review': review})
+
+    def test_review_targets_reject_unintegrated_cross_slice_dependency(self):
+        amendment = self.correction()
+        amendment['added_tasks'][0]['depends_on'] = ['T-other']
+        state = {'state': 'review-fix', 'tasks': {'T-other': {
+            'id': 'T-other', 'slice_id': 'FS-other', 'status': 'reviewed'}}, 'agent_results': []}
+        with self.assertRaisesRegex(CogitoError, 'already be integrated'):
+            path_targets(state, amendment)
+        state['tasks']['T-other']['status'] = 'integrated'
+        self.assertIn('T-fix', path_targets(state, amendment))
+
     def test_materializes_three_scopes_without_mutating_inputs(self):
         package, amendment = path_package(), path_amendment()
         original = copy.deepcopy((package, amendment))

@@ -357,8 +357,12 @@ def main(argv: list[str] | None = None) -> int:
             output = RunStore(repo, args.run_id).complete_correction(args.amendment_id, args.commit_id, args.action_id)
         elif args.command == "review-fix-start":
             store = RunStore(repo, args.run_id)
-            output = (store.start_review_fix_with_amendment(_read_object(args.input), args.action_id)
-                      if args.input else store.enter_review_fix(args.action_id))
+            request = _read_object(args.input) if args.input else None
+            if request is not None and set(request) == {'finding'}:
+                output = store.enter_review_fix(args.action_id, finding_reference=request['finding'])
+            else:
+                output = (store.start_review_fix_with_amendment(request, args.action_id)
+                          if request is not None else store.enter_review_fix(args.action_id))
         elif args.command == "review-fix-complete":
             output = RunStore(repo, args.run_id).complete_review_fix(args.amendment_id, args.commit_id, args.action_id)
         elif args.command == "integrate":

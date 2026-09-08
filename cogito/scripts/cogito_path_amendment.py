@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, hash_json, atomic_create_json, atomic_write_json, load_json
 from cogito_evidence_binding import capture_index_and_worktree_trees, working_tree_changed_paths
-from cogito_path_amendment_state import review_binding
+from cogito_path_amendment_state import path_targets, review_binding
 from cogito_replan_lock import run_mutation
 
 
@@ -75,28 +75,28 @@ class PathAmendmentMixin:
         current = store.load()
         if pending_from_events(store.root, store.run_id) and not current.get('path_amendment'):
             raise CogitoError('retry the applied path review to complete executor recovery first')
-        if current['state'] != 'executing':
-            raise CogitoError('path correction is only available during executing')
         prior = [e['payload']['amendment'] for e in store._events.read() if e['type'] == 'technical-amendment-added']
         effective = store.effective_package()
         materialize_contract_with_limits(store.approved_package(), [*prior, amendment], store.workflow['limits'])
         if not amendment.get('path_additions'):
             raise CogitoError('path correction requires path_additions')
+        target_tasks = path_targets(current, amendment)
         ids = [r['task_id'] for r in amendment['path_additions']]
-        for task_id in ids:
-            task = current['tasks'][task_id]
-            if task['status'] not in {'pending', 'leased', 'running', 'blocked'} or any(
-                    r['task_id'] == task_id and r['role'] == 'implementer' and r['status'] == 'complete' for r in current['agent_results']):
-                raise CogitoError('path correction cannot change a completed Task or recorded commit')
-        slice_id = current['tasks'][ids[0]]['slice_id']
+        slice_id = target_tasks[ids[0]]['slice_id']
+        finding_binding = {}
+        if current['state'] == 'review-fix':
+            starts = [e for e in store._events.read() if e['type'] == 'review-fix-required']
+            if not starts or current['tasks'][starts[-1]['payload']['review_task_id']]['slice_id'] != slice_id:
+                raise CogitoError('review path correction must belong to the current finding Slice')
+            finding_binding = {'review_finding': starts[-1]['payload']}
         if current.get('path_amendment') and current['path_amendment']['slice_id'] != slice_id:
             raise CogitoError('withdraw the existing Slice proposal before correcting another Slice')
-        tasks = {k: v for k, v in current['tasks'].items() if v.get('slice_id') == slice_id}
+        tasks = {k: v for k, v in target_tasks.items() if v.get('slice_id') == slice_id}
         owner = next(s for s in effective['slices'] if s['id'] == slice_id)
         declared = store.root / owner['worker']['worktree']
         if declared.resolve() != declared:
             raise CogitoError('path correction worktree must not traverse symlinks')
-        worktree, branch = store._task_worktree(current['tasks'][ids[0]], effective)
+        worktree, branch = store._task_worktree(target_tasks[ids[0]], effective)
         if worktree.resolve() != worktree:
             raise CogitoError('path correction worktree must not traverse symlinks')
         binding = None
@@ -116,6 +116,8 @@ class PathAmendmentMixin:
             if any(not path_allowed(p, allowed) for p in changes if p not in controls and not p.startswith('.cogito/')):
                 raise CogitoError('checkout already contains changes outside the existing Task paths')
             binding = dict(head=head, index_tree=index, content_tree=tree)
+            if current['state'] == 'review-fix':
+                store._validate_review_content(worktree, tree)
         for row in amendment['path_additions']:
             for relative in row['paths']:
                 path = worktree / relative
@@ -126,7 +128,7 @@ class PathAmendmentMixin:
         executors = sorted({t['agent_id'] for t in tasks.values() if t.get('agent_id')})
         active_ids = sorted({t['agent_id'] for t in tasks.values() if t['status'] in {'leased', 'running'}})
         return current, dict(slice_id=slice_id, tasks=tasks, worktree=str(worktree), binding=binding,
-                             executor_ids=executors, active_executor_ids=active_ids)
+                             executor_ids=executors, active_executor_ids=active_ids, **finding_binding)
 
     @run_mutation
     def path_amendment_propose(self, request, action_id):

@@ -438,12 +438,14 @@ def _validate_amendment_changes(effective: Mapping[str, Any], amendment: Mapping
     for task in amendment.get("added_tasks", []):
         if task["id"] in existing_tasks:
             raise CogitoError("added tasks require new ids")
-        if any(not path_allowed(str(path), effective["approved_paths"]) for path in task["paths"]):
+        grants = {path for row in amendment.get("path_additions", [])
+                  if row["task_id"] == task["id"] for path in row["paths"]}
+        if any(path not in grants and not path_allowed(str(path), effective["approved_paths"]) for path in task["paths"]):
             raise CogitoError("added task paths must stay within approved paths")
         if effective["kind"] in {"maintenance", "documentation"}:
             if task["slice_id"] != "mini-package":
                 raise CogitoError("Mini Package amendment tasks use slice_id mini-package")
-        elif task["slice_id"] not in slices or any(not path_allowed(str(path), slices[task["slice_id"]]["worker"]["allowed_paths"]) for path in task["paths"]):
+        elif task["slice_id"] not in slices or any(path not in grants and not path_allowed(str(path), slices[task["slice_id"]]["worker"]["allowed_paths"]) for path in task["paths"]):
             raise CogitoError("added task exceeds its Slice worker responsibility")
         existing_tasks.add(task["id"])
     if any(not path_allowed(str(path), effective["approved_paths"]) for path in amendment.get("path_fixes", [])):
@@ -484,9 +486,9 @@ def materialize_contract_with_limits(
         _validate_amendment_changes(effective, amendment)
         addition = json.loads(json.dumps(amendment))
         effective["checks"].extend(addition.get("added_checks", []))
-        apply_path_additions(effective, addition)
         dag = effective["execution_dag"]
         dag["tasks"].extend(addition.get("added_tasks", []))
+        apply_path_additions(effective, addition)
         dag["edges"].extend(
             {"from": dependency, "to": task["id"]}
             for task in addition.get("added_tasks", []) for dependency in task.get("depends_on", [])

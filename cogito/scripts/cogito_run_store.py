@@ -949,6 +949,12 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
 
     @run_mutation
     def enter_review_fix(self, action_id: str | None = None, *, finding_reference=None) -> RunState:
+        if finding_reference is not None and (
+                not isinstance(finding_reference, dict)
+                or set(finding_reference) != {'event_sequence', 'event_hash'}
+                or type(finding_reference['event_sequence']) is not int
+                or not isinstance(finding_reference['event_hash'], str)):
+            raise CogitoError('review-fix-start requires an exact finding reference')
         request_hash = (request_fingerprint("review-fix-start") if finding_reference is None
                         else request_fingerprint('review-fix-start', finding=finding_reference))
         replay = self._replay(action_id, "review-fix-required", request_hash)
@@ -1820,8 +1826,15 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             else:
                 output['next_action'] = 'prepare-review-fix'
                 operations.append(operation_hint(self.root, self.run_id, 'review-fix-start',
-                    input_value={'finding': {'event_sequence': finding['sequence'], 'event_hash': finding['event_hash']}},
-                    required_inputs=['amendment']))
+                    input_value={'finding': {'event_sequence': finding['sequence'], 'event_hash': finding['event_hash']}}))
+                operations[-1]['optional_inputs'] = ['amendment']
+                output['scope_correction'] = {
+                    'within_existing_paths': 'Add amendment to the review-fix-start input.',
+                    'omitted_files': 'Start with finding only, then amend-paths propose/review with new correction tasks; the existing independent Reviewer may review.',
+                    'changed_boundary': 'Use replanning for changes beyond the approved contract.',
+                }
+        if state['state'] == 'review-fix' and state.get('path_amendment'):
+            return
         if state['state'] == 'review-fix' and not running:
             from cogito_task_finish import preflight_store
             events = self._events.read()

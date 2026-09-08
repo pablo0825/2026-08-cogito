@@ -1,4 +1,4 @@
-"""Pure, append-only scope additions for existing atomic Tasks."""
+"""Pure, append-only scope additions for atomic execution and correction Tasks."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def validate_path_additions_shape(amendment: Mapping[str, Any]) -> None:
     if "path_additions" not in amendment:
         return
     additions = require_array(amendment["path_additions"], "path_additions", nonempty=True)
-    if "commit_id" in amendment or any(amendment.get(key) for key in ("added_tasks", "path_fixes")):
+    if "commit_id" in amendment or amendment.get("path_fixes"):
         raise CogitoError("path additions cannot mix with other amendment changes")
     task_ids: set[str] = set()
     paths: set[str] = set()
@@ -40,6 +40,14 @@ def validate_path_additions_shape(amendment: Mapping[str, Any]) -> None:
             require_id(check, "path addition check id")
         if len(checks) != len(set(checks)):
             raise CogitoError("path addition.check_ids must be unique")
+    if amendment.get("added_tasks"):
+        added = {task["id"]: task for task in amendment["added_tasks"]}
+        if set(added) != task_ids:
+            raise CogitoError("review path additions must target exactly the new correction tasks")
+        for row in additions:
+            task = added[row["task_id"]]
+            if not set(row["paths"]) <= set(task["paths"]) or not set(row["check_ids"]) <= set(task.get("check_ids", [])):
+                raise CogitoError("new correction tasks must include their added paths and checks")
 
 
 def validate_path_additions(effective: Mapping[str, Any], amendment: Mapping[str, Any]) -> None:
@@ -52,6 +60,10 @@ def validate_path_additions(effective: Mapping[str, Any], amendment: Mapping[str
     if effective.get("task_delivery") != "atomic" or effective["kind"] not in {"feature", "change", "correction"}:
         raise CogitoError("path additions require an atomic Development Package")
     tasks = {task["id"]: task for task in effective["execution_dag"]["tasks"]}
+    added = {task["id"]: task for task in amendment.get("added_tasks", [])}
+    if set(added) & set(tasks):
+        raise CogitoError("added tasks require new ids")
+    tasks.update(added)
     slices = {item["id"]: item for item in effective["slices"]}
     checks = {check["id"] for check in [*effective["checks"], *amendment.get("added_checks", [])]
               if check.get("required", True)}
@@ -72,7 +84,7 @@ def validate_path_additions(effective: Mapping[str, Any], amendment: Mapping[str
         for path in addition["paths"]:
             if path_allowed(path, protected) or any(path_allowed(value, [path]) for value in protected):
                 raise CogitoError("path addition overlaps frozen control or safety scope")
-            if path_allowed(path, task["paths"]):
+            if task["id"] not in added and path_allowed(path, task["paths"]):
                 raise CogitoError("path addition is already within its Task scope")
             if any(path_allowed(path, other["paths"]) or any(path_allowed(value, [path]) for value in other["paths"])
                    for other in tasks.values() if other["id"] != task["id"]):
