@@ -32,7 +32,7 @@ def failure_payload(store, state, check_id, worktree, action_id, execution, reas
             **execution, 'started_hash': hash_json(execution), 'reason': reason}
 
 
-def prepare_link(store, old, new):
+def prepare_link(store, old, new, *, read_only=False):
     events = store._events.read()
     failures = [e for e in events if e['type'] == FAILURE_EVENT and e['payload']['attempt_id'] == old]
     if len(failures) != 1:
@@ -50,10 +50,11 @@ def prepare_link(store, old, new):
         item = replacement_evidence(store, events, prior)
         if item is None or item['passed'] is not False:
             raise CogitoError('previous replacement must have a recorded failed outcome')
-        from cogito_execution_registry import snapshot
+        from cogito_execution_registry import snapshot, observe_read_only
         target = prior['payload']['check_retry']['replacement_action_id']
         record_id = failure['check_id'] + '-' + hash_json({'action_id': target})[:16]
-        entry = snapshot(store.root, store.run_id)['entries'].get(record_id, {})
+        observe = observe_read_only if read_only else snapshot
+        entry = observe(store.root, store.run_id)['entries'].get(record_id, {})
         if not entry.get('terminated'):
             raise CogitoError('previous replacement executor is not proven stopped')
     return link

@@ -99,26 +99,34 @@ def check_fixed_history(store, binding):
     return False
 
 
-def select_task_evidence(store, task):
-    """Pick the latest recorded attempt per targeted ID; validation decides validity."""
-    snapshot = store._events.snapshot()
+def unfinished_check_actions(store, snapshot):
     # Unknown attempts must be resolved even if an older matching check passed.
     completed = {e.get('action_id') for e in snapshot.events if e['type'] == 'check-evidence-recorded'}
     from cogito_check_retry import superseded_attempts
     completed.update(superseded_attempts(store, snapshot.events))
-    for path in (store.run_dir / 'check-actions').glob('*/started.json'):
+    unfinished = []
+    for path in sorted((store.run_dir / 'check-actions').glob('*/started.json')):
         request = load_json(path.parent / 'request.json')
         if request['action_id'] not in completed:
-            raise CogitoError('resolve unfinished controlled check before task-finish: ' + request['action_id'])
+            unfinished.append(request)
+    return unfinished
+
+
+def collect_check_candidates(store, check_ids, worktree):
+    """Latest per check AND checkout; missing is distinct from stale or failed."""
+    snapshot = store._events.snapshot()
+    unfinished = unfinished_check_actions(store, snapshot)
+    if unfinished:
+        raise CogitoError('resolve unfinished controlled check before task-finish: ' + unfinished[0]['action_id'])
     latest: dict[str, tuple[datetime, str]] = {}
     for event in snapshot.events:
         if event['type'] != 'check-evidence-recorded':
             continue
         payload = event['payload']
-        if payload['check_id'] not in task['check_ids']:
+        if payload['check_id'] not in check_ids:
             continue
         expected = request_fingerprint('run-check', check_id=payload['check_id'],
-                                       worktree=str(Path(task['worktree']).resolve()))
+                                       worktree=str(Path(worktree).resolve()))
         if event.get('request_hash') != expected:
             continue
         evidence = load_json(Path(payload['evidence_path']))
@@ -135,10 +143,16 @@ def select_task_evidence(store, task):
             raise CogitoError('ambiguous controlled check attempts: ' + payload['check_id'])
         if previous is None or previous[0] < started:
             latest[payload['check_id']] = (started, evidence['evidence_path'])
+    return {key: value[1] for key, value in latest.items()}
+
+
+def select_task_evidence(store, task):
+    """Pick the latest recorded attempt per targeted ID; validation decides validity."""
+    latest = collect_check_candidates(store, task['check_ids'], task['worktree'])
     missing = [key for key in task['check_ids'] if key not in latest]
     if missing:
         raise CogitoError('missing controlled checks: ' + ', '.join(missing))
-    return [latest[key][1] for key in task['check_ids']]
+    return [latest[key] for key in task['check_ids']]
 
 
 class TaskFinishMixin:

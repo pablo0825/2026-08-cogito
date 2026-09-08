@@ -591,15 +591,19 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                and not _path_allowed(path, task["paths"]) for path in changes):
             raise CogitoError("atomic task resume exceeds its original path responsibility")
 
-    def _require_atomic_clean(self, worktree: Path, head: str, state: RunState) -> str:
+    def _require_atomic_clean(self, worktree: Path, head: str, state: RunState, *, read_only: bool = False) -> str:
         self._validate_path_files(worktree)
-        index, tree = capture_index_and_worktree_trees(worktree)
         controls = {state.get("package_path"), "docs/cogito/project-graph.json"}
-        changes = working_tree_changed_paths(worktree, head)
-        for value in (index, tree):
-            changes.update(filter(None, self._git_at(
-                worktree, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", head, value, "--",
-            ).split("\0")))
+        if read_only:
+            from cogito_evidence_binding import inspect_atomic_content
+            tree, changes = inspect_atomic_content(worktree, head)
+        else:
+            index, tree = capture_index_and_worktree_trees(worktree)
+            changes = working_tree_changed_paths(worktree, head)
+            for value in (index, tree):
+                changes.update(filter(None, self._git_at(
+                    worktree, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", head, value, "--",
+                ).split("\0")))
         if any(path not in controls and not path.startswith(".cogito/") for path in changes):
             raise CogitoError("atomic task has uncommitted product content")
         return tree
@@ -672,7 +676,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                                 phase="post-integration" if verified[-1]["type"] == "human-correction-verified" else "implementation",
                                 current_head=head if verified[-1]["type"] == "human-correction-verified" else None)
 
-    def _validate_atomic_wave(self, evidence: Sequence[Mapping[str, Any]], snapshot: EventSnapshot) -> None:
+    def _validate_atomic_wave(self, evidence: Sequence[Mapping[str, Any]], snapshot: EventSnapshot, *, read_only: bool = False) -> None:
         """Keep Task receipts historical while binding review to current contents."""
         for item in evidence:
             validate_check_evidence(item)
@@ -703,7 +707,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             if (last["head_commit"] != head
                     or self._git_at(worktree, "branch", "--show-current") != tasks[last["task_id"]]["branch"]):
                 raise CogitoError("review checkout changed after its last Task Result")
-            tree = self._require_atomic_clean(worktree, head, state)
+            tree = self._require_atomic_clean(worktree, head, state, read_only=read_only)
             for result in results:
                 self._git_at(worktree, "merge-base", "--is-ancestor", result["head_commit"], head)
             matching = [item for item in evidence
@@ -1596,6 +1600,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         current_head: str | None = None,
         validate_supplied: bool = False,
         task_id: str | None = None,
+        read_only: bool = False,
+        candidate_only: bool = False,
     ) -> None:
         """Collect immutable files for pure rules using the operation's snapshot.
 
@@ -1613,6 +1619,10 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             if not supplied or len(supplied) != len(evidence) or supplied.keys() - known:
                 raise CogitoError('human evidence must name distinct known checks and cannot be empty')
             required.update(supplied)
+        if candidate_only:
+            if not read_only:
+                raise CogitoError('candidate inspection is query-only, not verification closure')
+            required = set(supplied)
         if required - supplied.keys():
             raise CogitoError("required verification evidence is missing")
         evidence_root = (self.run_dir / "evidence").resolve()
@@ -1636,9 +1646,10 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             effective_contract=effective, phase=phase, current_head=current_head,
             validate_supplied=validate_supplied,
             task_id=task_id,
+            candidate_only=candidate_only,
         )
         if effective.get("task_delivery") == "atomic" and phase == "post-integration":
-            tree = self._require_atomic_clean(self.root, str(current_head), snapshot.state)
+            tree = self._require_atomic_clean(self.root, str(current_head), snapshot.state, read_only=read_only)
             if any(item["worktree_binding"].get("content_tree") != tree for item in evidence):
                 raise CogitoError("integration evidence does not match current delivery content")
 
@@ -1724,6 +1735,27 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             self._atomic_operation_hints(output, projection)
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)
+        from cogito_next_operations import accepted_hints, check_recovery_hints, integration_hints, verification_hints
+        # Add guidance only to the normal route, never over a judgment/recovery override.
+        if output['next_action'] in {'run-controlled-checks', 'run-post-integration-checks'}:
+            output.update(verification_hints(self, projection))
+        elif output['next_action'] == 'integrate-serially':
+            output.update(integration_hints(self, projection))
+        elif output['next_action'] == 'report-completion':
+            output.update(accepted_hints(self, projection))
+        if output['next_action'] in {'run-controlled-checks', 'run-post-integration-checks',
+                'dispatch-ready-workers', 'dispatch-review-fix', 'dispatch-in-scope-correction',
+                'dispatch-post-integration-correction', 'dispatch-human-correction'}:
+            try:
+                recovery = check_recovery_hints(self, projection)
+                if recovery:
+                    if all(row['category'] == 'not_started' for row in recovery['check_recovery']):
+                        output['check_recovery'] = recovery['check_recovery']
+                        output['optional_recovery_operations'] = recovery['operations']
+                    else:
+                        output.update(recovery)
+            except (CogitoError, OSError, KeyError, ValueError) as exc:
+                output['check_recovery'] = [{'category': 'unknown_outcome', 'reason': str(exc)[:600]}]
         return output
 
     def _atomic_operation_hints(self, output, state):
@@ -1744,7 +1776,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 parents = self._git_at(Path(task['worktree']), 'rev-list', '--parents', '-n', '1', head).split()[1:]
                 if parents != [task['base_commit']]:
                     raise CogitoError('create one atomic Task commit before task-finish')
-                tree = self._require_atomic_clean(Path(task['worktree']), head, state)
+                tree = self._require_atomic_clean(Path(task['worktree']), head, state, read_only=True)
                 if any(e['worktree_binding']['content_tree'] != tree for e in evidence):
                     raise CogitoError('targeted checks do not match current checkout content')
                 hint['recorded_evidence'] = paths

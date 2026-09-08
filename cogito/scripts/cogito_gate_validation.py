@@ -166,6 +166,7 @@ def validate_evidence(
     current_head: str | None = None,
     validate_supplied: bool = False,
     task_id: str | None = None,
+    candidate_only: bool = False,
 ) -> None:
     """Validate loaded evidence against one contract, ledger, and event snapshot.
 
@@ -196,6 +197,13 @@ def validate_evidence(
         if not supplied or len(supplied) != len(evidence) or supplied.keys() - known.keys():
             raise CogitoError('human evidence must name distinct known checks and cannot be empty')
         required.update({key: known[key] for key in supplied})
+    if candidate_only:
+        # Query classification, never closure: validate supplied known records
+        # with the same rules, then the caller must validate the complete set.
+        known = {item['id']: item for item in effective_contract['checks']}
+        if phase == 'task' or not supplied or len(supplied) != len(evidence) or supplied.keys() - known.keys():
+            raise CogitoError('candidate inspection requires distinct known non-task checks')
+        required = {key: known[key] for key in supplied}
     anchors = (
         {"integration-complete", "post-integration-correction-complete", "human-correction-complete"}
         if post_integration

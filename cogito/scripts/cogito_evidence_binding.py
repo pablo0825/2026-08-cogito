@@ -51,9 +51,10 @@ def _private_index(worktree: Path) -> Iterator[tuple[dict[str, str], Path, os.st
         raise CogitoError(f"cannot snapshot working-tree content: {exc}") from exc
 
 
-def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
+def capture_index_and_worktree_trees(worktree: Path, *, object_env: dict[str, str] | None = None) -> tuple[str, str]:
     """Snapshot staging and working content using one private copy of the index."""
     with _private_index(worktree) as (env, temporary_index, index_stat):
+        env.update(object_env or {})
         index_tree = subprocess.run(
             ["git", "-C", str(worktree), "write-tree"],
             env=env, check=True, capture_output=True, text=True, timeout=30,
@@ -70,6 +71,30 @@ def capture_index_and_worktree_trees(worktree: Path) -> tuple[str, str]:
             env=env, check=True, capture_output=True, text=True, timeout=30,
         ).stdout.strip()
         return index_tree, content_tree
+
+
+def inspect_atomic_content(worktree: Path, head: str) -> tuple[str, set[str]]:
+    """Compute query-only trees in disposable objects, preserving the real index."""
+    try:
+        objects = subprocess.run(
+            ['git', '-C', str(worktree), 'rev-parse', '--path-format=absolute', '--git-path', 'objects'],
+            check=True, capture_output=True, text=True, timeout=15,
+        ).stdout.strip()
+        with tempfile.TemporaryDirectory(prefix='cogito-query-objects-') as directory:
+            object_env = {'GIT_OBJECT_DIRECTORY': directory,
+                          'GIT_ALTERNATE_OBJECT_DIRECTORIES': objects}
+            index, tree = capture_index_and_worktree_trees(worktree, object_env=object_env)
+            changes = working_tree_changed_paths(worktree, head)
+            for value in (index, tree):
+                output = subprocess.run(
+                    ['git', '-C', str(worktree), 'diff', '--name-only', '--no-renames',
+                     '--no-ext-diff', '-z', head, value, '--'],
+                    env={**os.environ, **object_env}, check=True, capture_output=True, text=True, timeout=30,
+                ).stdout
+                changes.update(filter(None, output.split('\0')))
+            return tree, changes
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CogitoError(f'cannot inspect atomic content: {exc}') from exc
 
 
 def working_tree_changed_paths(worktree: Path, base: str) -> set[str]:

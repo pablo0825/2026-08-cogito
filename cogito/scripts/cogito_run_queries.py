@@ -21,7 +21,7 @@ def operation_hint(root, run_id, operation, arguments=(), *, action_id='<action-
         argv.extend(['--action-id', action_id])
     if input_value is not None or required_inputs:
         argv.extend(['--input', '<input.json>'])
-    return {'operation': operation, 'argv': argv, 'input': deepcopy(input_value),
+    return {'operation': operation, 'argv': argv, 'cwd': str(Path(root).resolve()), 'input': deepcopy(input_value),
             'required_inputs': list(required_inputs)}
 
 
