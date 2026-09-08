@@ -46,11 +46,15 @@ Preserve explicitly supported compatibility. Do not restore retired RP Start or 
 
 Report automated tests, skill format validation, and agent behavioral evaluations separately. Scenario definitions are not passing results, and historical reports do not validate the current change. Clearly identify checks not run or unavailable.
 
-## Sub-agent Delegation
+## Primary Agent and Sub-agent Responsibilities
 
-The user authorizes sub-agent assistance for analysis, evaluation, simulation, and proposal revision without repeated confirmation. Use it when bounded, independent subtasks or independent review are likely to improve quality. Simple tasks do not require delegation.
+The primary agent owns implementation, including code and documentation changes, fixes, and integration of the final delivery. It may run relevant automated tests directly while implementing and correcting the work.
 
-The primary agent must verify findings, resolve disagreements, and own the final result. Delegation does not replace required tests or Gate review evidence.
+When the task requires simulations, independent reviews, or acceptance checks, delegate those activities to sub-agents without repeated confirmation. Sub-agents evaluate the work against the requirements and report findings with supporting evidence. They return required fixes to the primary agent rather than modifying the implementation themselves. They may also assist with analysis, evaluation, and proposal revision.
+
+The primary agent verifies findings, resolves disagreements, implements corrections, and requests focused rechecks when needed. It remains responsible for the final result. Simple, low-impact changes may be checked directly by the primary agent unless another applicable rule requires independent verification.
+
+Sub-agent acceptance checks do not replace explicit user approval, required tests, or Gate review evidence.
 
 ## Coding and Architecture
 
