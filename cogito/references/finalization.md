@@ -30,7 +30,7 @@ python3 cogito/scripts/cogito_gate.py --repo <root> delivery-summary --run-id <I
 
 啟用 `stage_commits` 或曾採認舊審查的 run 必須提供摘要；其他舊 run 可省略，但若提供也必須與事件相符。缺項、過期、改動 commit 或使用不符的驗收摘要都會被拒絕。先前 blocked／失敗的 Agent Result 仍保留為歷史，不要求未採用的工作版本被整合。
 
-審查採認放在 `delivery_summary.verification` 的 `review-approved` receipt 內，欄位為 `retention`；原本的 Reviewer Result 仍位於 `reviews`，實際執行的 checks 仍保留原事件。Result 頂層 `reviews` 須同時列出原 Reviewer 與採認 Reviewer。`report.review_retentions` 從這份摘要產生，可追溯原 review、本次採認者、選測理由及內容綁定，不代表舊測試在新版本重新跑過。完整採認條件與操作見 [Execution Policy](execution-policy.md#保留未受影響審查)。
+審查採認放在 `delivery_summary.verification` 的 `review-approved` receipt 內，欄位為 `retention`；原本的 Reviewer Result 仍位於 `reviews`，實際執行的 checks 仍保留原事件。Result 頂層 `reviews` 須同時列出原 Reviewer 與採認 Reviewer。`report.review_retentions` 從這份摘要產生，可追溯原 review、本次採認者、選測理由及內容綁定，不代表舊測試在新版本重新跑過。完整採認條件與操作見 [Execution Corrections](execution-corrections.md#保留未受影響審查)。
 
 ## 3. 準備 Result 與 Project Graph
 

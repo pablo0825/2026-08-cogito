@@ -51,4 +51,4 @@ Grilling 只取得足以形成正確契約的共同理解，不要求使用者�
 
 Package 尚未核准而需求已改變時，使用 [Planning Revisions](planning-revisions.md) 的 `requirements` 輪次重新進入摘要準備，不在已確認摘要上偷做自循環。`shared-understanding-ready` 需帶目前 `planning_round`、新的 `shared_understanding_hash` 與 `document: {"path": "...", "hash": "..."}`，讓 Gate 保存確認對象的精確內容；confirmation 同時指定本輪及最新 hash。未改需求的 `plan`／`boundary` 輪次沿用已確認共識；影響不明時先 Grilling，不能以較低層級略過必要確認。歷史只有 hash 的摘要不假造原文，但新 requirements 輪次必須提供可驗證文件。
 
-需求、Scope、Acceptance、公開契約、資料模型、安全邊界或 Slice 責任改變時，先重新釐清，再依核准階段走 planning 或 [Replanning](replanning.md)。Package 已核准後，只有未改變上述邊界的純技術缺口才依 [Execution Policy](execution-policy.md#自動修正) 的 Technical Amendment／correction 處理。
+需求、Scope、Acceptance、公開契約、資料模型、安全邊界或 Slice 責任改變時，先重新釐清，再依核准階段走 planning 或 [Replanning](replanning.md)。Package 已核准後，只有未改變上述邊界的純技術缺口才依 [Execution Corrections](execution-corrections.md#自動修正) 的 Technical Amendment／correction 處理。

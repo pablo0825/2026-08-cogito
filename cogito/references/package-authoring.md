@@ -59,7 +59,7 @@ Coordinator 依垂直行為及依賴順序拆分 Task，不將多個可獨立驗
 
 核准前，若有同型且已 accepted 的單一 Slice，Coordinator 先明確指定來源，以[歷史 Slice 查詢](#歷史-slice-查詢)取得候選清單，再判斷本次適用性。Coordinator 再沿本次行為追蹤 request／入口、service、repository、mapper、response contract 與相關測試，只檢查實際適用的層次，並逐項標記沿用、新增或不適用。沒有合適 accepted Slice 時直接進行這段目標追蹤，不做全 repository 內容搜尋作為預設起點。
 
-確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Policy](execution-policy.md#實作中補列必要路徑) 判斷是否符合輕量補正。
+確認必要修改路徑已分配到既有 Plan 的 Files／Tasks，且 Package、Worker、Task 三層授權一致；Checks 記錄對應 Acceptance 與受影響依賴的選測理由。共用 mapper 或 contract 要追蹤其他消費者，不能只列入口檔與直接測試。將依賴漏列在核准前補齊，不新增文件或核准階段。核准後才發現的漏列依 [Execution Corrections](execution-corrections.md#實作中補列必要路徑) 判斷是否符合輕量補正。
 
 新 `init` 的開發 run 會要求 atomic Package；歷史 run 與已凍結的 RP successor 保留原契約，沒有標記的舊 Package 不補寫、不改 hash。Maintenance／Documentation 維持原流程。
 

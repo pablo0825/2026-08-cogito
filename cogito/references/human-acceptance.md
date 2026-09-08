@@ -40,7 +40,7 @@ awaiting-human
 
 `human feedback|triage|start|complete|verify|review|escalate --run-id <ID> --action-id <action>` 管理同一 run 的專用人工退回流程。除 `verify` 使用可重複的 `--evidence <path>`、`review` 不接輸入外，其餘操作使用 `--input <JSON-file>`。不得以通用 transition 偽造 `human-*` 敏感事件。以下範例說明各步驟的 payload。
 
-下例假設已在 `awaiting-human`，交付內容仍與正式 post-integration evidence 一致。每個 JSON 存成對應 UTF-8 檔案；每個有副作用的操作使用穩定 action ID，相同請求重送沿用原 ID。Task 與 Amendment 依 [Execution Policy](execution-policy.md#自動修正)，Result 欄位依[登錄 Agent Result](execution-policy.md#登錄-agent-result)，runner 呼叫依[選擇與執行 checks](execution-policy.md#選擇與執行-checks)。本輪提交、驗證與審查順序以下文人工修正步驟為準。
+下例假設已在 `awaiting-human`，交付內容仍與正式 post-integration evidence 一致。每個 JSON 存成對應 UTF-8 檔案；每個有副作用的操作使用穩定 action ID，相同請求重送沿用原 ID。Task 與 Amendment 依 [Execution Corrections](execution-corrections.md#自動修正)，Result 欄位依[登錄 Agent Result](execution-policy.md#登錄-agent-result)，runner 呼叫依[選擇與執行 checks](execution-policy.md#選擇與執行-checks)。本輪提交、驗證與審查順序以下文人工修正步驟為準。
 
 開始本輪前先確認提交方式：一般 kind 使用帶 Amendment trailer 的合法修正 commit；Maintenance 保持 Start Gate HEAD，以未提交快照完成，最後才一次交付。若需要同步修改 Spec／Plan，先讀本檔「同步更新文件」，將合法文件更新納入本輪 completion 與驗證。
 
