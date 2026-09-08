@@ -132,7 +132,7 @@ class CleanupTests(GitTestCase):
         other_dir = self.root / '.cogito/runs/RUN-2'
         other_dir.mkdir()
         other = SimpleNamespace(load=lambda: {'tasks': {'T-other': {'branch': 'worker'}}})
-        with patch('cogito_run_store.RunStore', return_value=other):
+        with patch('cogito_cleanup.read_run_references', return_value=list(other.load()['tasks'].values())):
             self.assertTrue(cleanup_accepted(self.store)['retained'])
             self.assertTrue(self.worker.exists())
         other_dir.rmdir()
@@ -181,7 +181,7 @@ class CleanupTests(GitTestCase):
             with self.subTest(referenced=referenced):
                 other = SimpleNamespace(load=lambda: {'tasks': {'T-other': {
                     'worktree': str(referenced), 'branch': 'different'}}})
-                with patch('cogito_run_store.RunStore', return_value=other):
+                with patch('cogito_cleanup.read_run_references', return_value=list(other.load()['tasks'].values())):
                     self.assertTrue(cleanup_accepted(self.store)['retained'])
                     self.assertTrue(self.worker.exists())
 
@@ -189,7 +189,7 @@ class CleanupTests(GitTestCase):
         (self.root / '.cogito/runs/RUN-2').mkdir()
         other = SimpleNamespace(load=lambda: {'tasks': {'T-maintenance': {
             'worktree': str(self.root), 'branch': 'delivery'}}})
-        with patch('cogito_run_store.RunStore', return_value=other):
+        with patch('cogito_cleanup.read_run_references', return_value=list(other.load()['tasks'].values())):
             outcome = cleanup_accepted(self.store)
         self.assertEqual(outcome['retained'], [])
         self.assertEqual(outcome['removed'], [str(self.worker)])

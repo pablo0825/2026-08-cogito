@@ -76,7 +76,7 @@ def _required_objects(value):
             yield from _required_objects(item)
 
 
-def _pin(store, current, final, head):
+def _pin(store, current, final, head, *, read_only=False):
     git = GitRepository(store.root)
     values = [store._events.read(), current, final, {'head_commit': head}]
     for evidence_path, ledger in current.get('evidence', {}).items():
@@ -99,7 +99,8 @@ def _pin(store, current, final, head):
         try:
             existing = git.run('show-ref', '--verify', '--hash', ref)
         except CogitoError:
-            git.run('update-ref', ref, oid, '0' * len(oid))
+            if not read_only:
+                git.run('update-ref', ref, oid, '0' * len(oid))
         else:
             if existing != oid:
                 raise CogitoError('cleanup evidence ref changed')
@@ -107,8 +108,41 @@ def _pin(store, current, final, head):
     return pinned
 
 
-def _other_use(store, path, branch):
+def read_run_references(root, run_id):
+    """Read only supported reference facts; never repair another Run's cache."""
     from cogito_run_store import RunStore
+    from cogito_slice_inventory import read_accepted_source
+    from cogito_slice_inventory_compat import EVENT
+
+    other = RunStore(root, run_id)
+    if other.events_path.resolve() != other.events_path or other.run_dir.resolve() != other.run_dir:
+        raise CogitoError('reference history traverses a symlink')
+    def frozen_package(state):
+        path = other.root / state['package_path']
+        if path.resolve() != path:
+            raise CogitoError('reference Package traverses a symlink')
+        return other._approved_package_from_state(state)
+    events = other._events.read()  # Verify the original chain before compatibility projection.
+    if any(e['type'] == 'finalization-complete' for e in events):
+        source = read_accepted_source(root, run_id, workflow=other.workflow,
+                                      event_repository=other._events,
+                                      package_fallback=frozen_package)
+        state, package = source['state'], source['package']
+    else:
+        if any(e['type'] == EVENT for e in events):
+            raise CogitoError('historical compatibility requires accepted history')
+        state = other._events.snapshot().state
+        package = frozen_package(state) if state.get('package_hash') else {}
+    if state.get('run_id') != run_id or (package and package.get('run_id') != run_id):
+        raise CogitoError('reference history belongs to another Run')
+    references = list(state.get('tasks', {}).values())
+    references += [item['worker'] for item in package.get('slices', [])]
+    references += [{'worktree': path, 'branch': binding.get('branch')}
+                   for path, binding in state.get('carryover_worktrees', {}).items()]
+    return references
+
+
+def _other_use(store, path, branch):
     for registered in _registrations(GitRepository(store.root)):
         nested = Path(registered).resolve()
         if nested != path and nested.is_relative_to(path):
@@ -122,11 +156,10 @@ def _other_use(store, path, branch):
             continue
         if directory.resolve() != directory:
             raise CogitoError('another runtime traverses a symlink')
-        other = RunStore(store.root, directory.name)
-        state = other.load()
-        references = list(state.get('tasks', {}).values())
-        if state.get('package_hash'):
-            references += [item['worker'] for item in other.approved_package().get('slices', [])]
+        try:
+            references = read_run_references(store.root, directory.name)
+        except (CogitoError, OSError, KeyError, TypeError, ValueError) as exc:
+            raise CogitoError(f'reference_unknown: {directory.name}: {exc}') from exc
         for item in references:
             candidate = item.get('worktree')
             referenced = (store.root / candidate).resolve() if candidate else None
@@ -139,7 +172,7 @@ def _clean(git, path):
     for entry in git.run_at(path, 'ls-files', '-v', '-z').split('\0'):
         if entry and (entry[0].islower() or entry[0] == 'S'):
             raise CogitoError('worktree index hides tracked content from status')
-    if git.run_at(path, 'status', '--porcelain', '--untracked-files=all'):
+    if git.run_at(path, '--no-optional-locks', 'status', '--porcelain', '--untracked-files=all'):
         raise CogitoError('worktree contains tracked changes or untracked files')
     for name in git.run_at(path, 'ls-files', '--others', '--ignored', '--exclude-standard', '-z').split('\0'):
         if name and not any(part in _CACHE_DIRS for part in Path(name).parts[:-1]):
@@ -193,6 +226,61 @@ def cleaned_content_tree(store, path) -> str | None:
     return GitRepository(store.root).run('rev-parse', item['head'] + '^{tree}')
 
 
+def _candidate(store, worker, current, final, package, git):
+    """Shared safety assessment. Apply calls this again under its original locks."""
+    path = _managed(store, store.root / worker['worktree'])
+    if cleaned_worktree(store, path):
+        return None
+    registration = _registrations(git).get(str(path))
+    branch = worker['branch']
+    leases = [task for task in current['tasks'].values() if task.get('worktree') == str(path)]
+    if not leases or any(not _owned_task(task, branch, package) for task in leases):
+        raise CogitoError('recorded task leases do not establish completed ownership')
+    if not registration or registration.get('branch') != 'refs/heads/' + branch or 'locked' in registration or 'prunable' in registration:
+        raise CogitoError('Git worktree registration differs or is locked')
+    if git.run_at(path, 'rev-parse', '--path-format=absolute', '--git-common-dir') != git.run('rev-parse', '--path-format=absolute', '--git-common-dir'):
+        raise CogitoError('worktree belongs to another repository')
+    _other_use(store, path, branch)
+    head = git.run_at(path, 'rev-parse', 'HEAD')
+    git.run('merge-base', '--is-ancestor', head, final['payload']['final_commit'])
+    _clean(git, path)
+    return path, head
+
+
+def assess_cleanup(store):
+    """Advisory current blockers; no registry locks, refs, receipts or removals."""
+    from types import SimpleNamespace
+    from cogito_execution_registry import observe_read_only
+    result = {'removable': [], 'retained': [], 'observation_only': True}
+    try:
+        state = store._events.snapshot().state
+        view = SimpleNamespace(root=store.root, run_id=store.run_id, run_dir=store.run_dir,
+            _events=store._events, load=lambda: state,
+            approved_package=lambda: store._approved_package_from_state(state),
+            completion_report=lambda: store._load_completion_report(state))
+        if not observe_read_only(store.root, store.run_id, allow_external_receipts=True)['quiescent']:
+            raise CogitoError('executors have not terminated')
+        current, final = _final(view)
+        package, git = view.approved_package(), GitRepository(store.root)
+        receipt_path = _receipt_path(view)
+        if receipt_path.exists():
+            receipt = load_json(receipt_path)
+            if receipt.get('run_id') != store.run_id or receipt.get('accepted_event_hash') != final['event_hash']:
+                raise CogitoError('cleanup receipt does not match acceptance')
+        for worker in (item['worker'] for item in package.get('slices', [])):
+            try:
+                candidate = _candidate(view, worker, current, final, package, git)
+                if candidate is not None:
+                    path, head = candidate
+                    _pin(view, current, final, head, read_only=True)
+                    result['removable'].append(str(path))
+            except (CogitoError, OSError, KeyError, TypeError, ValueError) as exc:
+                result['retained'].append({'worktree': str(store.root / worker['worktree']), 'reason': str(exc)[:600]})
+    except (CogitoError, OSError, KeyError, TypeError, ValueError, IndexError) as exc:
+        result['retained'].append({'reason': str(exc)[:600]})
+    return result
+
+
 def cleanup_accepted(store) -> dict[str, Any]:
     """Never changes acceptance. Call again after resolving a retained reason."""
     result: dict[str, Any] = {'removed': [], 'retained': []}
@@ -212,22 +300,11 @@ def cleanup_accepted(store) -> dict[str, Any]:
             for worker in (item['worker'] for item in package.get('slices', [])):
                 raw = store.root / worker['worktree']
                 try:
-                    path = _managed(store, raw)
-                    if cleaned_worktree(store, path):
+                    candidate = _candidate(store, worker, current, final, package, git)
+                    if candidate is None:
                         continue
-                    registration = _registrations(git).get(str(path))
+                    path, head = candidate
                     branch = worker['branch']
-                    leases = [task for task in current['tasks'].values() if task.get('worktree') == str(path)]
-                    if not leases or any(not _owned_task(task, branch, package) for task in leases):
-                        raise CogitoError('recorded task leases do not establish completed ownership')
-                    if not registration or registration.get('branch') != 'refs/heads/' + branch or 'locked' in registration or 'prunable' in registration:
-                        raise CogitoError('Git worktree registration differs or is locked')
-                    if git.run_at(path, 'rev-parse', '--path-format=absolute', '--git-common-dir') != git.run('rev-parse', '--path-format=absolute', '--git-common-dir'):
-                        raise CogitoError('worktree belongs to another repository')
-                    _other_use(store, path, branch)
-                    head = git.run_at(path, 'rev-parse', 'HEAD')
-                    git.run('merge-base', '--is-ancestor', head, final_commit)
-                    _clean(git, path)
                     pinned = _pin(store, current, final, head)
                     receipt['worktrees'][str(path)] = {'branch': branch, 'head': head,
                         'final_commit': final_commit, 'pinned_objects': pinned}

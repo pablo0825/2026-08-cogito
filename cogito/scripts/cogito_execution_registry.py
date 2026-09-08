@@ -244,6 +244,11 @@ def snapshot(root: str | Path, run_id: str, *, allow_external_receipts: bool = F
         return _observe(data, allow_external_receipts=allow_external_receipts)
 
 
+def observe_read_only(root: str | Path, run_id: str, *, allow_external_receipts: bool = False) -> dict[str, Any]:
+    """Advisory observation only; no lock creation or executor admission guarantee."""
+    return _observe(_load(_path(root, run_id), run_id), allow_external_receipts=allow_external_receipts)
+
+
 @contextmanager
 def quiescent_guard(root: str | Path, run_id: str, *, allow_external_receipts: bool = False) -> Iterator[bool]:
     """Keep executor admission locked while the caller removes unused resources."""

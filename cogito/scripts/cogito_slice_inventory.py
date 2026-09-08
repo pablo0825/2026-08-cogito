@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, Callable, Mapping, cast
 
 from cogito_common import CogitoError
 from cogito_contract_fields import GIT_OBJECT_RE, RUN_ID_RE, require_id, require_path, require_string
@@ -34,20 +34,17 @@ def _read_json_blob(
     return value
 
 
-def build_slice_inventory(
+def read_accepted_source(
     root: str | Path,
     source_run: str,
-    source_slice: str,
     *,
     workflow: Mapping[str, Any] | None = None,
     event_repository: EventRepositoryPort | None = None,
     git_repository: GitRepositoryPort | None = None,
+    package_fallback: Callable[[Mapping[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Read accepted ledger and committed artifacts without repairing any cache."""
     require_string(source_run, "source_run", RUN_ID_RE)
-    if not source_run.startswith("DEV-"):
-        raise CogitoError("slice-inventory source must be a Development run")
-    require_id(source_slice, "source_slice")
     repo_root = Path(root).resolve()
     workflow_value = dict(workflow or load_workflow())
     events_path = repo_root / ".cogito" / "runs" / source_run / "events.jsonl"
@@ -70,7 +67,7 @@ def build_slice_inventory(
         snapshot = compatible_snapshot(events, workflow_value)
     state, events = snapshot.state, snapshot.events
     if state.get("run_id") != source_run or state.get("state") != "accepted":
-        raise CogitoError("slice-inventory source must be an accepted run")
+        raise CogitoError("source must be an accepted run")
 
     final_events = [item for item in events if item["type"] == "finalization-complete"]
     start_events = [item for item in events if item["type"] == "start-gate-passed"]
@@ -93,7 +90,11 @@ def build_slice_inventory(
     final_commit = cast(str, final_commit)
     delivery_head = cast(str, delivery_head)
 
-    package = _read_json_blob(git, final_commit, package_path, "Package")
+    if (package_fallback is not None and not historical_resolution
+            and not git.run('ls-tree', final_commit, '--', package_path)):
+        package = package_fallback(state)
+    else:
+        package = _read_json_blob(git, final_commit, package_path, "Package")
     result = _read_json_blob(git, final_commit, result_path, "Result")
     validated_result = compatible_result(result, events) if historical_resolution else result
     validate_result(validated_result)
@@ -106,15 +107,6 @@ def build_slice_inventory(
     )
     if historical_resolution:
         validate_resolution_checks(events, effective)
-    if package.get("kind") not in {"feature", "change", "correction"}:
-        raise CogitoError("slice-inventory source must use a Development Package")
-    accepted_slices = [item["id"] for item in package["slices"]]
-    if len(accepted_slices) != 1:
-        raise CogitoError("slice-inventory currently requires an accepted single-Slice Package")
-    if source_slice != accepted_slices[0]:
-        raise CogitoError(
-            f"source Slice {source_slice} does not match accepted Slice {accepted_slices[0]}"
-        )
     frozen_hash = package_hash(package)
     if package.get("run_id") != source_run or frozen_hash != state.get("package_hash"):
         raise CogitoError("committed Package does not match the accepted run")
@@ -126,8 +118,6 @@ def build_slice_inventory(
         raise CogitoError("accepted effective contract hashes do not match")
     if [item.get("id") for item in result["amendments"]] != [item["id"] for _, item in amendments]:
         raise CogitoError("Result amendment summary is incomplete or out of order")
-    if result.get("slice_dispositions") != {source_slice: "accepted"}:
-        raise CogitoError("source Slice is not the sole accepted Package Slice")
     validation_events = [
         item for item in events if item.get("type") != HISTORICAL_RESOLUTION_EVENT
     ] if historical_resolution else events
@@ -137,6 +127,36 @@ def build_slice_inventory(
     final_tree = git.run("rev-parse", f"{final_commit}^{{tree}}")
     if final_payload.get("final_tree") != final_tree:
         raise CogitoError("accepted final commit tree does not match the event ledger")
+    return dict(state=state, events=events, package=package, result=result,
+                effective=effective, amendments=amendments, final_commit=final_commit,
+                delivery_head=delivery_head, package_path=package_path, result_path=result_path)
+
+
+def build_slice_inventory(
+    root: str | Path, source_run: str, source_slice: str, *,
+    workflow: Mapping[str, Any] | None = None,
+    event_repository: EventRepositoryPort | None = None,
+    git_repository: GitRepositoryPort | None = None,
+) -> dict[str, Any]:
+    """Keep inventory's public single-Development-Slice scope separate from reading."""
+    require_string(source_run, "source_run", RUN_ID_RE)
+    if not source_run.startswith("DEV-"):
+        raise CogitoError("slice-inventory source must be a Development run")
+    require_id(source_slice, "source_slice")
+    git = git_repository or GitRepository(Path(root).resolve())
+    source = read_accepted_source(root, source_run, workflow=workflow,
+                                  event_repository=event_repository, git_repository=git)
+    package, result, state = source['package'], source['result'], source['state']
+    if package.get("kind") not in {"feature", "change", "correction"}:
+        raise CogitoError("slice-inventory source must use a Development Package")
+    accepted_slices = [item["id"] for item in package["slices"]]
+    if len(accepted_slices) != 1:
+        raise CogitoError("slice-inventory currently requires an accepted single-Slice Package")
+    if source_slice != accepted_slices[0]:
+        raise CogitoError(f"source Slice {source_slice} does not match accepted Slice {accepted_slices[0]}")
+    if result.get("slice_dispositions") != {source_slice: "accepted"}:
+        raise CogitoError("source Slice is not the sole accepted Package Slice")
+    delivery_head, final_commit = source['delivery_head'], source['final_commit']
     changed = git.run(
         "diff", "--name-only", "--no-renames", "--no-ext-diff",
         "--ignore-submodules=none", "-z", delivery_head, final_commit, "--",
@@ -145,12 +165,12 @@ def build_slice_inventory(
     return build_inventory_view(
         package=package,
         result=result,
-        effective_contract=effective,
+        effective_contract=source['effective'],
         agent_results=state.get("agent_results", []),
-        amendments=amendments,
+        amendments=source['amendments'],
         slice_id=source_slice,
         final_commit=final_commit,
-        package_path=package_path,
-        result_path=result_path,
+        package_path=source['package_path'],
+        result_path=source['result_path'],
         committed_paths=committed_paths,
     )

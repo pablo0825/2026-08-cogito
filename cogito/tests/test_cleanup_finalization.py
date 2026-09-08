@@ -16,6 +16,36 @@ import test_atomic_task_verification as verification
 
 
 class CleanupFinalizationTests(GitTestCase):
+    def test_normal_history_package_fallback_rejects_symlink(self):
+        from cogito_cleanup import read_run_references
+        repo, _, store, args = self.finalizing()
+        store.finalize(*args)
+        self.assertTrue(read_run_references(repo, store.run_id))
+        path = repo / store.load()['package_path']
+        saved = store.run_dir / 'package-copy.json'
+        saved.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(saved)
+        with self.assertRaisesRegex(CogitoError, 'symlink'):
+            read_run_references(repo, store.run_id)
+
+    def test_reference_reader_uses_committed_package_without_cache_writes(self):
+        from cogito_cleanup import read_run_references
+        repo, worker, store, args = self.finalizing(commit_package=True)
+        store.finalize(*args)
+        state = store.load()
+        cache = store.state_path.read_bytes()
+        events = store.events_path.read_bytes()
+        (repo / state['package_path']).chmod(0o644)
+        (repo / state['package_path']).write_text('{}')
+        references = read_run_references(repo, store.run_id)
+        self.assertTrue(any((repo / r.get('worktree', '.')).resolve() == worker for r in references))
+        self.assertEqual(store.state_path.read_bytes(), cache)
+        self.assertEqual(store.events_path.read_bytes(), events)
+        store.state_path.unlink()
+        read_run_references(repo, store.run_id)
+        self.assertFalse(store.state_path.exists())
+
     @staticmethod
     def finalize_cli_arguments(store, args):
         return [
@@ -24,11 +54,14 @@ class CleanupFinalizationTests(GitTestCase):
             "--action-id", args[3],
         ]
 
-    def finalizing(self):
+    def finalizing(self, *, commit_package=False):
         fixture = verification.AtomicVerificationTests()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         repo, worker, store, draft, _, _, integration = fixture.integrated()
+        if commit_package:
+            git(repo, 'add', '-f', store.load()['package_path'])
+            git(repo, 'commit', '-qm', 'retain frozen Package')
         post = fixture.check(store, repo, 'C-b', 'post-cleanup')
         store.decide_post_verification([post])
         graph_path = repo / 'docs/cogito/project-graph.json'
