@@ -1,5 +1,6 @@
 """Pure review bindings and event projection for additive path corrections."""
 from cogito_common import CogitoError, hash_json
+from cogito_path_amendment_contract import paths_overlap, predecessor_slices
 
 EVENTS = {'path-amendment-proposed', 'path-amendment-withdrawn'}
 ASSESSMENTS = {'requirements', 'api', 'data_model', 'security', 'slice', 'checks'}
@@ -37,7 +38,75 @@ def path_targets(state, amendment, events=()):
                 r['task_id'] == row['task_id'] and r['role'] == 'implementer'
                 and r['status'] == 'complete' for r in state.get('agent_results', [])):
             raise CogitoError('path correction cannot change a completed Task or recorded commit')
+    starts = [e for e in events if e['type'] == 'review-fix-required']
+    current_start = starts[-1] if starts else None
+    finding_task = state['tasks'].get(
+        current_start['payload'].get('review_task_id')) if current_start else None
+    completed_before_review = {e['payload'].get('task_id') for e in events
+                              if current_start and e['sequence'] < current_start['sequence']
+                              and e['type'] == 'task-updated'
+                              and e['payload'].get('status') == 'complete'}
+    completed_results = {e['payload']['result']['task_id'] for e in events
+                         if current_start and e['sequence'] < current_start['sequence']
+                         and e['type'] == 'agent-result-recorded'
+                         and e['payload']['result'].get('role') == 'implementer'
+                         and e['payload']['result'].get('status') == 'complete'}
+    for row in amendment['path_additions']:
+        target = tasks[row['task_id']]
+        for path in row['paths']:
+            owners = [other for other in tasks.values() if other['id'] != target['id']
+                      and paths_overlap(path, other['paths'])]
+            if not owners:
+                continue
+            predecessors = predecessor_slices(tasks.values(), target['slice_id'])
+            if state['state'] == 'executing' and all(other['slice_id'] in predecessors for other in owners):
+                if state.get('task_delivery') != 'atomic' or not target.get('base_commit'):
+                    raise CogitoError('predecessor path reuse requires an atomic target lease baseline')
+                for other in owners:
+                    if other['status'] != 'integrated' or not any(
+                            r['task_id'] == other['id'] and r['role'] == 'implementer'
+                            and r['status'] == 'complete' and r.get('head_commit')
+                            for r in state.get('agent_results', [])):
+                        raise CogitoError('predecessor path owners must have integrated delivery results')
+                continue
+            originals = [other for other in owners if other['slice_id'] == target['slice_id']]
+            if (state['state'] != 'review-fix' or not finding_task
+                    or finding_task['slice_id'] != target['slice_id'] or not originals
+                    or any(other['status'] not in {'complete', 'verified', 'reviewed'}
+                           or other['id'] not in completed_before_review or other['id'] not in completed_results
+                           for other in originals)):
+                raise CogitoError('path reuse requires a completed original Task in the current review Slice')
+            # A file may already be declared by a later Slice in the approved
+            # Package. Reusing our own existing scope grants that Slice nothing;
+            # it must remain unstarted so no concurrent ownership is introduced.
+            for other in owners:
+                if other['slice_id'] != target['slice_id'] and (
+                        other['status'] != 'pending' or other.get('base_commit') or any(
+                            r['task_id'] == other['id'] for r in state.get('agent_results', []))):
+                    raise CogitoError('shared path reuse requires other Slice owners to remain unstarted')
     return tasks
+
+
+def predecessor_deliveries(state, amendment, events=()):
+    """Replayable binding; Git ancestry is verified by the command before publication."""
+    tasks = path_targets(state, amendment, events)
+    bindings = []
+    for row in amendment['path_additions']:
+        target = tasks[row['task_id']]
+        predecessors = predecessor_slices(tasks.values(), target['slice_id'])
+        owners = {other['id'] for other in tasks.values() if other['slice_id'] in predecessors
+                  and any(paths_overlap(path, other['paths']) for path in row['paths'])}
+        if state['state'] == 'executing' and owners:
+            heads = sorted({r['head_commit'] for r in state.get('agent_results', [])
+                            if r['task_id'] in owners and r['role'] == 'implementer' and r['status'] == 'complete'})
+            bindings.append(dict(task_id=target['id'], base_commit=target['base_commit'], owner_heads=heads))
+    return bindings
+
+
+def validate_predecessor_binding(state, amendment, proposal, events):
+    expected = predecessor_deliveries(state, amendment, events)
+    if expected != proposal.get('predecessor_deliveries', []):
+        raise CogitoError('predecessor delivery baseline binding changed')
 
 
 def review_binding(pending, review):
@@ -65,6 +134,7 @@ def project_path_amendment(state, event, payload, events=()):
         if hash_json(body) != payload.get('proposal_hash') or payload.get('base_contract_hash') != state['effective_contract_hash']:
             raise CogitoError('invalid path proposal binding')
         path_targets(state, payload['amendment'], events)
+        validate_predecessor_binding(state, payload['amendment'], payload, events)
         state['path_amendment'] = dict(payload)
         return True
     if event == 'path-amendment-withdrawn':
@@ -86,6 +156,7 @@ def apply_path_projection(state, payload, events=()):
         raise CogitoError('path additions require the exact pending reviewed proposal')
     review_binding(pending, payload.get('scope_review'))
     path_targets(state, amendment, events)
+    validate_predecessor_binding(state, amendment, pending, events)
     added_ids = {task['id'] for task in amendment.get('added_tasks', [])}
     for row in amendment['path_additions']:
         if row['task_id'] in added_ids:

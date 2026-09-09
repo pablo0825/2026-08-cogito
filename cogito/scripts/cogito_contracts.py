@@ -420,11 +420,14 @@ def validate_amendment(package: Mapping[str, Any], prior: Sequence[Mapping[str, 
     materialize_contract(package, [*prior, amendment])
 
 
-def _validate_amendment_changes(effective: Mapping[str, Any], amendment: Mapping[str, Any]) -> None:
+def _validate_amendment_changes(
+    effective: Mapping[str, Any], amendment: Mapping[str, Any],
+    original_approved_paths: Sequence[str] | None = None,
+) -> None:
     """Check a shaped amendment against the already validated effective prefix."""
     if not any(amendment.get(key) for key in ("added_checks", "added_tasks", "path_fixes", "path_additions")):
         raise CogitoError("amendment must add a check/task or record an in-scope path fix")
-    validate_path_additions(effective, amendment)
+    validate_path_additions(effective, amendment, original_approved_paths)
     existing_checks = {item["id"] for item in effective["checks"]}
     for check in amendment.get("added_checks", []):
         if check["id"] in existing_checks:
@@ -483,7 +486,7 @@ def materialize_contract_with_limits(
         _validate_amendment_shape(amendment)
         if amendment["id"] in amendment_ids:
             raise CogitoError("amendment id must be unique")
-        _validate_amendment_changes(effective, amendment)
+        _validate_amendment_changes(effective, amendment, package["approved_paths"])
         addition = json.loads(json.dumps(amendment))
         effective["checks"].extend(addition.get("added_checks", []))
         dag = effective["execution_dag"]

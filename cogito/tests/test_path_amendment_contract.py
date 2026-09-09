@@ -95,7 +95,7 @@ class PathAmendmentContractTests(unittest.TestCase):
         amendment = self.correction()
         amendment['added_tasks'][0]['depends_on'] = ['T-other']
         state = {'state': 'review-fix', 'tasks': {'T-other': {
-            'id': 'T-other', 'slice_id': 'FS-other', 'status': 'reviewed'}}, 'agent_results': []}
+            'id': 'T-other', 'slice_id': 'FS-other', 'paths': ['other.py'], 'status': 'reviewed'}}, 'agent_results': []}
         with self.assertRaisesRegex(CogitoError, 'already be integrated'):
             path_targets(state, amendment)
         state['tasks']['T-other']['status'] = 'integrated'
@@ -177,15 +177,19 @@ class PathAmendmentContractTests(unittest.TestCase):
         with self.assertRaisesRegex(CogitoError, "cannot mix"):
             materialize_contract(path_package(), [amendment])
 
-    def test_rejects_other_task_and_slice_ownership(self):
+    def test_same_slice_contract_reuse_requires_runtime_review(self):
         package = path_package()
         package["approved_paths"].append("src/mapper.py")
         package["slices"][0]["worker"]["allowed_paths"].append("src/mapper.py")
         other = copy.deepcopy(package["execution_dag"]["tasks"][0])
         other.update(id="T-2", paths=["src/mapper.py"])
         package["execution_dag"]["tasks"].append(other)
-        with self.assertRaisesRegex(CogitoError, "another Task"):
-            materialize_contract(package, [path_amendment()])
+        effective = materialize_contract(package, [path_amendment()])
+        self.assertIn('src/mapper.py', effective['execution_dag']['tasks'][0]['paths'])
+        state = {'state': 'executing', 'tasks': {
+            task['id']: {**task, 'status': 'running'} for task in package['execution_dag']['tasks']}}
+        with self.assertRaisesRegex(CogitoError, 'current review Slice'):
+            path_targets(state, path_amendment())
         package["execution_dag"]["tasks"].pop()
         other_slice = copy.deepcopy(package["slices"][0])
         other_slice["id"] = "FS-002"

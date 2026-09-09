@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, hash_json, atomic_create_json, atomic_write_json, load_json
 from cogito_evidence_binding import capture_index_and_worktree_trees, working_tree_changed_paths
-from cogito_path_amendment_state import path_targets, review_binding
+from cogito_path_amendment_state import path_targets, review_binding, predecessor_deliveries
 from cogito_replan_lock import run_mutation
 
 
@@ -54,6 +54,13 @@ def stopped_executors(store, executor_ids, active_ids):
             if (identifier in executor_ids or identifier not in worker_ids) and not entry['terminated']:
                 raise CogitoError('affected Workers and controlled checks must have stopped')
         yield path, data
+
+
+def validate_predecessor_ancestry(git_at, worktree, deliveries):
+    for delivery in deliveries:
+        for head in delivery['owner_heads']:
+            if git_at(worktree, 'merge-base', head, delivery['base_commit']) != head:
+                raise CogitoError('predecessor delivery is absent from the target lease baseline')
 
 
 class PathAmendmentMixin:
@@ -125,6 +132,10 @@ class PathAmendmentMixin:
                     raise CogitoError('checkout already contains a file outside its authorized paths')
                 if path.resolve() != path or path.is_dir():
                     raise CogitoError('path additions must identify exact files without symlinks')
+        deliveries = predecessor_deliveries(current, amendment, store._events.read())
+        validate_predecessor_ancestry(store._git_at, worktree, deliveries)
+        if deliveries:
+            finding_binding['predecessor_deliveries'] = deliveries
         executors = sorted({t['agent_id'] for t in tasks.values() if t.get('agent_id')})
         active_ids = sorted({t['agent_id'] for t in tasks.values() if t['status'] in {'leased', 'running'}})
         return current, dict(slice_id=slice_id, tasks=tasks, worktree=str(worktree), binding=binding,

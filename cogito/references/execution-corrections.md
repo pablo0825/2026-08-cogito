@@ -91,7 +91,7 @@ Coordinator 撰寫本輪修正 Task 與 checks 的 Amendment，保存輸入：
 
 限同一 Atomic Development Run、整合前的 `review-fix`：本輪 finding 所需的檔案漏列，且 Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任均不變。補正可授權本次新增的修正 Tasks，或本輪已新增且尚未完成的修正 Task，全部屬於該 finding 的 Slice；不更改已完成 Task 的 paths、checks、commit 或 Result。真正超出核准契約時使用 [Replanning](replanning.md)。
 
-以下步驟用於首次建立修正 Task；已有本輪未完成 Task 時，直接依本節末段補列，不再次啟動 review-fix 或新增 Task。
+以下步驟用於首次建立修正 Task；已有本輪未完成 Task，且符合[共通程序](#路徑補列的共通程序)的補列資格時，直接依本節末段補列，不再次啟動 review-fix 或新增 Task。
 
 1. Coordinator 或 Implementer 先說明原 finding、未超出範圍的理由、精確檔案及相關 checks。引用原規格與 finding，不重新撰寫完整 Package。以 `next` 提供的 `finding` 單獨作為 `review-fix-start --input` 的輸入，例如 `{"finding": {"event_sequence": 54, "event_hash": "<實值>"}}`，先進入既有修正階段；不要把尚未覆核的路徑補列放進合併啟動輸入。
 2. 停妥受影響 Worker 與 controlled checks，保留原本已驗證的 checkout；尚未授權的檔案不可先改。依[路徑補列的共通程序](#路徑補列的共通程序)準備並 propose 以下形式：
@@ -127,7 +127,14 @@ Coordinator 撰寫本輪修正 Task 與 checks 的 Amendment，保存輸入：
 
 本節供[執行中補列](#實作中補列必要路徑)與[審查修正補列](#審查修正中的必要檔案補列)共用；適用狀態、Task 是否新增及完成方式依各入口。補列只修正原規格所需的檔案授權，Acceptance、公開 API 語意、資料模型、安全邊界與 Slice 責任必須不變。不能只靠檔名判斷；超出契約時走 [Replanning](replanning.md)。
 
-路徑必須是精確檔案，不得使用目錄、glob、symlink、控制文件、凍結來源、高風險 hotspot，或跨用其他 Task／Slice 的責任路徑。新檔案可尚不存在，但所屬 worktree 必須已建立；已完成 Task／Result 不改寫。Checks 只引用既有或本次新增的 required checks，新增檢查仍受凍結環境政策限制，不刪除原 required checks。
+路徑必須是精確檔案，不得使用目錄、glob、symlink、控制文件、凍結來源或高風險 hotspot。其他 Task／Slice 的責任路徑只允許下列兩種重用；其餘重疊仍拒絕。新檔案可尚不存在，但所屬 worktree 必須已建立；已完成 Task／Result 不改寫。Checks 只引用既有或本次新增的 required checks，新增檢查仍受凍結環境政策限制，不刪除原 required checks。
+
+- **本輪審查修正重用已完成路徑**：目標須是目前 `review-fix` 輪次新建或尚未完成的修正 Task，與 finding 及原 Task 同 Slice。原 Task 必須在本輪 review 開始前已有完成事件與正式 Implementer Result；目前為 `complete`／`verified`／`reviewed` 均可。若檔案原已在本 Slice 有效核准範圍內，且其他 Slice 也有既有宣告，其他 owners 必須仍為 pending、沒有 lease baseline 或任何 Result；不新增其他 Slice 權限。一般 `executing`、仍進行中的原 Task、前輪修正 Task 作為本輪補列目標均不適用。
+- **執行中重用已整合前置路徑**：限同一 atomic Run 的 `executing`，目標 Task 尚未完成且已有 lease baseline；精確檔案必須已在原 Package 的 `approved_paths`，不能只靠先前 Amendment 新增。所有原 owners 均須已 integrated，並屬既定 DAG 的直接或間接前置 Slice。Gate 驗證每個 owner 的 Implementer delivery commit 都是目標 baseline 的祖先；proposal 綁定 baseline 與 delivery heads，review 再驗證 Git 祖先關係，event replay 比對綁定。不得新增 Slice 依賴、沿用並行或尚未整合 owner 的路徑，也不得改寫原成果紀錄。
+
+前置重用檔案若同時列於 `source_registry`，僅在來源為同一精確路徑且 disposition 為 `read-only-source` 時，承認原 Package 已有的修改授權。仍須通過前述前置整合與 baseline 檢查；一般新增路徑、其他 source disposition、來源目錄範圍均不適用，也不能覆蓋控制文件或 hotspot 保護。
+
+前置重用完成後若進入審查修正，該檔案已在目標 Slice 的有效範圍內，依[啟動審查修正](#啟動審查修正)直接列入新修正 Task 的完整 `paths`。上述兩種補列例外不疊加；已建立的修正 Task 若再漏列同時由已整合前置 Slice 擁有的檔案，須另建符合既有授權的新修正 Task，不能用本輪重用例外繞過其他 owner 尚未開始的限制。
 
 1. 停妥受影響 Slice 的實際 Worker 與所有 controlled checks，保留原授權範圍內未完成的內容；未授權檔案不可先改。使用[正常登錄](execution-policy.md#派發與隔離)與 [executor 停止憑據](replanning.md#停止與保存)的 `replan register-executor`／`replan executor-receipt`，不執行 `replan begin`。身分須對應 lease agent ID；receipt 來自真正 executor 回應，只更新 Task status 不代表已停。
 2. 依原入口準備 proposal JSON，執行 `amend-paths propose --run-id <ID> --input <proposal.json> --action-id <ID>`。Gate 綁定 effective contract、受影響 Task、checkout 內容及 executor 身分，回傳 `proposal_hash`。等待覆核期間，受影響 Slice 與 controlled checks 不可繼續；其他 Slice 可繼續不受影響的 Task 操作。
