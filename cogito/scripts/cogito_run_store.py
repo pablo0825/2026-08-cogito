@@ -1739,6 +1739,9 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 and output['next_action'] in {'dispatch-ready-workers', 'dispatch-review-fix',
                     'dispatch-in-scope-correction', 'dispatch-independent-reviewer'}):
             self._atomic_operation_hints(output, projection)
+        from cogito_next_operations import dispatch_hints, reviewer_hints
+        if output['next_action'] == 'dispatch-independent-reviewer':
+            output.update(reviewer_hints(self, projection))
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)
         from cogito_next_operations import accepted_hints, check_recovery_hints, integration_hints, verification_hints
@@ -1762,6 +1765,11 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                         output.update(recovery)
             except (CogitoError, OSError, KeyError, ValueError) as exc:
                 output['check_recovery'] = [{'category': 'unknown_outcome', 'reason': str(exc)[:600]}]
+        if output['next_action'] == 'dispatch-ready-workers' and output.get('ready_tasks'):
+            if any(row['category'] != 'not_started' for row in output.get('check_recovery', [])):
+                output.update(dispatch_tasks=[], dispatch_note='Resolve check recovery before dispatching more work.')
+            else:
+                output.update(dispatch_hints(self, projection, output['ready_tasks']))
         return output
 
     def _atomic_operation_hints(self, output, state):

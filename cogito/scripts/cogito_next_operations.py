@@ -1,14 +1,96 @@
 """Bounded, advisory operation bundles using existing selectors and validators."""
 from pathlib import Path
 from datetime import datetime
+from copy import deepcopy
 
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, hash_json, load_json
-from cogito_gate_validation import verification_checks
+from cogito_gate_validation import derive_review_decision, verification_checks
 from cogito_run_queries import operation_hint
 from cogito_task_finish import collect_check_candidates, unfinished_check_actions
 
 MAX_ITEMS = 50
+
+
+def _task_context(store, package, task):
+    """Copy only dispatch/review context; never synthesize task responsibility."""
+    context = {key: deepcopy(task[key]) for key in
+               ('id', 'slice_id', 'responsibility', 'paths', 'check_ids', 'depends_on') if key in task}
+    slices = {item['id']: item for item in package.get('slices', [])}
+    owner = slices.get(task.get('slice_id'))
+    context['documents'] = {key: deepcopy(owner[key]) for key in ('spec', 'plan') if owner and key in owner}
+    if package.get('shared_understanding', {}).get('path'):
+        context['documents']['shared_understanding'] = deepcopy(package['shared_understanding'])
+    if package['kind'] in {'maintenance', 'documentation'}:
+        worktree, branch = store.root, package['delivery_branch']
+    elif owner:
+        worktree = (store.root / owner['worker']['worktree']).resolve()
+        branch = owner['worker']['branch']
+    else:
+        raise CogitoError('task has no owning Slice')
+    context.update(worktree=str(worktree), branch=branch)
+    return context
+
+
+def dispatch_hints(store, state, task_ids):
+    package = store._approved_package_from_state(state)
+    contexts = []
+    for task_id in task_ids:
+        context = _task_context(store, package, state['tasks'][task_id])
+        hint = operation_hint(store.root, store.run_id, 'task',
+            ['--task-id', task_id, '--status', 'leased', '--agent-id', '<agent-id>'])
+        context['operations'] = [hint]
+        contexts.append(context)
+    return {'dispatch_tasks': contexts,
+            'dispatch_note': 'Context is advisory, not a lease or worktree readiness check. '
+                'Use the real executor identity; after leasing, register the executor before task running. '
+                'Execute one lease then query next again; Gate revalidates current scope and checkout.'}
+
+
+def reviewer_hints(store, state):
+    """Draft immutable references, leaving every reviewer judgment unfilled."""
+    package = store._approved_package_from_state(state)
+    events = store._events.read()
+    cycle = max((e['sequence'] for e in events if e['type'] == 'verification-passed'), default=0)
+    current = [e['payload']['result'] for e in events
+               if e['type'] == 'agent-result-recorded' and e['sequence'] > cycle]
+    contexts = []
+    for task in state['tasks'].values():
+        if task.get('status') != 'verified':
+            continue
+        try:
+            derive_review_decision(package, {**state, 'tasks': {task['id']: task}, 'agent_results': current})
+        except CogitoError:
+            pass
+        else:
+            continue
+        context = _task_context(store, package, task)
+        context.update(worktree=task.get('worktree'), branch=task.get('branch'))
+        implemented = [r for r in state['agent_results'] if r['task_id'] == task['id']
+                       and r['role'] == 'implementer' and r['status'] == 'complete']
+        context['operations'] = []
+        if not implemented or not task.get('agent_id') or not task.get('worktree'):
+            context['blockers'] = ['recorded implementation or lease is missing; cannot draft review references']
+        else:
+            result = implemented[-1]
+            draft = {'schema_version': '3.0', 'run_id': store.run_id, 'task_id': task['id'],
+                     'role': 'reviewer', 'reviewed_implementer': task['agent_id'],
+                     'base_commit': result['base_commit'], 'head_commit': result['head_commit']}
+            if package['kind'] == 'maintenance':
+                try:
+                    draft['head_commit'] = store._git_at(Path(task['worktree']), 'rev-parse', 'HEAD')
+                except (CogitoError, OSError) as exc:
+                    context['blockers'] = [_reason(exc)]
+                    contexts.append(context)
+                    continue
+            context['operations'] = [operation_hint(store.root, store.run_id, 'agent-result',
+                input_value=draft, required_inputs=['agent_id', 'status', 'changed_paths',
+                                                   'evidence', 'risks', 'requested_transition'])]
+        contexts.append(context)
+    return {'review_tasks': contexts,
+            'review_note': 'Fill the draft only after independent review. Do not infer approval from these references. '
+                'Gate revalidates the implementation range and current verified content when recording the Result. '
+                'After recording, query next again; when all reviews are complete, use the existing review-approved transition.'}
 
 
 def _reason(exc):

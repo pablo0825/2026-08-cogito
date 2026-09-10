@@ -10,6 +10,8 @@ Package checkpoint 登記成功後才通過 Start Gate，再派工。Maintenance
 
 ## 派發與隔離
 
+正常執行的 `next.dispatch_tasks` 提供目前可派 Task 的責任、路徑、checks IDs、文件引用、預定 branch/worktree 與 `task leased` 命令；歷史 Task 沒有的描述不會代填。先準備所列 checkout，使用真正派工取得的 Agent ID 取代命令 placeholder。提示不是 lease 或 checkout 已就緒的證明；一次登記一個 lease 後重查 `next`，Gate 仍核對最新依賴、容量、範圍與工作目錄。取得 lease 後依下方規則登錄 executor，再進入 running。
+
 Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；Atomic Task 依[完成 Task](#完成-task)流程完成後才開始下一項。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
 
 每個 Worker 取得 lease 後，先以 `replan register-executor --run-id <ID> --agent-id <lease-agent-id>` 登錄真正的執行身分，再進入 `task running`：外部 Agent 提供 `--handle <executor-handle>`，OS executor 提供獨立 process group 的 `--pid <PID>`。命令沿用 `replan` 命名，但正常派工不執行 `replan begin`。Coordinator 在派工前後查詢 Gate，已要求停止後不得啟動工作；不能編造 handle／PID。需要停止時依 [executor 停止與憑據](replanning.md#停止與保存) 保留真正工具回報，只更新 Task status 不代表程序已停。
@@ -40,6 +42,8 @@ Maintenance 的新 lease 由 Gate 記錄 working tree 與 index 兩份起始快�
 Maintenance 在目前 delivery checkout 執行，保留 Start Gate HEAD，任務與修正先保存未提交快照；最後以 [Finalization](finalization.md) 規定的一個交付 commit 保存所有已驗證內容。Documentation 不自動取得 Maintenance 的單一 commit 規則或審查豁免。
 
 ### 登錄 Agent Result
+
+一般獨立審查的 `next.review_tasks` 列出本輪尚未完成審查的 Task 與 `agent-result` 草稿。將 operation 的 `input` 保存為 JSON，完成真實審查後補齊 `required_inputs`，再代入 `--input` 與 action ID 執行；草稿只預填 run/task、role、被審查者及 commit 引用，不預填 Reviewer 身分、通過結論、changed paths、evidence、風險或 requested transition。沒有可確認的實作／lease 時回 blocker，不猜引用；Maintenance 仍依任務快照與目前 HEAD 審查。既有 Result 格式與版本／內容驗證不變，提示不保證過時資料可登記。登記後重查 `next`；本輪全部審查完成後沿用既有 `review-approved` transition，由 Gate 判定能否推進。
 
 使用手動 `agent-result`（包含 Reviewer 登記）時，至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
 
