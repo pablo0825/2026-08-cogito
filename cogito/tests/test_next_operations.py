@@ -48,6 +48,7 @@ class NextOperationTests(GitTestCase):
         staging = index.read_bytes()
         output = store.next_action()
         self.assertEqual(output['eligible_evidence'], [evidence[-1]['evidence_path']])
+        self.assertEqual(output['next_action'], 'submit-verification')
         self.assertEqual(before, {str(p): p.read_bytes() for p in objects.rglob('*') if p.is_file()})
         self.assertEqual(index.read_bytes(), staging)
         self.assertEqual(store.events_path.read_bytes(), events)
@@ -163,6 +164,7 @@ class NextOperationTests(GitTestCase):
         self.invoke(output['operations'][0], 'post-check-next')
         output = store.next_action()
         self.assertEqual(output['operations'][0]['operation'], 'post-verify')
+        self.assertEqual(output['next_action'], 'submit-post-verification')
         self.invoke(output['operations'][0], 'post-verify-next')
         self.assertEqual(store.load()['state'], 'finalizing')
 

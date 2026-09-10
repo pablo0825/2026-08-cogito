@@ -10,6 +10,8 @@ Package checkpoint 登記成功後才通過 Start Gate，再派工。Maintenance
 
 ## 派發與隔離
 
+lease 後重查 `next`：`leased_tasks` 列出未進入 running 的 Task。未登錄 executor 時，從 `registration_choices` 選擇實際使用的 handle 或 PID 命令，只執行其中一種；登錄後再次查詢，使用既有 `task running` 命令。沒有其他可派任務時，入口為 `start-leased-workers`。`resolve-executor-registration` 或 Task blocker 表示目前無法確認可啟動的 executor，先查明原因，不編造新身分或把停止紀錄當成仍可工作。登錄與查詢不代表開始實作，Gate 仍會在操作時核對狀態。
+
 正常執行的 `next.dispatch_tasks` 提供目前可派 Task 的責任、路徑、checks IDs、文件引用、預定 branch/worktree 與 `task leased` 命令；歷史 Task 沒有的描述不會代填。先準備所列 checkout，使用真正派工取得的 Agent ID 取代命令 placeholder。提示不是 lease 或 checkout 已就緒的證明；一次登記一個 lease 後重查 `next`，Gate 仍核對最新依賴、容量、範圍與工作目錄。取得 lease 後依下方規則登錄 executor，再進入 running。
 
 Coordinator 只派發 Project Graph 中依賴已滿足的 task，同時最多三個 Slice Worker；同一 Slice 同時只能有一個 active lease。Feature／Change／Correction Worker 各用專用 branch/worktree，且首次派發必須以當下最新 delivery HEAD 為起點。跨 Slice 相依只有在上游到達 `integrated` milestone 後才滿足；同 Slice 內部 task 依序完成；Atomic Task 依[完成 Task](#完成-task)流程完成後才開始下一項。同一 Implementer 可連續處理，無須每項重新建立代理。只有 Coordinator 可串行整合到固定 delivery branch。
@@ -43,7 +45,7 @@ Maintenance 在目前 delivery checkout 執行，保留 Start Gate HEAD，任務
 
 ### 登錄 Agent Result
 
-一般獨立審查的 `next.review_tasks` 列出本輪尚未完成審查的 Task 與 `agent-result` 草稿。將 operation 的 `input` 保存為 JSON，完成真實審查後補齊 `required_inputs`，再代入 `--input` 與 action ID 執行；草稿只預填 run/task、role、被審查者及 commit 引用，不預填 Reviewer 身分、通過結論、changed paths、evidence、風險或 requested transition。沒有可確認的實作／lease 時回 blocker，不猜引用；Maintenance 仍依任務快照與目前 HEAD 審查。既有 Result 格式與版本／內容驗證不變，提示不保證過時資料可登記。登記後重查 `next`；本輪全部審查完成後沿用既有 `review-approved` transition，由 Gate 判定能否推進。
+一般獨立審查的 `next.review_tasks` 列出本輪尚未完成審查的 Task 與 `agent-result` 草稿。將 operation 的 `input` 保存為 JSON，完成真實審查後補齊 `required_inputs`，再代入 `--input` 與 action ID 執行；草稿只預填 run/task、role、被審查者及 commit 引用，不預填 Reviewer 身分、通過結論、changed paths、evidence、風險或 requested transition。沒有可確認的實作／lease 時回 blocker，不猜引用；Maintenance 仍依任務快照與目前 HEAD 審查。既有 Result 格式與版本／內容驗證不變，提示不保證過時資料可登記。登記後重查 `next`；本輪全部審查完成時，`complete-review` 提供既有 `review-approved` transition，由 Gate 重新核對內容並判定能否推進，不再派 Reviewer。
 
 使用手動 `agent-result`（包含 Reviewer 登記）時，至少回報 run/task/agent/role、status、base/head commit、changed paths、checks/evidence、risks 與 requested transition。Implementer identity 取自 Gate 發出的 task lease；Reviewer Result 必須逐 task 指向該 implementer，Gate 自行比對兩者不同。Package 只固定 role 與獨立性要求，不預先指定真人或 Agent ID。格式修復最多兩次，只能修結構，不能更改實際 code、evidence 或風險判斷。
 
@@ -80,6 +82,8 @@ runner 只保存有界 head/tail 輸出。合計輸出超過凍結的 `max_check
 
 `next` 的驗證提示列出 `eligible_evidence`、`missing_checks`、`stale_checks` 與已填 evidence 的 `verify`／`post-verify` argv；完整組合無法驗證時不提供 closure。提示有範圍限制時，不能以截斷清單宣稱可完成。
 
+必要證據齊全時，`submit-verification`／`submit-post-verification` 提供使用現有 evidence 的 `verify`／`post-verify` 命令，不要求重跑測試；缺少或過期時仍提示適用的檢查。執行後重查 `next`，過時提示不免除操作時的驗證。
+
 Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後再執行 `post-verify`。兩者核對的內容不同：
 
 | 操作 | evidence 對象 |
@@ -93,6 +97,8 @@ Atomic 本波 Task 完成後，依 Gate 執行 `verify`；整合全部完成後�
 `Result.checks` 記錄最後整合驗證採用的 checks；Task checks 保留在 Implementer Results 與 delivery summary。不建立純跑測試的 Task 或空 commit。舊 Package 維持原驗證規則。
 
 ### Check 重送
+
+`resolve-check-recovery` 優先於正常驗證、Task 完成與派工；此時只提供可確認安全的恢復操作，不保留先前的推進命令。恢復資料無法讀取或超出查詢範圍時，說明原因並停止推進；成功恢復後重查 `next`。只有尚未開始的非阻塞請求仍為 optional，不影響正常下一步。
 
 先讀 `next.check_recovery` 的操作與 blockers：Gate 區分未啟動、已發布 evidence、已綁替代檢查與未知結果。非阻塞的未啟動請求僅列在 `optional_recovery_operations`，不取代正常驗證；不自行依 marker 猜測資格或另造 resolver。Transient retry 最多兩次，跨 resume 與 Agent 更換保留；超限或不可恢復錯誤時依 [Runtime Interface](runtime-interface.md#停止條件與狀態操作)停止並登錄 block。以下說明各種提示的處理界線。
 

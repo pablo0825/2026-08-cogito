@@ -73,7 +73,9 @@ class DispatchReviewHintTests(GitTestCase):
             self.invoke(operation, repo, payload=draft, action=f'incomplete-{i}', success=False)
             self.invoke(operation, repo, payload=self.reviewed(draft), action=f'review-{i}')
             self.assertNotIn(context['id'], [t['id'] for t in store.next_action()['review_tasks']])
-        store.transition('review-approved', {})
+        output = store.next_action()
+        self.assertEqual(output['next_action'], 'complete-review')
+        self.invoke(output['operations'][0], repo, action='complete-review')
         self.assertEqual(store.load()['state'], 'integrating')
 
     def test_review_draft_does_not_bypass_independence_or_content_drift(self):

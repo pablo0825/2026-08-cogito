@@ -1750,6 +1750,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)
         from cogito_next_operations import accepted_hints, check_recovery_hints, integration_hints, verification_hints
+        check_action = output['next_action']
         # Add guidance only to the normal route, never over a judgment/recovery override.
         if output['next_action'] in {'run-controlled-checks', 'run-post-integration-checks'}:
             output.update(verification_hints(self, projection))
@@ -1757,9 +1758,10 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             output.update(integration_hints(self, projection))
         elif output['next_action'] == 'report-completion':
             output.update(accepted_hints(self, projection))
-        if output['next_action'] in {'run-controlled-checks', 'run-post-integration-checks',
+        if check_action in {'run-controlled-checks', 'run-post-integration-checks',
                 'dispatch-ready-workers', 'dispatch-review-fix', 'dispatch-in-scope-correction',
                 'dispatch-post-integration-correction', 'dispatch-human-correction'}:
+            recovery = {}
             try:
                 recovery = check_recovery_hints(self, projection)
                 if recovery:
@@ -1769,12 +1771,27 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     else:
                         output.update(recovery)
             except (CogitoError, OSError, KeyError, ValueError) as exc:
-                output['check_recovery'] = [{'category': 'unknown_outcome', 'reason': str(exc)[:600]}]
+                output.update(check_recovery=[{'category': 'unknown_outcome', 'reason': str(exc)[:600]}], operations=[])
+            if any(row['category'] != 'not_started' for row in output.get('check_recovery', [])):
+                output['next_action'] = 'resolve-check-recovery'
+                # Some bounded/error recovery results have no operations field.
+                output['operations'] = recovery.get('operations', [])
+                output.pop('optional_operations', None)
+                output.pop('optional_recovery_operations', None)
+                output['dispatch_tasks'] = []
+                return output
         if output['next_action'] == 'dispatch-ready-workers' and output.get('ready_tasks'):
             if any(row['category'] != 'not_started' for row in output.get('check_recovery', [])):
                 output.update(dispatch_tasks=[], dispatch_note='Resolve check recovery before dispatching more work.')
             else:
                 output.update(dispatch_hints(self, projection, output['ready_tasks']))
+        if output['next_action'] == 'dispatch-ready-workers':
+            from cogito_next_operations import leased_task_hints
+            output.update(leased_task_hints(self, projection))
+            if output['next_action'] == 'resolve-executor-registration':
+                output.pop('dispatch_tasks', None)
+            if output.get('leased_tasks') and not output.get('ready_tasks'):
+                output['next_action'] = 'start-leased-workers'
         return output
 
     def _atomic_operation_hints(self, output, state):

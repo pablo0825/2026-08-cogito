@@ -87,10 +87,50 @@ def reviewer_hints(store, state):
                 input_value=draft, required_inputs=['agent_id', 'status', 'changed_paths',
                                                    'evidence', 'risks', 'requested_transition'])]
         contexts.append(context)
-    return {'review_tasks': contexts,
+    output = {'review_tasks': contexts,
             'review_note': 'Fill the draft only after independent review. Do not infer approval from these references. '
                 'Gate revalidates the implementation range and current verified content when recording the Result. '
                 'After recording, query next again; when all reviews are complete, use the existing review-approved transition.'}
+    if not contexts:
+        try:
+            derive_review_decision(package, {**state, 'agent_results': current})
+        except CogitoError:
+            pass
+        else:
+            output.update(next_action='complete-review', operations=[operation_hint(
+                store.root, store.run_id, 'transition', ['--event', 'review-approved'])])
+    return output
+
+
+def leased_task_hints(store, state):
+    from cogito_execution_registry import observe_read_only
+    leased = [t for t in state['tasks'].values() if t['status'] == 'leased']
+    if not leased:
+        return {}
+    output = {'leased_tasks': []}
+    try:
+        registry = observe_read_only(store.root, store.run_id, allow_external_receipts=True)
+        if registry['stop_requested']:
+            raise CogitoError('executor stop requested; reconcile the stop before starting leased work')
+    except (CogitoError, OSError) as exc:
+        return {'next_action': 'resolve-executor-registration', 'operations': [], 'blockers': [_reason(exc)]}
+    for task in leased:
+        row = {'task_id': task['id'], 'agent_id': task['agent_id'], 'operations': []}
+        entry = registry['entries'].get(task['agent_id'])
+        if entry is None:
+            argv = ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(store.root),
+                    'replan', 'register-executor', '--run-id', store.run_id, '--agent-id', task['agent_id']]
+            row['registration_choices'] = [
+                {'operation': 'register-executor', 'cwd': str(store.root), 'argv': [*argv, flag, value]}
+                for flag, value in (('--handle', '<executor-handle>'), ('--pid', '<pid>'))]
+            row['note'] = 'Choose ONE actual executor identity, register it, then query next. Never invent a handle or PID.'
+        elif entry['observation'] not in {'running', 'unverified-external'}:
+            row['blockers'] = ['registered executor is not available for starting work: ' + entry['observation']]
+        else:
+            row['operations'] = [operation_hint(store.root, store.run_id, 'task',
+                ['--task-id', task['id'], '--status', 'running', '--agent-id', task['agent_id']])]
+        output['leased_tasks'].append(row)
+    return output
 
 
 def _reason(exc):
@@ -200,6 +240,7 @@ def verification_hints(store, state):
         if post:
             hint['judgment_required'] = 'Decide whether reviewer escalation is required before submitting.'
         output['operations'] = [hint]
+        output['next_action'] = 'submit-post-verification' if post else 'submit-verification'
     except (CogitoError, OSError, KeyError, ValueError) as exc:
         output['blockers'] = [_reason(exc)]
     return output
