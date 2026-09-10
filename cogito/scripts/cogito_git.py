@@ -31,6 +31,9 @@ class GitRepository:
                 ["git", "-C", str(directory), *args], check=True, text=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
             )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or '').strip()
+            raise CogitoError(f"{error_prefix}: {exc}" + (f"; {detail}" if detail else "")) from exc
         except (OSError, subprocess.SubprocessError) as exc:
             raise CogitoError(f"{error_prefix}: {exc}") from exc
         # NUL-delimited paths may begin with whitespace; do not normalize them.

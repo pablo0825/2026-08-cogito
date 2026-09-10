@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
 from cogito_common import CogitoError
@@ -27,9 +28,19 @@ def validate_atomic_integration(
     try:
         merge = git("merge-tree", "--write-tree", previous_head, tip)
     except CogitoError as exc:
+        failure = exc.__cause__
+        # merge-tree exits 1 and prints a result tree for merge conflicts.
+        # Permission, process and unsupported-command errors are not conflicts.
+        output = failure.stdout if isinstance(failure, subprocess.CalledProcessError) else None
+        first_line = output.splitlines()[0] if isinstance(output, str) and output else ''
+        if (isinstance(failure, subprocess.CalledProcessError) and failure.returncode == 1
+                and GIT_OBJECT_RE.fullmatch(first_line)):
+            raise CogitoError(
+                "atomic integration found merge conflicts in reviewed Tasks; "
+                "resolve the conflict through reviewed work before integrating: " + str(exc)
+            ) from exc
         raise CogitoError(
-            "atomic integration cannot establish a clean merge of reviewed Tasks; "
-            "resolve the conflict through reviewed work before integrating"
+            "atomic integration merge-tree check failed; merge validation did not complete: " + str(exc)
         ) from exc
     tree = merge.splitlines()[0] if merge else ""
     if not GIT_OBJECT_RE.fullmatch(tree):
