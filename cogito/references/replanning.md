@@ -48,6 +48,12 @@ Controlled check 的 subprocess 由 runner 登錄；啟動與 replan fence 使�
 
 新理解摘要與新 Spec／Plan 使用候選 Package 綁定的精確 path/hash，與準備快照、Start artifact 及交接使用相同文件清單。來源已凍結的文件保持原內容；需改寫時使用新路徑。新文件例外不授權修改其他產品檔案或來源資料。RP propose 在獨立覆核與核准前檢查交接範圍，核准時再核對候選內容；文件內容變更後須更新候選與提案，不沿用舊核准。
 
+候選準備完成後，查來源或 successor 的 `next`，也可查 `replan status`。需要新提案時，`proposal_draft.operations` 提供綁定候選 hash 的 `replan draft` 命令；尚未完成 planning 覆核或正在處理工具接軌時先解決 blocker。已有有效 RP 提案正在覆核／核准時不提示重建；只修改提案判斷而不換 Package 時，也可用目前 `candidate_package_hash` 明確呼叫 draft。
+
+`draft` 直接在 `.cogito/replans/<RP-ID>/drafts/` 建立新的可編輯 JSON，原樣放入指定候選 Package 並列出所有 source task IDs。回傳 `draft_path`、尚需填寫的 `required_inputs` 與使用此檔案的既有 `propose` 命令，不必再搬整份 Package。先編輯草稿補齊下列判斷，再執行 propose；工具不代填作者、差異、成果取捨或驗證結論。draft 不產生提案／審查／核准事件，也不建立 Start artifact；這些仍由原操作處理。
+
+每次 draft 建立不同檔案，不覆蓋已填內容；意外中斷可重新產生，舊檔保留。候選 hash 不符時拒絕產生，重查提示後準備新草稿；候選或文件在產生後變更，propose／approve 仍使用原驗證拒絕過時資料。propose 已開始後若失敗，先查 status，依既有規則使用原輸入檔與 action ID 恢復，不把新的 draft 當成原操作重送。
+
 提案 JSON 包含：
 
 - `author_id`：方案作者。
@@ -98,6 +104,7 @@ python3 cogito/scripts/cogito_gate.py --repo <repo> replan register-executor --r
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan begin --replan-id RP-001 --source-run <old-run> --successor-run <new-run> --reason '需要修改共用 API' --action-id rp-begin
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan executor-receipt --run-id <old-run> --agent-id <worker> --handle <executor-handle> --input <receipt.json>
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan stop --replan-id RP-001 --action-id rp-stop
+python3 cogito/scripts/cogito_gate.py --repo <repo> replan draft --replan-id RP-001 --candidate-hash <successor-candidate-hash>
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan propose --replan-id RP-001 --input <proposal.json> --action-id rp-propose-1
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan review --replan-id RP-001 --input <review.json> --action-id rp-review-1
 python3 cogito/scripts/cogito_gate.py --repo <repo> replan approve --replan-id RP-001 --proposal-hash <hash> --action-id rp-approve-1

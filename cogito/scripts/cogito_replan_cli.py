@@ -11,10 +11,11 @@ from cogito_run_store import RunStore
 def run(root, argv):
     parser=argparse.ArgumentParser(prog='cogito_gate.py replan')
     sub=parser.add_subparsers(dest='operation',required=True)
-    for name in ('status','begin','stop','propose','review','approve','reject','handoff','abandon',
+    for name in ('status','draft','begin','stop','propose','review','approve','reject','handoff','abandon',
                  'toolchain-propose','toolchain-review','toolchain-approve','toolchain-reject'):
         p=sub.add_parser(name);p.add_argument('--replan-id',required=True)
-        if name!='status':p.add_argument('--action-id',required=True)
+        if name not in {'status','draft'}:p.add_argument('--action-id',required=True)
+        if name=='draft':p.add_argument('--candidate-hash',required=True)
         if name=='begin':
             p.add_argument('--source-run',required=True);p.add_argument('--successor-run',required=True);p.add_argument('--reason',required=True)
         if name in {'propose','review','toolchain-propose','toolchain-review'}:p.add_argument('--input',required=True)
@@ -43,7 +44,17 @@ def run(root, argv):
             return snapshot(root,args.run_id,allow_external_receipts=True)
     store=ReplanStore(root,args.replan_id)
     op=args.operation
-    if op=='status':return store.load()
+    if op=='status':
+        from cogito_replan_draft import proposal_guidance
+        state = store.load()
+        return {**state, **proposal_guidance(store, state)}
+    if op=='draft':
+        from cogito_replan_draft import write_draft
+        try:
+            return write_draft(store, args.candidate_hash)
+        except OSError as exc:
+            raise CogitoError('RP draft storage failed; no proposal was submitted. Preserve existing files, '
+                              'repair storage and rerun draft to create a new file: ' + str(exc)) from exc
     if op=='begin':return store.begin(args.source_run,args.successor_run,args.reason,args.action_id)
     if op=='stop':return store.stop(args.action_id)
     if op=='toolchain-propose':return store.toolchain_propose(load_json(Path(args.input)),args.action_id)

@@ -1686,15 +1686,20 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         for replan in replans(self.root):
             if self.run_id in {replan["source_run_id"], replan["successor_run_id"]} and replan["state"] not in {"completed", "abandoned", "disposition"}:
                 from cogito_replan_store import ReplanStore
-                replan = ReplanStore(self.root, replan["replan_id"]).load()
+                from cogito_replan_draft import proposal_guidance
+                replan_store = ReplanStore(self.root, replan["replan_id"])
+                replan = replan_store.load()
+                draft_guidance = proposal_guidance(replan_store, replan)
                 projection = self.load()
                 if self.run_id == replan["successor_run_id"] and not projection.get("package_hash") and projection.get("planning", {}).get("revision"):
                     output = derive_next_action(projection)
                     if output["next_action"] == "request-package-approval":
-                        output["next_action"] = "prepare-replan-proposal"
-                    output.update(replan_id=replan["replan_id"], replan_state=replan["state"])
-                    return output
-                return {"state": projection["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"]}
+                        output["next_action"] = ('prepare-replan-proposal'
+                            if draft_guidance.get('proposal_draft', {}).get('operations') else 'continue-replan')
+                    output.update(replan_id=replan["replan_id"], replan_state=replan["state"],
+                                  replan_next_action=replan["next_action"])
+                    return {**output, **draft_guidance}
+                return {"state": projection["state"], "next_action": "continue-replan", "replan_id": replan["replan_id"], "replan_state": replan["state"], "replan_next_action": replan["next_action"], **draft_guidance}
         projection = self.load()
         from cogito_path_amendment import pending_from_events
         pending_effect = pending_from_events(self.root, self.run_id)
