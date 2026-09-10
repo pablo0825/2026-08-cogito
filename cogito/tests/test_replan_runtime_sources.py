@@ -199,7 +199,7 @@ class ReplanRuntimeSourcesTest(GitTestCase):
                                          'reason': 'fixture', 'check_ids': ['C-001']}]}
         append_event(self.source_events, {'type': 'technical-amendment-added',
                                          'payload': {'amendment': amendment}})
-        with self.assertRaisesRegex(CogitoError, 'overlaps frozen control or safety scope'):
+        with self.assertRaisesRegex(CogitoError, 'overlaps frozen source scope'):
             self.rp._runtime({'source_run_id': 'DEV-001', 'successor_run_id': 'DEV-002',
                               'replan_id': 'RP-001'})
 

@@ -46,6 +46,8 @@ Controlled check 的 subprocess 由 runner 登錄；啟動與 replan fence 使�
 
 建立新的 run，使用原有 Shared Understanding、Boundary、prepare-package Gates 準備 successor。需要重新確認理解的變更仍取得使用者確認；原需求沿用則明確引用原已確認內容，不把新 run 建立視為實作授權。
 
+新理解摘要與新 Spec／Plan 使用候選 Package 綁定的精確 path/hash，與準備快照、Start artifact 及交接使用相同文件清單。來源已凍結的文件保持原內容；需改寫時使用新路徑。新文件例外不授權修改其他產品檔案或來源資料。RP propose 在獨立覆核與核准前檢查交接範圍，核准時再核對候選內容；文件內容變更後須更新候選與提案，不沿用舊核准。
+
 提案 JSON 包含：
 
 - `author_id`：方案作者。

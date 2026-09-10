@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from cogito_actions import request_fingerprint, require_same_request
 from cogito_common import CogitoError, atomic_create_json, atomic_write_json, hash_json, load_json
-from cogito_contracts import package_hash, validate_package_with_limits
+from cogito_contracts import package_hash, validate_package_with_limits, package_document_refs
 from cogito_events import append_event, read_events
 from cogito_evidence_binding import capture_index_and_worktree_trees
 from cogito_project_graph import formalize_project_graph, validate_project_graph
@@ -157,9 +157,7 @@ class ReplanStore:
         package = source.approved_package()
         from cogito_contracts import path_allowed
         approved_paths = source.effective_package()['approved_paths']
-        contracts = [d for sl in package['slices'] for d in (sl['spec'], sl['plan'])]
-        if package.get('shared_understanding', {}).get('path'):
-            contracts.append(package['shared_understanding'])
+        contracts = package_document_refs(package)
         contract_paths = {d['path'] for d in contracts}
         documents = [*contracts, *package.get('source_registry', [])]
         product_sources = set()
@@ -292,8 +290,20 @@ class ReplanStore:
         if proposal:
             package = proposal['package']
             allowed.add(f"docs/cogito/packages/{package['run_id']}.json")
-            olddocs = {d['path'] for s in self.source().approved_package()['slices'] for d in (s['spec'],s['plan'])}
-            allowed.update(d['path'] for s in package['slices'] for d in (s['spec'],s['plan']) if d['path'] not in olddocs)
+            from cogito_contracts import path_allowed
+            source = self.source()
+            olddocs = {d['path'] for d in package_document_refs(source.approved_package(), include_sources=True)}
+            product_paths = source.effective_package()['approved_paths']
+            for document in package_document_refs(package):
+                path = document['path']
+                # A new document reference cannot turn an existing product or
+                # frozen source file into permission to edit the stop snapshot.
+                if path in olddocs or path_allowed(path, product_paths):
+                    continue
+                if any(source._git('ls-tree', saved['delivery'][field], '--', path)
+                       for field in ('index_tree', 'content_tree')):
+                    continue
+                allowed.add(path)
         for field in ('index_tree','content_tree'):
             runtime.assert_frozen_tree(actual['delivery'][field], frozen_runtime)
             before = runtime.product_tree(saved['delivery'][field], immutable_files=frozen_runtime,

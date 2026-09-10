@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, hash_json
-from cogito_contracts import package_hash, safe_repo_path
+from cogito_contracts import package_hash, safe_repo_path, package_document_refs
 from cogito_replan_lock import run_mutation
 
 PLANNING_EVENTS = {"planning-begun", "planning-reviewed", "planning-withdrawn"}
@@ -52,11 +52,7 @@ def capture_candidate(root, package, round_number, *, strict=False):
     Legacy callers may prepare before files exist. Preserve that fact explicitly;
     revising such a candidate requires completing its source snapshots first.
     """
-    refs = [d for sl in package["slices"] for d in (sl["spec"], sl["plan"])]
-    refs += package["source_registry"]
-    shared = package["shared_understanding"]
-    if "path" in shared:
-        refs.append(shared)
+    refs = package_document_refs(package, include_sources=True)
     files, unavailable, expected = {}, [], {}
     for ref in refs:
         path = ref["path"]

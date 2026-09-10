@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from cogito_common import CogitoError, hash_json
-from cogito_contracts import package_hash, validate_package_with_limits
+from cogito_contracts import package_hash, validate_package_with_limits, package_document_refs
 from cogito_git_objects import HardenedObjectReader, TreeEntry
 from cogito_planning import validate_snapshot
 from cogito_project_graph import validate_project_graph
@@ -37,12 +37,7 @@ def _safe_control_path(path: str) -> bool:
 
 def control_paths(package: Mapping[str, Any], package_path: str) -> list[str]:
     paths = {package_path, "docs/cogito/project-graph.json"}
-    for item in package["slices"]:
-        paths.update((item["spec"]["path"], item["plan"]["path"]))
-    paths.update(item["path"] for item in package["source_registry"])
-    shared = package.get("shared_understanding") or {}
-    if shared.get("path"):
-        paths.add(shared["path"])
+    paths.update(item['path'] for item in package_document_refs(package, include_sources=True))
     if not all(_safe_control_path(path) for path in paths):
         raise CogitoError("Start artifact contains an unsafe control path")
     return sorted(paths)

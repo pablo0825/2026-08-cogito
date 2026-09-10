@@ -15,7 +15,7 @@ class ReplanStoreTests(GitTestCase):
     fixture = feature_support.FeatureMultitaskTests.fixture
     result = staticmethod(feature_support.FeatureMultitaskTests.result)
     # Reuse the real verified/reviewing fixture; inherited feature tests also run.
-    def setup_replan(self):
+    def setup_replan(self, configure=None):
         repo,worktree,source,ranges=self.fixture()
         old=source.approved_package()
         rp=ReplanStore(repo,'RP-api')
@@ -26,6 +26,8 @@ class ReplanStoreTests(GitTestCase):
             oldid=sl['id'];sl['id']+='-V2';sl['type']='change';sl['lineage']=[oldid]
             sl['worker']['branch']+='-v2';sl['worker']['worktree']+='-v2'
         for task in draft['execution_dag']['tasks']: task['slice_id']+='-V2'
+        if configure is not None:
+            configure(repo, draft)
         new=RunStore(repo,'DEV-next');new.create('change')
         new.transition('shared-understanding-ready',{'shared_understanding_hash':draft['shared_understanding']['hash']})
         new.transition('shared-understanding-confirmed',{'confirmed':True})
@@ -71,6 +73,66 @@ class ReplanStoreTests(GitTestCase):
         self.assertEqual(load_json(repo/'docs/cogito/project-graph.json')['active_run_id'],new.run_id)
         rp.handoff('handoff')
         new.update_task('T-1','leased','new-worker')
+
+    @staticmethod
+    def new_summary(repo, draft):
+        relative = 'docs/cogito/understanding/DEV-next.md'
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('Successor understanding\n')
+        draft['shared_understanding'] = dict(
+            path=relative, hash=hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_new_summary_survives_prepare_approval_and_handoff_replay(self):
+        repo, worker, source, successor, rp, proposal = self.setup_replan(self.new_summary)
+        relative = proposal['package']['shared_understanding']['path']
+        content = (repo / relative).read_bytes()
+        original_package = source.approved_package()
+        original_head = git(worker, 'rev-parse', 'HEAD')
+        self.approve_replan(rp)
+        rp.handoff('handoff')
+        events = rp.events_path.read_bytes()
+        rp.handoff('handoff')
+        self.assertEqual(rp.events_path.read_bytes(), events)
+        self.assertEqual(successor.load()['state'], 'executing')
+        self.assertEqual((repo / relative).read_bytes(), content)
+        artifact = rp.load()['proposal']['start_artifact']
+        self.assertEqual(git(repo, 'show', artifact['result_start_tree'] + ':' + relative),
+                         content.decode().strip())
+        self.assertEqual(source.approved_package(), original_package)
+        self.assertEqual(git(worker, 'rev-parse', 'HEAD'), original_head)
+
+    def test_new_summary_does_not_allow_unrelated_or_frozen_document_changes(self):
+        for relative in ('docs/unrelated.md', 'docs/spec.md'):
+            with self.subTest(path=relative):
+                repo, _, _, _, rp, _ = self.setup_replan(self.new_summary)
+                before = rp.events_path.read_bytes()
+                (repo / relative).write_text('Unauthorized change\n')
+                with self.assertRaises(CogitoError):
+                    self.approve_replan(rp)
+                self.assertEqual(rp.events_path.read_bytes(), before)
+
+    def test_changed_successor_summary_is_rejected_before_approval(self):
+        repo, _, _, _, rp, proposal = self.setup_replan(self.new_summary)
+        digest = rp.load()['proposal_hash']
+        rp.review(dict(proposal_hash=digest, reviewer_id='independent', findings=[],
+            assessment={k: 'Reviewed evidence' for k in ('impact','reuse','revalidation','handoff')}), 'review')
+        (repo / proposal['package']['shared_understanding']['path']).write_text('Unreviewed summary\n')
+        before = rp.events_path.read_bytes()
+        with self.assertRaises(CogitoError):
+            rp.approve(digest, 'approve')
+        self.assertEqual(rp.events_path.read_bytes(), before)
+
+    def test_summary_reference_cannot_authorize_product_or_existing_file_edits(self):
+        for relative in ('src/a.txt', '.gitignore'):
+            with self.subTest(path=relative):
+                def alias(repo, draft):
+                    path = repo / relative
+                    path.write_text('Reclassified as a new summary\n')
+                    draft['shared_understanding'] = dict(
+                        path=relative, hash=hashlib.sha256(path.read_bytes()).hexdigest())
+                with self.assertRaisesRegex(CogitoError, 'outside new control documents'):
+                    self.setup_replan(alias)
 
     def test_recover_after_graph_write_before_start(self):
         repo,_,_,new,rp,_=self.setup_replan();self.approve_replan(rp)

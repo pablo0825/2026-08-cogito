@@ -23,6 +23,23 @@ from cogito_workflow import load_workflow
 
 
 DEFAULT_MAX_CHECK_OUTPUT_BYTES = 10 * 1024 * 1024
+
+
+def package_document_refs(
+    package: Mapping[str, Any], *, include_sources: bool = False,
+) -> list[Mapping[str, Any]]:
+    """List frozen control documents, optionally including product references.
+
+    Preserve reference order and input values; source_registry entries are not
+    automatically granted the same write permissions as control documents.
+    """
+    documents = [d for sl in package['slices'] for d in (sl['spec'], sl['plan'])]
+    if include_sources:
+        documents.extend(package.get('source_registry', []))
+    shared = package.get('shared_understanding', {})
+    if shared.get('path'):
+        documents.append(shared)
+    return documents
 MIN_MAX_CHECK_OUTPUT_BYTES = 1024
 MAX_MAX_CHECK_OUTPUT_BYTES = 100 * 1024 * 1024
 
