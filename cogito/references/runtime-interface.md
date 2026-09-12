@@ -10,7 +10,7 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 以 `python3 cogito/scripts/cogito_gate.py --repo <root> next --run-id <ID>` 取得下一步，依操作文件使用專用 subcommand，參數以其 `--help` 為準。`implementation-complete` 與 `review-approved` 使用通用 `transition`，Gate 仍從已登錄 Result 與 task milestone 推導 verdict；其他敏感事件不得透過通用 transition、直接呼叫 runner 或 runtime `record()` 寫入。只有 `run-check` 產生並登錄的 evidence 可用於 Gate closure。
 
-每個有副作用的 action 使用穩定 `--action-id`。相同命令與完整輸入重送不重做已完成操作，不同命令或輸入不得使用同一 ID。舊 action 缺少 request fingerprint 時先確認既有結果，不推測原始請求。發生部分失敗先查 Gate 與既有成果，不先重做 Git 或外部操作。
+每個變更 Gate 事件歷史的 action 使用穩定 `--action-id`；只產生草稿的命令依所屬流程處理。相同命令與完整輸入重送不重做已完成操作，不同命令或輸入不得使用同一 ID。舊 action 缺少 request fingerprint 時先確認既有結果，不推測原始請求。發生部分失敗先查 Gate 與既有成果，不先重做 Git 或外部操作。
 
 ## JSON 輸入與顯示
 

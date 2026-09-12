@@ -2,7 +2,7 @@
 
 本流程只在 Gate 的 `next_action` 為 `write-result-and-finalize`、狀態為 `finalizing` 時使用。先前的驗證、審查及適用人工驗收必須已完成；產生摘要或建立 commit 本身都不代表結案。
 
-順序是：確認最後驗證內容 → 取得交付摘要 → 準備 Result／Project Graph → 建立 final commit → 登記並確認 accepted → 回報結果。
+順序是：確認最後驗證內容 → 產生並檢查結案草稿 → 保存 Result／Project Graph → 建立 final commit → 登記並確認 accepted → 回報結果。
 
 ## 1. 確認最後驗證內容
 
@@ -20,7 +20,19 @@ Maintenance 的任務與修正不提前建立產品 commit。Implementer Result 
 
 所有 kind 都會再次核對 Start Gate HEAD 到 final commit 的完整交付範圍。產品修改必須在 Package 或有效 Amendment 的核准路徑內；控制文件只接受既有精確例外，不能因位於 `docs/` 就取得豁免。凍結 Package 須內容相符，採納來源依凍結 bytes/hash 或已核准路徑處理，Spec／Plan 依既有政策且先於最後驗證更新。通過 integration 或 content-tree 比對都不能取代範圍檢查。
 
-## 2. 取得交付摘要
+## 2. 準備結案草稿
+
+進入 `finalizing` 後先查 `next`，依 `operations` 使用 `result-draft --run-id <ID> --event-hash <目前事件hash>`。此命令不接受 `--action-id`，不追加 Gate 事件。命令直接在 `.cogito/runs/<ID>/drafts/closure-<unique>/` 建立可編輯的 Result 與 Project Graph 草稿，回傳 `drafts`、正式 `destinations`、待填 `required_inputs`、提交範圍／必要 trailers 與既有 finalize 命令。不重複從輸出搬完整 JSON。
+
+Result 已整理最後驗證證據、Reviewer（含採認）、修正、人工驗收與 delivery summary。它不填 `remaining_risks`；Agent 評估後才加入字串陣列，確實無剩餘風險時才用空陣列。草稿的 `status: accepted` 是預定 Result 格式，不代表已結案或新增核准。Graph 草稿只關閉本 run 的 Slice，保留其他歷史，兩份草稿都經原記錄驗證器核對。
+
+先檢查草稿並補齊風險，再保存到回傳的 canonical destinations；不可將 runtime 草稿路徑直接傳給 finalize。保存前確認正式檔案沒有其他未納入修改，保留無關 staging。依第 1 節的 kind 規則建立 final commit：Maintenance 仍需同一提交包含已驗證產品與適用 trailers，不能先提交 metadata。取得實際 commit ID 後再用回傳命令登記。
+
+草稿命令不改正式文件、index、HEAD 或事件；每次建立新目錄，不覆蓋已編輯草稿。事件 hash 變更時重新查詢，尚未完成驗收則拒絕；草稿後的證據、內容及歷史漂移仍由原 finalize 拒絕。兩檔寫入中斷時不回成功，保留部分檔案，修復後另建新草稿。若 HEAD 已包含可通過驗證的結案檔案，`next` 改提供該 commit 的 finalize 命令，不要求重複 commit；中斷重送仍使用原參數與 action ID。既有結案檔案驗證失敗時先處理 blocker，不盲目覆蓋或追加 commit。
+
+### 單獨取得交付摘要
+
+需要單獨查詢或沿用原手動整理方式時，仍可使用：
 
 ```sh
 python3 cogito/scripts/cogito_gate.py --repo <root> delivery-summary --run-id <ID>

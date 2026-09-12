@@ -1500,6 +1500,15 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             outcome = {"removed": [], "retained": [], "error": str(exc)}
         return {**current, "cleanup": outcome}
 
+    @run_mutation
+    def result_draft(self, event_hash: str) -> dict[str, Any]:
+        from cogito_result_draft import write_result_draft
+        try:
+            return write_result_draft(self, event_hash)
+        except OSError as exc:
+            raise CogitoError('Result draft storage failed; no finalization was submitted. Preserve existing files, '
+                              'repair storage and generate a new draft: ' + str(exc)) from exc
+
     def delivery_summary(self) -> dict[str, Any]:
         """Produce the ledger-derived Result section after all acceptance Gates."""
         snapshot = self._events.snapshot()
@@ -1749,6 +1758,9 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
             output.update(reviewer_hints(self, projection))
         if projection["state"] == "accepted":
             output["report"] = self._load_completion_report(projection)
+        if output['next_action'] == 'write-result-and-finalize':
+            from cogito_result_draft import finalizing_hints
+            output.update(finalizing_hints(self, projection))
         from cogito_next_operations import accepted_hints, check_recovery_hints, integration_hints, verification_hints
         check_action = output['next_action']
         # Add guidance only to the normal route, never over a judgment/recovery override.

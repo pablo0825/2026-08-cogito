@@ -231,6 +231,9 @@ def parser() -> argparse.ArgumentParser:
     human = commands.add_parser("human-approve")
     human.add_argument("--run-id", required=True)
     human.add_argument("--action-id", required=True)
+    result_draft = commands.add_parser('result-draft', help='prepare editable Result and Project Graph drafts from Gate history')
+    result_draft.add_argument('--run-id', required=True)
+    result_draft.add_argument('--event-hash', required=True)
     finalize = commands.add_parser("finalize")
     finalize.add_argument("--run-id", required=True)
     finalize.add_argument("--result", required=True)
@@ -378,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "human-approve":
             output = RunStore(repo, args.run_id).approve_human_gate(args.action_id)
+        elif args.command == 'result-draft':
+            output = RunStore(repo, args.run_id).result_draft(args.event_hash)
         elif args.command == "finalize":
             projection = RunStore(repo, args.run_id).finalize(
                 args.result, args.project_graph, args.final_commit, args.action_id,
