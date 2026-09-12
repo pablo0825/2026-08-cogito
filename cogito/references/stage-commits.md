@@ -16,7 +16,9 @@ Grilling 的持久產物是已確認的 Shared Understanding；不另將整段�
 
 完成階段轉移後查詢 `next`。收到 `commit-stage-artifacts` 時：
 
-1. 執行 `checkpoint prepare --run-id <run-id>`。Gate 核對確認時保存的精確 bytes，產生 `docs/cogito/checkpoints/<run-id>/<sequence>-<stage>.json`，回傳 `paths`、`base_commit`、`branch` 與 `commit_message`。
+優先使用 `next.operations`：尚未 commit 時提供 `checkpoint prepare`；HEAD 已改變時，工具共用 `checkpoint record` 的原驗證，只有精確符合本階段的提交才提供帶實際 commit ID 的 record 命令。無關提交、錯誤 branch 或文件不符回 blocker，不引導再 commit。提示只查詢 Git 與事件，不建立 manifest 或修改 index。
+
+1. 執行 `checkpoint prepare --run-id <run-id>`。Gate 核對確認時保存的精確 bytes，產生 `docs/cogito/checkpoints/<run-id>/<sequence>-<stage>.json`，回傳 `paths`、`base_commit`、`branch`、`commit_message` 與精確路徑的 Git add／commit argv。
 2. 檢查清單內的 diff。只 stage 回傳的精確路徑，並用 `git commit --only` 指定相同路徑，避免把原本已 staged 的無關變更帶入。路徑以獨立且正確引用的 argv 傳入，不使用 `git add .` 或 `git commit -a`。若 Git ignore 排除了正式文件，先查明規則；確認是本次應保存的正式文件後，可僅對該精確路徑使用 `git add -f`。不默默略過、擴張提交範圍或關閉 checkpoint guard。
 3. 取得完整 commit ID，執行 `checkpoint record --run-id <run-id> --commit-id <commit-id> --action-id <stable-action-id>`。Gate 驗證 delivery branch、唯一 parent、精確提交範圍、所有文件 bytes 與 regular-file mode；成功後追加 `stage-committed` 事件。
 4. 再查詢 `next` 繼續。不需要為同一批已確認／核准的階段文件重複詢問 commit 授權。

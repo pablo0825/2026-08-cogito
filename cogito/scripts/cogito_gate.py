@@ -117,12 +117,13 @@ def parser() -> argparse.ArgumentParser:
     paths.add_argument('--input', required=True)
     paths.add_argument('--action-id', required=True)
     planning = commands.add_parser("planning", help="versioned preparation in the same run")
-    planning.add_argument("operation", choices=["begin", "review", "withdraw", "history", "compare", "recover"])
+    planning.add_argument("operation", choices=["begin", "review", "withdraw", "history", "compare", "recover", "candidate"])
     planning.add_argument("--run-id", required=True)
     planning.add_argument("--input")
     planning.add_argument("--action-id")
     planning.add_argument("--from-round", type=int)
     planning.add_argument("--to-round", type=int)
+    planning.add_argument("--candidate-hash", help="exact current candidate to export for reading and approval")
     init = commands.add_parser("init")
     init.add_argument("--stage-commits", action=argparse.BooleanOptionalAction, default=None, help="require stage checkpoints (default on, except frozen RP successors)")
     init.add_argument("--run-id", required=True)
@@ -276,7 +277,15 @@ def main(argv: list[str] | None = None) -> int:
                 output = operation(_read_object(args.input), args.action_id)
         elif args.command == "planning":
             store = RunStore(repo, args.run_id)
-            if args.operation == "history":
+            if args.operation == "candidate":
+                from cogito_preparation_hints import export_candidate
+                if not args.candidate_hash:
+                    raise CogitoError('planning candidate requires --candidate-hash from next')
+                try:
+                    output = export_candidate(store, args.candidate_hash)
+                except OSError as exc:
+                    raise CogitoError('candidate export failed; preserve existing files and repair storage before retrying: ' + str(exc)) from exc
+            elif args.operation == "history":
                 output = store.planning_history()
             elif args.operation == "compare":
                 if args.from_round is None or args.to_round is None:

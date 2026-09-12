@@ -37,6 +37,8 @@ Grilling 只取得足以形成正確契約的共同理解，不要求使用者�
 4. 收到確認後，登錄 `shared-understanding-confirmed`，指定目前摘要 hash；有 planning 輪次時也指定本輪。
 5. 依 [Stage Commits](stage-commits.md) 建立摘要 checkpoint；只提交確認版本，不提交整個 drafts。Gate 登記成功後才進入 Boundary。
 
+準備與確認時優先使用 `next.operations` 的命令及已知 payload；`next.preparation_context.shared_understanding` 提供目前摘要的路徑與 hash，呈現前讀取該版本。提示中的 `required_inputs` 仍須補齊，`confirmed` 必須來自使用者實際確認；歷史只有 hash 時不假造原文。摘要格式與 readiness 判斷仍依本流程，不因工具提供 ready 命令就提早發布。
+
 等待確認時明說：「確認表示摘要內容正確，並會立即將此版摘要 commit；之後準備並保存 Boundary Gate、Slice／Spec／Plan 與 Development Package。Package Approval 與 Start Gate 通過前不會實作。」使用者修正摘要不等於核准；更新後繼續等待確認。
 
 新 run 即使是第一輪也必須提供可驗證的摘要文件，確認後依 [Stage Commits](stage-commits.md) 完成獨立 commit。Package 的 `shared_understanding` 引用同一 `path` 與 `hash`；摘要確認不改寫已凍結 bytes，確認狀態由事件及 checkpoint 表達。

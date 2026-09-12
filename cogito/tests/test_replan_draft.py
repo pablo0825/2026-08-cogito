@@ -44,6 +44,11 @@ class ReplanDraftTests(GitTestCase):
         fixture, (repo, worker, source, successor, rp, proposal) = self.fixture()
         expected = source.next_action()['proposal_draft']
         self.assertEqual(successor.next_action()['proposal_draft'], expected)
+        candidate_hint, = successor.next_action()['operations']
+        self.assertIn('candidate', candidate_hint['argv'])
+        exported = self.invoke(candidate_hint)
+        self.assertEqual(json.loads(Path(exported['package_path']).read_text()), proposal['package'])
+        self.assertNotIn('approve', candidate_hint['argv'])
         self.assertEqual(run(repo, ['status', '--replan-id', rp.replan_id])['proposal_draft'], expected)
         events = {s.events_path: s.events_path.read_bytes() for s in (source, successor, rp)}
         head = git(worker, 'rev-parse', 'HEAD')
@@ -91,12 +96,20 @@ class ReplanDraftTests(GitTestCase):
             'author_id': 'planner', 'reason': 'Revise stop conditions',
             'impact': {key: {'disposition': 'reuse', 'reason': 'Meaning unchanged'}
                        for key in ('requirements', 'boundary', 'spec', 'plan', 'dag', 'acceptance')}}, 'revise')
+        preparation = successor.next_action()
+        self.assertEqual(preparation['next_action'], 'author-development-package')
+        self.assertIn('prepare-package', preparation['operations'][0]['argv'])
         draft['planning_round'] = 2
         draft['stop_conditions'].append('Stop for API drift')
         successor.prepare_package(draft, 'candidate2')
         blocked = source.next_action()['proposal_draft']
         self.assertEqual(blocked['operations'], [])
         self.assertIn('independent planning review', blocked['blockers'][0])
+        review_hints = successor.next_action()['operations']
+        self.assertEqual([hint['operation'] for hint in review_hints], ['planning'] * 3)
+        self.assertIn('candidate', review_hints[0]['argv'])
+        self.assertIn('compare', review_hints[1]['argv'])
+        self.assertIn('review', review_hints[2]['argv'])
         with self.assertRaises(CogitoError):
             write_draft(rp, package_hash(draft))
         successor.planning_review({'round': 2, 'proposal_hash': successor.load()['planning']['proposal_hash'],
@@ -112,6 +125,7 @@ class ReplanDraftTests(GitTestCase):
         self.assertEqual(next_output['next_action'], 'continue-replan')
         self.assertIn('independent reviewer', next_output['replan_next_action'])
         self.assertNotIn('proposal_draft', next_output)
+        self.assertNotIn('operations', next_output)
         rp.review({'proposal_hash': rp.load()['proposal_hash'], 'reviewer_id': 'rp-reviewer', 'findings': [],
             'assessment': {key: 'Checked' for key in ('impact', 'reuse', 'revalidation', 'handoff')}}, 'rp-review')
         self.assertIn('human approval', successor.next_action()['replan_next_action'])

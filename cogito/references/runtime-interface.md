@@ -14,7 +14,7 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 ## JSON 輸入與顯示
 
-Atomic 執行與審查修正的 `next.operations` 提供絕對 repo/script 路徑、`cwd`、argv、已知 `input`、尚待 Agent 判斷的 `required_inputs` 與 `blockers`。合併已知輸入及必要判斷，存成 JSON 檔再填入 argv；`<input.json>`／`<action-id>` 等佔位符不可原樣執行。`<new-action-id>`、`<retry-action-id>`、`<replacement-action-id>` 分別填不同 ID；已填實值的恢復命令沿用原值。提示不構成授權，執行時仍重新驗證。
+準備、執行及已支援的修正入口使用 `next.operations` 提供絕對 repo/script 路徑、`cwd`、argv、已知 `input`、尚待 Agent 判斷的 `required_inputs` 與 `blockers`。合併已知輸入及必要判斷，依 argv 的參數形式傳入：`--input` 使用 JSON 檔，`transition --payload-json` 可使用一個 JSON 字串參數或 JSON 檔案路徑。`<payload-json>`／`<input.json>`／`<action-id>` 等佔位符不可原樣執行。`<new-action-id>`、`<retry-action-id>`、`<replacement-action-id>` 分別填不同 ID；已填實值的恢復命令沿用原值。提示不構成授權，執行時仍重新驗證；確認或核准命令必須等真正的使用者確認，不能連同前面的資料讀取命令一次執行。
 
 一般 Run mutation 成功時，`data` 回傳 `run_id`、目前 `state`、`sequence` 與 `last_event_hash`，不含完整歷史或 `next`。需要繼續工作時另查 `next`，由 Gate 統一決定 RP／DP、checkpoint、human、path amendment、fixed action 與 recovery 等路由優先順序。只有明確診斷完整 projection 時才查 `status`；舊狀態從 append-only events 核對，不從 mutation stdout 推測。重送 receipt 反映目前權威 projection，不保證重現原 action 當時的 bytes。
 

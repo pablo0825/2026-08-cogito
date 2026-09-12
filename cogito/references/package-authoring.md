@@ -35,6 +35,12 @@ AI 以 Shared Understanding 與專案證據提出結構化判斷：`single-slice
 
 ## Development Package
 
+`next.preparation_context` 提供 Gate 已保存的摘要引用與 Boundary 判斷；`operations` 提供 `prepare-package` 命令。Coordinator 仍須按本檔與 Spec／Plan template 判斷需求、範圍、切分與 checks，提示不代寫產品契約。Mini 入口只提示資格評估與 Package 準備，不建立摘要／Boundary／Slice 文件。
+
+候選準備後，依 `next` 的 `planning candidate --run-id <ID> --candidate-hash <hash>` 匯出目前的精確候選。命令將已驗證的候選快照保存為 `.cogito/runs/<ID>/drafts/candidate-<hash>.json`，回傳 `package_path`、文件引用與歷史缺失文件清單；不回傳全部歷史、不追加事件，也不核准。重送相同命令只接受相同檔案內容，拒絕覆蓋或 symlink。讀取此檔與引用文件，向使用者呈現同一版本；真正核准後才執行提示中的 `approve --package <exported-path>`。匯出檔不可改寫成新候選，修訂仍走 planning 輪次。
+
+修訂未完成獨立覆核時，提示提供候選匯出、精確輪次比較與 `planning review` 輸入，先完成覆核再請使用者核准；不預填 reviewer、findings 或 assessment。候選 hash 變更會拒絕舊匯出命令，舊檔也不能用來核准新候選；缺凍結快照時只回 blocker，不補造歷史。RP successor 仍使用 RP 的提案、覆核與核准，不提供一般 approve 捷徑。
+
 一張 Package 摘要必須讓使用者一次判斷：
 
 - 目標、Included／Excluded 與 Shared Understanding hash。

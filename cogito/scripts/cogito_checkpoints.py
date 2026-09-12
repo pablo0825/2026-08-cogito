@@ -142,19 +142,18 @@ class CheckpointMixin:
         target = self.root / path
         if not atomic_create_json(target, manifest) and target.read_bytes() != files[path]:
             raise CogitoError("existing checkpoint manifest differs from the confirmed stage")
+        from cogito_preparation_hints import checkpoint_commit_operations
+        guidance = checkpoint_commit_operations(self, sorted(files), f"docs(cogito): record {self.run_id} {manifest['stage']}")
         return {
             "stage": manifest["stage"], "paths": sorted(files),
             "base_commit": manifest["base_commit"], "branch": manifest["branch"],
             "commit_message": f"docs(cogito): record {self.run_id} {manifest['stage']}",
             "next_action": "commit-listed-paths-and-record-checkpoint",
+            **guidance,
         }
 
-    @run_mutation
-    def record_checkpoint(self, commit_id: str, action_id: str):
-        fingerprint = request_fingerprint("checkpoint-record", commit_id=commit_id)
-        replay = self._replay(action_id, "stage-committed", fingerprint)
-        if replay is not None:
-            return replay
+    def _validate_checkpoint_commit(self, commit_id):
+        """Read-only checks shared by checkpoint record and recovery guidance."""
         state, _, manifest, files = self._checkpoint_artifacts()
         if (self._git("rev-parse", "HEAD") != commit_id
                 or self._git("branch", "--show-current") != state["checkpoint_branch"]):
@@ -173,6 +172,15 @@ class CheckpointMixin:
                 raise CogitoError(f"committed stage artifact differs from confirmed bytes: {path}")
             if self._git("ls-tree", commit_id, "--", path).split()[0] not in {"100644", "100755"}:
                 raise CogitoError(f"stage artifact must be a regular file: {path}")
+        return state, manifest, files
+
+    @run_mutation
+    def record_checkpoint(self, commit_id: str, action_id: str):
+        fingerprint = request_fingerprint("checkpoint-record", commit_id=commit_id)
+        replay = self._replay(action_id, "stage-committed", fingerprint)
+        if replay is not None:
+            return replay
+        state, manifest, files = self._validate_checkpoint_commit(commit_id)
         return self.record("stage-committed", {
             "stage_sequence": manifest["stage_sequence"], "stage": manifest["stage"],
             "commit_id": commit_id, "base_commit": state["checkpoint_head"],

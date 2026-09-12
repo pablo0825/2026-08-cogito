@@ -1700,8 +1700,13 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 replan = replan_store.load()
                 draft_guidance = proposal_guidance(replan_store, replan)
                 projection = self.load()
-                if self.run_id == replan["successor_run_id"] and not projection.get("package_hash") and projection.get("planning", {}).get("revision"):
+                if (self.run_id == replan["successor_run_id"] and not projection.get("package_hash")
+                        and replan['state'] in {'analyzing', 'reviewing', 'awaiting-approval', 'awaiting-decision'}
+                        and replan.get('toolchain_status') not in {'reviewing', 'awaiting-approval'}):
                     output = derive_next_action(projection)
+                    from cogito_preparation_hints import preparation_hints
+                    if output['next_action'] != 'request-package-approval' or draft_guidance:
+                        output.update(preparation_hints(self, projection, output['next_action'], rp=True))
                     if output["next_action"] == "request-package-approval":
                         output["next_action"] = ('prepare-replan-proposal'
                             if draft_guidance.get('proposal_draft', {}).get('operations') else 'continue-replan')
@@ -1723,6 +1728,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     'request': pending_operation['request'],
                     'operations': [fixed_action_hint(self.root, self.run_id, pending_operation)]}
         output = derive_next_action(projection)
+        from cogito_preparation_hints import preparation_hints
+        output.update(preparation_hints(self, projection, output['next_action']))
         if (projection['state'] == 'blocked' and projection.get('blocked_from') == 'executing'
                 and projection.get('task_delivery') == 'atomic' and not pending_operation):
             from cogito_result_metadata import require_recovery_state
