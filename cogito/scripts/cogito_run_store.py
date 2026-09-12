@@ -1829,14 +1829,32 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     continue
                 paths = [candidates[check_id] for check_id in task['check_ids']]
                 evidence = [_load_json(Path(p)) for p in paths]
-                self._validate_evidence(self.approved_package(), evidence, snapshot=self._events.snapshot(),
-                                        phase='task', task_id=task['id'])
+                for item in evidence:
+                    validate_check_evidence(item)
+                try:
+                    self._validate_evidence(self.approved_package(), evidence, snapshot=self._events.snapshot(),
+                                            phase='task', task_id=task['id'])
+                except CogitoError:
+                    hint['check_evidence'] = [
+                        {'check_id': item['check_id'], 'evidence_path': path,
+                         'recorded_status': item['status'],
+                         'note': ('Recorded execution failed. Read stdout/stderr and execution flags in this evidence before deciding how to fix it.'
+                                  if not item['passed'] else
+                                  'Recorded execution passed; this does not establish current validity. Inspect the blocker and evidence binding.')}
+                        for item, path in zip(evidence, paths)]
+                    raise
                 head = self._git_at(Path(task['worktree']), 'rev-parse', 'HEAD')
                 parents = self._git_at(Path(task['worktree']), 'rev-list', '--parents', '-n', '1', head).split()[1:]
                 if parents != [task['base_commit']]:
                     raise CogitoError('create one atomic Task commit before task-finish')
                 tree = self._require_atomic_clean(Path(task['worktree']), head, state, read_only=True)
-                if any(e['worktree_binding']['content_tree'] != tree for e in evidence):
+                mismatched = [item for item in evidence if item['worktree_binding']['content_tree'] != tree]
+                if mismatched:
+                    hint['check_evidence'] = [
+                        {'check_id': item['check_id'], 'evidence_path': item['evidence_path'],
+                         'recorded_status': item['status'],
+                         'note': 'This evidence covers different checkout content. Revalidate when implementation is ready, then query next.'}
+                        for item in mismatched]
                     raise CogitoError('targeted checks do not match current checkout content')
                 hint['recorded_evidence'] = paths
             except (CogitoError, OSError, KeyError, ValueError) as exc:

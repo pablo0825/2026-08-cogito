@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cogito_test_support import GitTestCase, git
+from cogito_common import CogitoError
 import test_atomic_task_execution as execution
 
 
@@ -39,9 +40,11 @@ class TaskCheckHintTests(GitTestCase):
         hint, = store.next_action()['operations']
         self.assertEqual(hint['operation'], 'task-finish')
         self.assertIn('commit', hint['blockers'][0])
+        self.assertNotIn('check_evidence', hint)
         self.commit(worker)
         hint, = store.next_action()['operations']
         self.assertNotIn('blockers', hint)
+        self.assertNotIn('check_evidence', hint)
         store.finish_task('T-a', {'risks': []}, 'finish-after-check')
         self.assertEqual(store.load()['tasks']['T-a']['status'], 'complete')
 
@@ -57,13 +60,74 @@ class TaskCheckHintTests(GitTestCase):
         self.assertTrue(passed['passed'])
         (worker / 'src/a.txt').write_text('changed after check\n')
         self.assert_no_rerun(store)
+        self.assertNotIn('check_evidence', store.next_action()['operations'][0])
         latest = self.check(store, worker, action='newer-failed')
         (worker / 'src/a.txt').write_text('after\n')
         self.assert_no_rerun(store)
+        row, = store.next_action()['operations'][0]['check_evidence']
+        self.assertEqual(row['evidence_path'], latest['evidence_path'])
+        self.assertEqual(row['recorded_status'], 'failed')
         path = Path(latest['evidence_path'])
         path.chmod(0o600)
         path.write_text('{}')
         self.assert_no_rerun(store)
+        self.assertNotIn('check_evidence', store.next_action()['operations'][0])
+
+    def test_failed_record_has_readable_pointer_without_output_or_state_changes(self):
+        repo, worker, store, _ = self.executing()
+        self.lease(store)
+        failed = self.check(store, worker)
+        events = store.events_path.read_bytes()
+        index = Path(git(worker, 'rev-parse', '--git-path', 'index'))
+        index_bytes = index.read_bytes()
+        objects = {str(p): p.read_bytes() for p in (repo / '.git/objects').rglob('*') if p.is_file()}
+        hint, = store.next_action()['operations']
+        self.assertIn('evidence binding failed for C-a', hint['blockers'][0])
+        row, = hint['check_evidence']
+        self.assertEqual(row['check_id'], 'C-a')
+        self.assertEqual(row['evidence_path'], failed['evidence_path'])
+        self.assertEqual(row['recorded_status'], 'failed')
+        self.assertIn('stdout/stderr', row['note'])
+        self.assertNotIn('stdout', row)
+        self.assertEqual(store.events_path.read_bytes(), events)
+        self.assertEqual(index.read_bytes(), index_bytes)
+        self.assertEqual(objects, {str(p): p.read_bytes() for p in (repo / '.git/objects').rglob('*') if p.is_file()})
+        with self.assertRaises(CogitoError):
+            store.finish_task('T-a', {'risks': []}, 'reject-failed')
+        original = {'operation': 'run-check', 'argv': ['original-recovery-action']}
+        with patch('cogito_next_operations.check_recovery_hints', return_value={
+                'check_recovery': [{'category': 'unknown_outcome'}], 'operations': [original]}):
+            self.assertEqual(store.next_action()['operations'], [original])
+
+    def test_mixed_results_are_not_all_classified_as_failed(self):
+        def configure(draft):
+            draft['execution_dag']['tasks'][0]['check_ids'] = ['C-a', 'C-b']
+        _, worker, store, _ = self.executing(configure)
+        self.lease(store)
+        (worker / 'src/b.txt').write_text('after\n')
+        self.check(store, worker, 'C-a', 'failed-a')
+        self.check(store, worker, 'C-b', 'passed-b')
+        hint, = store.next_action()['operations']
+        rows = {r['check_id']: r for r in hint['check_evidence']}
+        self.assertEqual(rows['C-a']['recorded_status'], 'failed')
+        self.assertEqual(rows['C-b']['recorded_status'], 'passed')
+        self.assertIn('does not establish current validity', rows['C-b']['note'])
+
+    def test_content_mismatch_points_only_to_old_content_and_preserves_finish_guard(self):
+        _, worker, store, _ = self.executing()
+        self.lease(store)
+        (worker / 'src/a.txt').write_text('after\n')
+        passed = self.check(store, worker)
+        (worker / 'src/a.txt').write_text('new content\n')
+        self.commit(worker)
+        hint, = store.next_action()['operations']
+        self.assertIn('do not match current checkout content', hint['blockers'][0])
+        row, = hint['check_evidence']
+        self.assertEqual(row['evidence_path'], passed['evidence_path'])
+        self.assertEqual(row['recorded_status'], 'passed')
+        self.assertIn('different checkout content', row['note'])
+        with self.assertRaises(CogitoError):
+            store.finish_task('T-a', {'risks': []}, 'reject-stale')
 
     def assert_no_rerun(self, store):
         hints = store.next_action()['operations']

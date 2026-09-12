@@ -39,6 +39,8 @@ Atomic Task 依下列順序完成，才能開始下一項 Task：
 
 Atomic Task 執行中查 `next`，若該 checkout 缺少 Task 指定 check 的正式 evidence，`operations` 直接提供對應的 `run-check` 命令、worktree 與 `task_id`，只需填新的 action ID。實作準備好後才執行，完成再查 `next`；這只補缺少的紀錄，不代表其他完成條件已通過。已有有效 evidence 但尚未 commit 時仍提示提交，不要求重跑。已失敗／過期的 evidence 保留原 blocker，由 Agent 修正原因；收到 `resolve-check-recovery` 時，先依既有恢復提示處理，不另開新測試取代。`not_started` 的原 action 重送仍是可選項，與新 action 擇一執行後重查。提示不增加 check、不改測試範圍，也不自動執行。
 
+若完整候選 evidence 的格式可讀，但 Task 驗證拒絕，`task-finish` 提示會附 `check_evidence`：check ID、evidence 路徑、`recorded_status` 與閱讀提示。`failed` 表示該次執行失敗，先讀 evidence 的 `stdout`／`stderr` 與執行旗標，再決定修正方式；`passed` 只代表該次執行通過，仍須依原 blocker 查核本輪有效性。只有通過前置驗證、提交與乾淨工作目錄檢查後，確認內容不匹配的紀錄才提示重新驗證。缺檢查仍先提示補齊紀錄；未提交或工作目錄不乾淨的 blocker 不會被解讀為 evidence 過期；證據損壞、讀取失敗不猜測測試結果。提示不複製測試輸出、不代判根因，也不自動重跑。
+
 ### Maintenance 任務快照
 
 Maintenance 的新 lease 由 Gate 記錄 working tree 與 index 兩份起始快照；Implementer Result 的 `changed_paths` 完整列出本次任務相對這兩份快照的產品增量，包括 staged、unstaged 與 untracked 路徑。不能因 base/head 相同或已 staged 而省略；rename 同時列原路徑刪除與新路徑新增。Gate 另驗整個 checkout 的累積修改是否仍在 Package 範圍內，且不更動使用者 index。請在取得 lease 後才修改或 stage 任務負責的檔案，不要替其他 task stage；一般執行階段的任務間隙若出現未登錄修改，下一個 lease 會拒絕。獨立 Reviewer 使用 Gate 保存的該任務完成快照判定責任，並確認目前內容仍是本輪正式驗證的內容。
