@@ -71,7 +71,7 @@ Gate 驗證提交內容、範圍、Result、Graph 與事件。通過後才把 fi
 
 ## 5. 回報與清理
 
-以 `report --run-id <ID>` 取得結案結果。它讀取 final commit 內的摘要，另附實際 final commit ID；不從目前工作副本重建或改寫 Result。Maintenance amendments 的實際 final commit ID 只補在衍生報告。
+accepted 的 `next` 以 `report_query` 提供 `report --run-id <ID>` 命令，不內嵌完整報告；DP followup 已結案但尚待完成 DP 時也保留此入口與原 DP 路由。向使用者回報結案前，必須執行 report 並讀取結果；若本次交付已讀過報告，不為單純查清理狀態重讀。報告讀取失敗時處理錯誤，不從 accepted 狀態猜測交付內容。它讀取 final commit 內的摘要，另附實際 final commit ID；不從目前工作副本重建或改寫 Result。Maintenance amendments 的實際 final commit ID 只補在衍生報告。
 
 向使用者回報：結果、實際 checks、獨立 review、commit IDs、amendments、是否經 human gate、剩餘風險及需要處理的清理保留原因。不要將本地測試通過當成 CI 通過。
 

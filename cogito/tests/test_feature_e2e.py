@@ -14,6 +14,7 @@ from unittest import mock
 
 from cogito_test_support import GitTestCase, git, init_repo
 import cogito_runtime as runtime
+from cogito_run_queries import completion_report_hint
 
 
 def sha256(path: Path) -> str:
@@ -231,9 +232,12 @@ class FeatureMultiSliceEndToEndTests(GitTestCase):
             git(repo, "commit", "-qm", "later unrelated edit")
             before = store.events_path.read_bytes()
             with mock.patch.object(store, "load", wraps=store.load) as load_state:
-                self.assertEqual(store.next_action(), {
-                    "state": "accepted", "next_action": "report-completion", "report": report,
-                })
+                guidance = store.next_action()
+                self.assertEqual(guidance['state'], 'accepted')
+                self.assertEqual(guidance['next_action'], 'report-completion')
+                self.assertNotIn('report', guidance)
+                self.assertEqual(guidance['report_query'], completion_report_hint(store.root, run_id))
+                self.assertTrue(guidance['cleanup']['observation_only'])
                 load_state.assert_called_once_with()
             self.assertEqual(store.completion_report(), report)
             self.assertEqual(store.events_path.read_bytes(), before)

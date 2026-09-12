@@ -48,6 +48,6 @@ Gate event 的 `request_hash` 綁定命令名稱與原始輸入，納入 event h
 
 `next` 的新提示不追加事件或建立 action、cleanup receipt／refs、executor registry／lock；既有 state cache refresh 與流程預驗證仍保留，整個命令不是零寫入。必要候選或待處理 attempt 超過 50 項時明列範圍限制，不以截斷清單宣稱可完成。
 
-`status` 是一般 Run 的完整 RunState 查詢；`next`、`report`、`delivery-summary`、planning history／compare／recover、RP／DP status 等查詢各自保留原資料 shape。Mutation receipt 的成功判讀與重送語意依 [Runtime Interface](runtime-interface.md#json-輸入與顯示)。
+`status` 是一般 Run 的完整 RunState 查詢；`report`、`delivery-summary`、planning history／compare、RP／DP status 等完整查詢維持既有資料。accepted 的 `next` 與 planning recover 所導向的 next 使用 `report_query`，不內嵌報告；cleanup 仍在內部驗證正式報告。Mutation receipt 的成功判讀與重送語意依 [Runtime Interface](runtime-interface.md#json-輸入與顯示)。
 
 `slice-inventory` 從 hash-chain 驗證後的事件投影與 final commit Git blobs 讀取 Package、Result、有效 Amendments 與 Start-to-final diff；不讀取或修復 `state.json`，不建立 lock、event、草稿或其他檔案。輸出保留凍結順序與 hashes。對含既有 `controlled-check-attempt-resolved` 的 accepted history，先對帳 replacement evidence、當時 effective contract 與 Result receipt，再只從本次唯讀投影排除該非 transition 記錄；不恢復舊寫入命令或放寬其他歷史事件。對帳失敗、其他不支援事件或超過輸出上限均 fail closed；操作與替代處理見 [歷史 Slice 查詢](package-authoring.md#歷史-slice-查詢)。

@@ -61,7 +61,7 @@ from cogito_gate_validation import (
 )
 from cogito_project_graph import formalize_project_graph, validate_project_graph
 from cogito_ports import EventRepositoryPort, GitRepositoryPort
-from cogito_run_queries import build_completion_report, derive_next_action
+from cogito_run_queries import build_completion_report, completion_report_hint, derive_next_action
 from cogito_scheduler import ready_tasks, tasks_with_dependencies
 from cogito_task_rules import effective_slice_id, is_active_task
 from cogito_workflow import load_workflow, validate_transition
@@ -1688,7 +1688,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     output = derive_next_action(projection)
                     if projection['state'] == 'accepted':
                         output['next_action'] = 'complete-disposition'
-                        output['report'] = self._load_completion_report(projection)
+                        output['report_query'] = completion_report_hint(self.root, self.run_id)
                     return {**output, **metadata}
                 return {"state": projection["state"], "next_action": "continue-disposition", **metadata}
         from cogito_replan_lock import replans
@@ -1764,7 +1764,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
         if output['next_action'] == 'dispatch-independent-reviewer':
             output.update(reviewer_hints(self, projection))
         if projection["state"] == "accepted":
-            output["report"] = self._load_completion_report(projection)
+            output['report_query'] = completion_report_hint(self.root, self.run_id)
         if output['next_action'] == 'write-result-and-finalize':
             from cogito_result_draft import finalizing_hints
             output.update(finalizing_hints(self, projection))

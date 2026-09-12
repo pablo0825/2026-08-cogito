@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cogito_common import load_json
 from cogito_disposition_store import DispositionStore
+from cogito_run_queries import build_disposition_receipt
 
 
 def run(root, argv):
@@ -35,13 +36,13 @@ def run(root, argv):
         from cogito_events import read_events
         return {'disposition_id': args.disposition_id, 'events': read_events(store.events_path)}
     if args.operation == 'begin':
-        return store.begin(args.source_run, args.reason, args.action_id, replan_id=args.replan_id)
+        return build_disposition_receipt(store.begin(args.source_run, args.reason, args.action_id, replan_id=args.replan_id))
     if args.operation in {'propose', 'review'}:
-        return getattr(store, args.operation)(load_json(Path(args.input)), args.action_id)
+        return build_disposition_receipt(getattr(store, args.operation)(load_json(Path(args.input)), args.action_id))
     if args.operation == 'approve':
-        return store.approve(args.proposal_hash, args.authorized, args.action_id)
+        return build_disposition_receipt(store.approve(args.proposal_hash, args.authorized, args.action_id))
     if args.operation in {'reject', 'pause'}:
-        return getattr(store, args.operation)(args.reason, args.action_id)
+        return build_disposition_receipt(getattr(store, args.operation)(args.reason, args.action_id))
     if args.operation == 'complete':
-        return store.complete(args.action_id, human_accepted=args.human_accepted)
-    return getattr(store, args.operation)(args.action_id)
+        return build_disposition_receipt(store.complete(args.action_id, human_accepted=args.human_accepted))
+    return build_disposition_receipt(getattr(store, args.operation)(args.action_id))

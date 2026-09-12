@@ -6,6 +6,8 @@ from cogito_common import CogitoError, load_json
 from cogito_replan_lock import project_lock, check_run_fence
 from cogito_replan_store import ReplanStore
 from cogito_run_store import RunStore
+from cogito_run_queries import (build_replan_receipt, build_disposition_receipt,
+                                build_mutation_receipt, build_executor_receipt)
 
 
 def run(root, argv):
@@ -27,8 +29,13 @@ def run(root, argv):
     group=register.add_mutually_exclusive_group(required=True);group.add_argument('--pid',type=int);group.add_argument('--handle')
     receipt=sub.add_parser('executor-receipt');receipt.add_argument('--run-id',required=True);receipt.add_argument('--agent-id',required=True);receipt.add_argument('--handle',required=True);receipt.add_argument('--input',required=True)
     advance=sub.add_parser('advance-adoptions');advance.add_argument('--run-id',required=True);advance.add_argument('--action-id',required=True)
+    status=sub.add_parser('executor-status');status.add_argument('--run-id',required=True)
     args=parser.parse_args(argv)
-    if args.operation=='advance-adoptions':return RunStore(root,args.run_id).advance_adoptions(args.action_id)
+    if args.operation=='executor-status':
+        from cogito_execution_registry import observe_read_only
+        RunStore(root,args.run_id).load()
+        return observe_read_only(root,args.run_id,allow_external_receipts=True)
+    if args.operation=='advance-adoptions':return build_mutation_receipt(RunStore(root,args.run_id).advance_adoptions(args.action_id))
     if args.operation in {'register-executor','executor-receipt'}:
         from cogito_execution_registry import register_process,register_external,record_external_receipt,snapshot
         with project_lock(root):
@@ -41,7 +48,7 @@ def run(root, argv):
                 else:register_external(root,args.run_id,args.agent_id,args.handle)
             else:
                 record_external_receipt(root,args.run_id,args.agent_id,args.handle,load_json(Path(args.input)))
-            return snapshot(root,args.run_id,allow_external_receipts=True)
+            return build_executor_receipt(root,snapshot(root,args.run_id,allow_external_receipts=True),args.agent_id)
     store=ReplanStore(root,args.replan_id)
     op=args.operation
     if op=='status':
@@ -55,15 +62,17 @@ def run(root, argv):
         except OSError as exc:
             raise CogitoError('RP draft storage failed; no proposal was submitted. Preserve existing files, '
                               'repair storage and rerun draft to create a new file: ' + str(exc)) from exc
-    if op=='begin':return store.begin(args.source_run,args.successor_run,args.reason,args.action_id)
-    if op=='stop':return store.stop(args.action_id)
-    if op=='toolchain-propose':return store.toolchain_propose(load_json(Path(args.input)),args.action_id)
-    if op=='toolchain-review':return store.toolchain_review(load_json(Path(args.input)),args.action_id)
-    if op=='toolchain-approve':return store.toolchain_approve(args.proposal_hash,args.approver_id,args.action_id)
-    if op=='toolchain-reject':return store.toolchain_reject(args.proposal_hash,args.reason,args.action_id)
-    if op=='propose':return store.propose(load_json(Path(args.input)),args.action_id)
-    if op=='review':return store.review(load_json(Path(args.input)),args.action_id)
-    if op=='approve':return store.approve(args.proposal_hash,args.action_id)
-    if op=='reject':return store.reject(args.proposal_hash,args.reason,args.action_id)
-    if op=='handoff':return store.handoff(args.action_id)
-    return store.abandon(args.disposition,args.reason,args.action_id)
+    if op=='begin':return build_replan_receipt(store.begin(args.source_run,args.successor_run,args.reason,args.action_id))
+    if op=='stop':return build_replan_receipt(store.stop(args.action_id))
+    if op=='toolchain-propose':return build_replan_receipt(store.toolchain_propose(load_json(Path(args.input)),args.action_id))
+    if op=='toolchain-review':return build_replan_receipt(store.toolchain_review(load_json(Path(args.input)),args.action_id))
+    if op=='toolchain-approve':return build_replan_receipt(store.toolchain_approve(args.proposal_hash,args.approver_id,args.action_id))
+    if op=='toolchain-reject':return build_replan_receipt(store.toolchain_reject(args.proposal_hash,args.reason,args.action_id))
+    if op=='propose':return build_replan_receipt(store.propose(load_json(Path(args.input)),args.action_id))
+    if op=='review':return build_replan_receipt(store.review(load_json(Path(args.input)),args.action_id))
+    if op=='approve':return build_replan_receipt(store.approve(args.proposal_hash,args.action_id))
+    if op=='reject':return build_replan_receipt(store.reject(args.proposal_hash,args.reason,args.action_id))
+    if op=='handoff':return build_replan_receipt(store.handoff(args.action_id))
+    result = store.abandon(args.disposition,args.reason,args.action_id)
+    return (build_disposition_receipt(result) if args.disposition == 'cancel-source'
+            else build_replan_receipt(result))

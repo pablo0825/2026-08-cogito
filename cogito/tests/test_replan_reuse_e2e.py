@@ -7,6 +7,7 @@ from pathlib import Path
 from cogito_test_support import GitTestCase, git, init_repo, package
 from cogito_run_store import RunStore
 from cogito_replan_store import ReplanStore
+from cogito_replan_cli import run as replan_cli
 from cogito_common import load_json, CogitoError
 
 class ReuseJourneyTests(GitTestCase):
@@ -83,7 +84,10 @@ class ReuseJourneyTests(GitTestCase):
         target.write_text('unreviewed change\n')
         with self.assertRaises(CogitoError):new.advance_adoptions('advance')
         target.write_text('after\n')
-        new.advance_adoptions('advance');git(repo,'merge','--no-ff','-qm','integrate adopted work','codex/fs-2');integration=git(repo,'rev-parse','HEAD');new.complete_integration(integration,'FS-2')
+        receipt = replan_cli(repo, ['advance-adoptions', '--run-id', new.run_id, '--action-id', 'advance'])
+        self.assertEqual(set(receipt), {'run_id', 'state', 'sequence', 'last_event_hash'})
+        self.assertEqual(receipt['state'], new.load()['state'])
+        git(repo,'merge','--no-ff','-qm','integrate adopted work','codex/fs-2');integration=git(repo,'rev-parse','HEAD');new.complete_integration(integration,'FS-2')
         self.assertEqual(new.load()['state'],'post-integration-verification')
         new.run_controlled_check('C-1',repo,'new-post-check');postpath=next(iter(new.load()['evidence']));new.decide_post_verification([load_json(Path(postpath))])
         graphpath=repo/'docs/cogito/project-graph.json';graph=load_json(graphpath);graph['active_run_id']=None;graph['slices']['FS-2'].update(disposition='accepted',completed_by=new.run_id);graphpath.write_text(json.dumps(graph))

@@ -18,6 +18,12 @@ Gate 推導 verdict 的範圍限於已實作的結構、狀態、ID 與證據規
 
 一般 Run mutation 成功時，`data` 回傳 `run_id`、目前 `state`、`sequence` 與 `last_event_hash`，不含完整歷史或 `next`。需要繼續工作時另查 `next`，由 Gate 統一決定 RP／DP、checkpoint、human、path amendment、fixed action 與 recovery 等路由優先順序。只有明確診斷完整 projection 時才查 `status`；舊狀態從 append-only events 核對，不從 mutation stdout 推測。重送 receipt 反映目前權威 projection，不保證重現原 action 當時的 bytes。
 
+RP／DP 的 mutation 成功回傳精簡收據：流程 ID、來源／承接 ID、狀態、事件序號／hash、已有提案 hash 與下一步；RP 另保留工具接軌狀態及其 hash。不從成功回應重讀 snapshot、Package 或歷史。需要獨立審查、核准或恢復時，使用 `replan status`／`disposition status` 取得完整當前資料，DP 歷史仍用 `disposition history`；收據不是核准證據，重送反映目前權威狀態。`replan abandon --disposition cancel-source` 轉交 DP，回傳 DP 收據。`replan draft` 與 `planning candidate` 的專用回傳維持不變。
+
+Executor 登錄及停止 receipt 回傳本次 `executor`、全局 `stop_requested`／`stop_request`／`quiescent`，並提供 `registry_query`。這些是當下觀察，不能據此自行解除停止或恢復執行；需要全體身分或停止原始回應時，使用 `replan executor-status --run-id <ID>`（唯讀、不建立 registry lock）。原始停止回應仍保存在 registry，收據不重複輸出 `raw_response`。`replan advance-adoptions` 使用一般 Run 收據，後續查 `next`。
+
+既有 CLI 呼叫者若從 mutation 回應讀 `entries`、`snapshot`、`proposal` 或完整歷史，須改用上述完整查詢；若讀 `next.report`，改執行 `report_query`，依 [Finalization](finalization.md) 讀取報告後回報。這是公開回傳格式的變更，不改 Store 回傳、事件或已保存資料，也不需要轉換歷史檔案。
+
 `ok: true` 與 CLI exit code `0` 只表示 Gate 操作成功；`run-check` 是否通過看 `check_status`，不能把 evidence 登錄成功當成 check 通過。驗證與 check recovery 提示依 [正式驗證](execution-policy.md#正式驗證)，整合選項依 [串行整合](execution-policy.md#串行整合)。`task-finish` 與帶 `amendment` 的 `review-fix-start --input` 保留 commit、evidence、amendment、task 與 next 專用 receipt；finding-only 啟動使用一般 receipt。這兩項固定操作部分失敗時依下方[恢復規則](#固定操作與歷史登記恢復)；accepted 後的 `next.cleanup` 只表示當下觀察，真正清理與 receipt 依 [Finalization](finalization.md#worktree-清理)。
 
 Gate／Runner 的 JSON 檔案輸入使用 UTF-8。`transition --payload-json` 接受 JSON object 字串或 UTF-8 檔案路徑，優先解析 inline JSON；若檔名恰為合法 JSON（如 `null`），使用 `./null` 或絕對路徑。兩種輸入都必須解析為 object；格式、編碼或讀取失敗回傳 exit code `2`，stderr 為含 `ok: false`／`error` 的 JSON，不嘗試轉碼、推進流程或輸出 traceback。

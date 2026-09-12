@@ -35,7 +35,7 @@ def fixed_action_hint(root, run_id, binding):
 
 
 def derive_next_action(projection: RunState) -> dict[str, Any]:
-    """Describe the next step; the caller attaches committed data for accepted runs."""
+    """Describe the next step; the caller attaches report guidance for accepted runs."""
     state = projection["state"]
     actions = {
         "preparing": "draft-shared-understanding", "awaiting-shared-confirmation": "request-shared-confirmation",
@@ -114,6 +114,48 @@ def build_mutation_receipt(projection: RunState) -> dict[str, Any]:
         "sequence": projection["sequence"],
         "last_event_hash": projection["last_event_hash"],
     }
+
+
+def build_replan_receipt(state):
+    """CLI receipt only; complete proposals and recovery journals remain in status."""
+    keys = ('replan_id', 'source_run_id', 'successor_run_id', 'state', 'sequence',
+            'last_event_hash', 'next_action', 'proposal_hash', 'proposal_stale',
+            'toolchain_status', 'toolchain_proposal_hash', 'handoff_tool_status',
+            'handoff_tool_proposal_hash', 'disposition_id', 'disposition')
+    return {key: deepcopy(state[key]) for key in keys if key in state}
+
+
+def build_disposition_receipt(state):
+    keys = ('disposition_id', 'source_run_id', 'replan_id', 'state', 'sequence',
+            'last_event_hash', 'next_action', 'proposal_hash')
+    output = {key: deepcopy(state[key]) for key in keys if key in state}
+    followup = (state.get('proposal') or {}).get('followup_run_id')
+    if followup:
+        output['followup_run_id'] = followup
+    return output
+
+
+def build_executor_receipt(root, registry, agent_id):
+    entry = registry['entries'][agent_id]
+    executor = {key: deepcopy(entry[key]) for key in
+                ('identifier', 'kind', 'identity', 'handle', 'observation', 'terminated') if key in entry}
+    if entry.get('receipt'):
+        executor['receipt'] = {key: deepcopy(entry['receipt'][key]) for key in
+                               ('provider', 'control_tool', 'event_id', 'handle', 'status')}
+    query = {'operation': 'executor-status', 'cwd': str(Path(root).resolve()),
+             'argv': ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(root),
+                      'replan', 'executor-status', '--run-id', registry['run_id']]}
+    return {'run_id': registry['run_id'], 'executor': executor,
+            'stop_requested': registry['stop_requested'], 'stop_request': deepcopy(registry['stop_request']),
+            'quiescent': registry['quiescent'],
+            'registry_query': query,
+            'note': 'Observation only, not permission to resume. Query next; inspect executor-status for full registry and raw receipts when needed.'}
+
+
+def completion_report_hint(root, run_id):
+    hint = operation_hint(root, run_id, 'report', action_id=None)
+    hint['note'] = 'Read the committed report before reporting completion to the user. If already read for this delivery, do not reread solely to inspect cleanup.'
+    return hint
 
 
 def build_check_receipt(
