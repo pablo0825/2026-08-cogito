@@ -1808,7 +1808,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
 
     def _atomic_operation_hints(self, output, state):
         from cogito_run_queries import operation_hint
-        from cogito_task_finish import select_task_evidence
+        from cogito_task_finish import collect_check_candidates
+        from cogito_next_operations import _run_check
         operations = []
         running = [t for t in state['tasks'].values() if t['status'] == 'running']
         for task in running:
@@ -1816,7 +1817,17 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                                   required_inputs=['risks'])
             hint['check_ids'] = task['check_ids']
             try:
-                paths = select_task_evidence(self, task)
+                candidates = collect_check_candidates(self, task['check_ids'], task['worktree'])
+                missing = [check_id for check_id in task['check_ids'] if check_id not in candidates]
+                if missing:
+                    for check_id in missing:
+                        operation = _run_check(self, check_id, task['worktree'])
+                        operation.update(task_id=task['id'],
+                            note='Required check evidence is missing for this Task checkout. '
+                                 'Run when implementation is ready, then query next; other completion requirements still apply.')
+                        operations.append(operation)
+                    continue
+                paths = [candidates[check_id] for check_id in task['check_ids']]
                 evidence = [_load_json(Path(p)) for p in paths]
                 self._validate_evidence(self.approved_package(), evidence, snapshot=self._events.snapshot(),
                                         phase='task', task_id=task['id'])
@@ -1828,7 +1839,7 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                 if any(e['worktree_binding']['content_tree'] != tree for e in evidence):
                     raise CogitoError('targeted checks do not match current checkout content')
                 hint['recorded_evidence'] = paths
-            except CogitoError as exc:
+            except (CogitoError, OSError, KeyError, ValueError) as exc:
                 hint['blockers'] = [str(exc)]
             operations.append(hint)
         if state['state'] == 'executing' and not running and not output.get('ready_tasks'):

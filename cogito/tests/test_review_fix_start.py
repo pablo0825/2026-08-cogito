@@ -69,7 +69,14 @@ class ReviewFixStartTests(GitTestCase):
         prefix = store.events_path.read_bytes()
         self.cli(store, 'review-fix-start', request=request, action='start')
         self.assertEqual(store.events_path.read_bytes(), prefix)
-        head, checks, result = self.fix(worker, store)
+        self.lease(store, 'T-fix')
+        hints = [o for o in store.next_action()['operations'] if o['operation'] == 'run-check']
+        self.assertEqual(len(hints), 1)
+        self.assertEqual(hints[0]['task_id'], 'T-fix')
+        self.assertIn('C-fix', hints[0]['argv'])
+        self.assertIn(str(worker.resolve()), hints[0]['argv'])
+        with patch.object(self, 'lease'):
+            head, checks, result = self.fix(worker, store)
         self.cli(store, 'review-fix-complete', '--amendment-id', 'TA-review', '--commit-id', head, action='closure')
         args = [v for c in checks for v in ('--evidence', c['evidence_path'])]
         self.cli(store, 'verify', *args, action='verify-fixed')

@@ -164,7 +164,8 @@ class TaskFinishTests(GitTestCase):
         self.lease(store)
         before = store.events_path.read_bytes()
         hint = store.next_action()['operations'][0]
-        self.assertEqual(hint['operation'], 'task-finish')
-        self.assertIn('C-a', hint['blockers'][0])
-        self.assertEqual(hint['required_inputs'], ['risks'])
+        self.assertEqual(hint['operation'], 'run-check')
+        self.assertIn('C-a', hint['argv'])
+        self.assertEqual(hint['task_id'], 'T-a')
+        self.assertIn('<new-action-id>', hint['argv'])
         self.assertEqual(store.events_path.read_bytes(), before)
