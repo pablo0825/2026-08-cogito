@@ -19,7 +19,7 @@ Cogito 是以程式化 Gate 管理多 Agent 軟體開發的 Codex skill；目前
 | `tests/`、`mypy.ini` | 自動化測試及靜態型別檢查 |
 | `evals/` | Agent 情境定義與有範圍限制的執行紀錄 |
 
-Repository 維護、測試選擇與版本政策依 [AGENTS.md](../AGENTS.md)。Python executable contracts 是資料驗證的唯一權威；模組責任見 contributor guide，實作與相容性細節見 [Runtime Internals](references/runtime-internals.md)。[RP 設計紀錄](RP-SUBTRACTIVE-REDESIGN.md) 保存分期設計歷史，不取代目前操作規則。
+Repository 維護、測試選擇與版本政策依 [AGENTS.md](../AGENTS.md)。Python executable contracts 是資料驗證的唯一權威；模組責任見 contributor guide，實作與相容性細節見 [Runtime Internals](references/runtime-internals.md)。已退役的設計計畫可從 Git 歷史查閱；目前 RP 操作依 [Replanning](references/replanning.md)。
 
 ## 驗證紀錄
 

@@ -19,7 +19,6 @@ Implementation lives under `cogito/`:
 - `references/`: operating procedures and templates, routed from `SKILL.md`. [Runtime internals](cogito/references/runtime-internals.md) explains runner and evidence implementation details for maintainers.
 - `tests/`: standard-library `unittest` tests; `tests/typing/` holds static type examples, and `mypy.ini` defines the checked scope.
 - `evals/reports/`: recorded simulations, acceptance exercises, and test reports. Some reports include runnable scripts; interpret each result within its recorded scope.
-- `RP-SUBTRACTIVE-REDESIGN.md`: phased design and implementation history, not an active runtime contract or authorization to implement deferred phases.
 
 For target-project artifact locations and operating rules, use [SKILL.md](cogito/SKILL.md). Repository maintenance follows this guide; reading the skill as source material does not activate it.
 
@@ -42,7 +41,7 @@ Name test files `test_*.py` and methods `test_*`. Cover normal behavior, malform
 
 Git-backed tests must inherit `cogito_test_support.GitTestCase` and initialize repositories with `init_repo()`. Call `super().setUp()` when overriding setup so personal Git configuration, signing, hooks, and environment variables remain isolated.
 
-Preserve explicitly supported compatibility. Do not restore retired RP Start or snapshot formats as part of refactoring. Retain historical records without fabricating approvals or evidence. For RP changes, consult current code, tests, and the design document's phase status.
+Preserve explicitly supported compatibility. Do not restore retired RP Start or snapshot formats as part of refactoring. Retain historical records without fabricating approvals or evidence. For RP changes, consult current code, tests, and the procedures in `references/replanning.md`, `references/replan-snapshots.md`, and `references/replan-toolchain.md` under `cogito/`. Retired design plans remain in Git history and do not authorize deferred features.
 
 Report automated tests, skill format validation, and agent behavioral evaluations separately. Scenario definitions are not passing results, and historical reports do not validate the current change. Clearly identify checks not run or unavailable.
 
