@@ -108,6 +108,63 @@ class NextOperationTests(GitTestCase):
         self.assertEqual(choice['operations'], [])
         self.assertIn('non_fast_forward', choice['blockers'][0])
 
+    def test_verified_checkout_rechecks_after_other_slice_review_fix(self):
+        fixture = self.fixture(verification.AtomicVerificationTests)
+
+        def parallel(draft):
+            second = copy.deepcopy(draft['slices'][0])
+            second['id'] = 'FS-2'
+            second['worker'].update(branch='codex/fs-2', worktree='.cogito/worktrees/FS-2')
+            draft['slices'].append(second)
+            draft['execution_dag']['tasks'][1]['slice_id'] = 'FS-2'
+            draft['execution_dag']['edges'] = []
+
+        repo, first, store, draft = fixture.executing(parallel)
+        second = repo / '.cogito/worktrees/FS-2'
+        git(repo, 'worktree', 'add', '-qb', 'codex/fs-2', str(second), draft['baseline_commit'])
+        results, evidence = [], []
+        for name, worker in (('a', first), ('b', second)):
+            result, item = fixture.implement(store, worker, name)
+            results.append(result)
+            evidence.append(item)
+        store.transition('implementation-complete', {})
+        store.complete_verification(evidence, 'verify-original')
+        store.submit_agent_result({**results[0], 'role': 'reviewer', 'agent_id': 'reviewer',
+            'reviewed_implementer': 'worker', 'status': 'needs-fix', 'changed_paths': [],
+            'evidence': [], 'risks': ['fix a'], 'requested_transition': 'review-fix'})
+        event = store._events.read()[-1]
+        store.start_review_fix_with_amendment({
+            'finding': {'event_sequence': event['sequence'], 'event_hash': event['event_hash']},
+            'amendment': {'id': 'TA-fix', 'reason': 'Correct a',
+                'added_tasks': [{'id': 'T-fix', 'slice_id': 'FS-1', 'paths': ['src/a.txt'],
+                    'responsibility': 'Correct a', 'check_ids': ['C-fix']}],
+                'added_checks': [{'id': 'C-fix', 'phase': 'task',
+                    'argv': [sys.executable, '-I', '-c',
+                        "from pathlib import Path; assert Path('src/a.txt').read_text() == 'fixed\\n'"]}]}}, 'start-fix')
+        fixture.lease(store, 'T-fix')
+        (first / 'src/a.txt').write_text('fixed\n')
+        head = fixture.commit(first, 'fix a\n\nCogito-Amendment: TA-fix')
+        fixture.check(store, first, 'C-fix', 'check-fix')
+        store.finish_task('T-fix', {'risks': []}, 'finish-fix')
+        store.complete_review_fix('TA-fix', head, 'close-fix')
+        self.assertEqual(store.load()['tasks']['T-b']['status'], 'verified')
+        historical = {item['evidence_path']: Path(item['evidence_path']).read_bytes() for item in evidence}
+        output = store.next_action()
+        self.assertEqual(output['stale_checks'][0]['check_id'], 'C-b')
+        self.assertEqual(output['operations'][0]['operation'], 'run-check')
+        self.assertIn(str(second.resolve()), output['operations'][0]['argv'])
+        self.assertNotIn('verify', [op['operation'] for op in output['operations']])
+
+        self.invoke(output['operations'][0], 'refresh-b')
+        output = store.next_action()
+        self.assertEqual(output['operations'][0]['operation'], 'verify')
+        self.invoke(output['operations'][0], 'verify-fixed')
+        self.assertEqual(store.load()['state'], 'reviewing')
+        for path, content in historical.items():
+            self.assertEqual(Path(path).read_bytes(), content)
+        for result in results:
+            self.assertIn(result, store.load()['agent_results'])
+
     def test_post_head_drift_reports_stale_check_and_rerun_not_closure(self):
         fixture = self.fixture(verification.AtomicVerificationTests)
         repo, _, store, _, _, _, _ = fixture.integrated()

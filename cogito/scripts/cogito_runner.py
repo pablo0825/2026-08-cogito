@@ -53,8 +53,9 @@ def validate_check_target(package, state, check_id, worktree, root):
         if worktree != root:
             raise CogitoError('post-integration checks must run in the delivery checkout')
     elif state['state'] == 'verifying':
+        statuses = {'complete', 'verified'} if package.get('task_delivery') == 'atomic' else {'complete'}
         eligible = {Path(str(t.get('worktree', ''))).resolve() for t in state['tasks'].values()
-                    if t.get('status') == 'complete'}
+                    if t.get('status') in statuses}
         if worktree not in eligible:
             raise CogitoError('verification checks must run in a completed Package Slice worktree')
     elif package.get('task_delivery') == 'atomic' and state['state'] in {
