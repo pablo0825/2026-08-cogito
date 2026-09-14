@@ -74,12 +74,14 @@ class RunQueryTests(unittest.TestCase):
                 "retained": [{"path": "/worktree/b", "reason": "busy"}],
                 "error": "cleanup unavailable", "ignored": "x" * 100_000,
             },
-        })
-        self.assertEqual(finalized["cleanup"], {
+        }, Path('/repo'))
+        self.assertEqual({key: finalized['cleanup'][key] for key in ('removed', 'retained', 'error')}, {
             "removed": ["/worktree/a"],
             "retained": [{"path": "/worktree/b", "reason": "busy"}],
             "error": "cleanup unavailable",
         })
+        self.assertEqual(finalized['cleanup']['status'], 'pending')
+        self.assertEqual(finalized['cleanup']['next_query']['operation'], 'next')
         self.assertLess(len(json.dumps(finalized).encode()), 2 * 1024)
 
     def test_preparation_distinguishes_mini_packages_and_rejects_unknown_states(self) -> None:

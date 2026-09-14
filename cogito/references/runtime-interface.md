@@ -24,7 +24,7 @@ Executor 登錄及停止 receipt 回傳本次 `executor`、全局 `stop_requeste
 
 既有 CLI 呼叫者若從 mutation 回應讀 `entries`、`snapshot`、`proposal` 或完整歷史，須改用上述完整查詢；若讀 `next.report`，改執行 `report_query`，依 [Finalization](finalization.md) 讀取報告後回報。這是公開回傳格式的變更，不改 Store 回傳、事件或已保存資料，也不需要轉換歷史檔案。
 
-`ok: true` 與 CLI exit code `0` 只表示 Gate 操作成功；`run-check` 是否通過看 `check_status`，不能把 evidence 登錄成功當成 check 通過。驗證與 check recovery 提示依 [正式驗證](execution-policy.md#正式驗證)，整合選項依 [串行整合](execution-policy.md#串行整合)。`task-finish` 與帶 `amendment` 的 `review-fix-start --input` 保留 commit、evidence、amendment、task 與 next 專用 receipt；finding-only 啟動使用一般 receipt。這兩項固定操作部分失敗時依下方[恢復規則](#固定操作與歷史登記恢復)；accepted 後的 `next.cleanup` 只表示當下觀察，真正清理與 receipt 依 [Finalization](finalization.md#worktree-清理)。
+`ok: true` 與 CLI exit code `0` 只表示 Gate 操作成功；`run-check` 是否通過看 `check_status`，不能把 evidence 登錄成功當成 check 通過。驗證與 check recovery 提示依 [正式驗證](execution-policy.md#正式驗證)，整合選項依 [串行整合](execution-policy.md#串行整合)。`task-finish` 與帶 `amendment` 的 `review-fix-start --input` 保留 commit、evidence、amendment、task 與 next 專用 receipt；finding-only 啟動使用一般 receipt。這兩項固定操作部分失敗時依下方[恢復規則](#固定操作與歷史登記恢復)；finalize receipt 的 `cleanup.status`／`next_query` 區分開發結案與本次清理結果，accepted 後的 `next.cleanup` 則只表示當下觀察。詳細狀態、executor 補登及原請求重試依 [Finalization](finalization.md#worktree-清理)。
 
 Gate／Runner 的 JSON 檔案輸入使用 UTF-8。`transition --payload-json` 接受 JSON object 字串或 UTF-8 檔案路徑，優先解析 inline JSON；若檔名恰為合法 JSON（如 `null`），使用 `./null` 或絕對路徑。兩種輸入都必須解析為 object；格式、編碼或讀取失敗回傳 exit code `2`，stderr 為含 `ok: false`／`error` 的 JSON，不嘗試轉碼、推進流程或輸出 traceback。
 

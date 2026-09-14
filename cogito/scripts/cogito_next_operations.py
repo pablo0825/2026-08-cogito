@@ -6,7 +6,7 @@ from copy import deepcopy
 from cogito_actions import request_fingerprint
 from cogito_common import CogitoError, hash_json, load_json
 from cogito_gate_validation import derive_review_decision, verification_checks
-from cogito_run_queries import operation_hint
+from cogito_run_queries import executor_status_hint, operation_hint
 from cogito_task_finish import collect_check_candidates, unfinished_check_actions
 
 MAX_ITEMS = 50
@@ -368,9 +368,39 @@ def integration_hints(store, state):
     return {'integration_choices': choices, 'integration_rule': 'Execute ONE choice, then query next again. Mutation revalidates current facts.'}
 
 
-def accepted_hints(store, state):
+def cleanup_hints(store, state):
     from cogito_cleanup import assess_cleanup
-    output = {'cleanup': assess_cleanup(store)}
+    cleanup = assess_cleanup(store)
+    cleanup['status'] = 'pending' if cleanup['removable'] or cleanup['retained'] else 'no_pending_cleanup'
+    cleanup['note'] = ('Development is accepted. Report development and cleanup separately. '
+        'This is an observation, not a removal receipt. Resolve actionable blockers, then query next again; '
+        'follow next_action before retrying cleanup. Keep retained data until its disposition is decided.')
+    agents = {task.get('agent_id') for task in state['tasks'].values()}
+    if any('executor_id' in row for row in cleanup['retained']):
+        cleanup['registry_query'] = executor_status_hint(store.root, store.run_id)
+    for row in cleanup['retained']:
+        if row.get('reason') == 'external_receipt_missing':
+            row['note'] = ('Obtain the matching terminal response from the executor control tool, then record its receipt. '
+                'Agent prose saying done is not a terminal response. Do not invent receipt fields.')
+            if row['executor_id'] in agents:
+                row['operations'] = [{
+                    'operation': 'executor-receipt', 'cwd': str(store.root),
+                    'argv': ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(store.root),
+                             'replan', 'executor-receipt', '--run-id', store.run_id,
+                             '--agent-id', row['executor_id'], '--handle', row['handle'], '--input', '<receipt-path>'],
+                    'required_inputs': ['receipt-path'],
+                    'note': 'Supply a receipt file with provider, control_tool, event_id, handle, status and raw_response from the actual terminal response.'}]
+            else:
+                row['note'] += ' No matching Worker lease; inspect executor-status and resolve the registration mismatch.'
+        elif row.get('reason') == 'executor_not_terminated':
+            row['note'] = ('Wait for the process and its descendants to terminate, then query next again.'
+                if row['observation'] in {'running', 'descendants-running'} else
+                'Process termination cannot be established. Inspect the process identity/group and preserve the worktree; an external receipt cannot clear this process entry.')
+    return {'cleanup': cleanup}
+
+
+def accepted_hints(store, state):
+    output = cleanup_hints(store, state)
     try:
         finals = [e for e in store._events.read() if e['type'] == 'finalization-complete']
         if len(finals) != 1:

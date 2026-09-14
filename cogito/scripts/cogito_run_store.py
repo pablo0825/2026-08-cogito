@@ -1689,6 +1689,8 @@ class RunStore(ReviewFixStartMixin, TaskFinishMixin, ResultMetadataMixin, PathAm
                     if projection['state'] == 'accepted':
                         output['next_action'] = 'complete-disposition'
                         output['report_query'] = completion_report_hint(self.root, self.run_id)
+                        from cogito_next_operations import cleanup_hints
+                        output.update(cleanup_hints(self, projection))
                     return {**output, **metadata}
                 return {"state": projection["state"], "next_action": "continue-disposition", **metadata}
         from cogito_replan_lock import replans

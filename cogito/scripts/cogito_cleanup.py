@@ -258,8 +258,22 @@ def assess_cleanup(store):
             _events=store._events, load=lambda: state,
             approved_package=lambda: store._approved_package_from_state(state),
             completion_report=lambda: store._load_completion_report(state))
-        if not observe_read_only(store.root, store.run_id, allow_external_receipts=True)['quiescent']:
-            raise CogitoError('executors have not terminated')
+        registry = observe_read_only(store.root, store.run_id, allow_external_receipts=True)
+        if not registry['quiescent']:
+            for identifier, entry in registry['entries'].items():
+                if entry['terminated']:
+                    continue
+                row = {'executor_id': identifier, 'kind': entry['kind'],
+                       'observation': entry['observation'],
+                       'reason': 'external_receipt_missing' if entry['kind'] == 'external'
+                                 else 'executor_not_terminated'}
+                if entry['kind'] == 'external':
+                    row['handle'] = entry['handle']
+                else:
+                    row['pid'] = entry['identity']['pid']
+                    row['pgid'] = entry['identity']['pgid']
+                result['retained'].append(row)
+            return result
         current, final = _final(view)
         package, git = view.approved_package(), GitRepository(store.root)
         receipt_path = _receipt_path(view)

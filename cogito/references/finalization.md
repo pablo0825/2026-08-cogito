@@ -73,7 +73,9 @@ Gate 驗證提交內容、範圍、Result、Graph 與事件。通過後才把 fi
 
 accepted 的 `next` 以 `report_query` 提供 `report --run-id <ID>` 命令，不內嵌完整報告；DP followup 已結案但尚待完成 DP 時也保留此入口與原 DP 路由。向使用者回報結案前，必須執行 report 並讀取結果；若本次交付已讀過報告，不為單純查清理狀態重讀。報告讀取失敗時處理錯誤，不從 accepted 狀態猜測交付內容。它讀取 final commit 內的摘要，另附實際 final commit ID；不從目前工作副本重建或改寫 Result。Maintenance amendments 的實際 final commit ID 只補在衍生報告。
 
-向使用者回報：結果、實際 checks、獨立 review、commit IDs、amendments、是否經 human gate、剩餘風險及需要處理的清理保留原因。不要將本地測試通過當成 CI 通過。
+讀取 report 後，檢查 finalize receipt 的 `cleanup.status`；若為 `pending`，執行 `cleanup.next_query` 取得當前保留原因與後續操作。依下節處理可排除的阻擋，再重查 `next`；不要看到 `accepted` 就略過收尾。DP followup 仍依 `next_action: complete-disposition` 先完成 DP，不能以清理重試取代該路由。
+
+向使用者分別回報開發與清理結果：開發包含結果、實際 checks、獨立 review、commit IDs、amendments、是否經 human gate 及剩餘風險；清理說明本次移除或保留項目、原因與待辦。例如「開發已完成；清理待處理：worker-b 尚缺終止憑據，工作樹已保留」。若因 `.env` 等本地資料保留，如實說明等待資料處理決定，不為達成清理完成而刪除資料，也不把保留解讀成開發未驗收。不要將本地測試通過當成 CI 通過。
 
 ### Worktree 清理
 
@@ -81,9 +83,17 @@ accepted 的 `next` 以 `report_query` 提供 `report --run-id <ID>` 命令，�
 
 已忽略的 `node_modules`、`__pycache__`、`.pytest_cache`、`.mypy_cache` 可隨 worktree 移除；其他 ignored 資料（例如 `.env`、本地資料庫）會阻止清理。使用一般 `git worktree remove` 一併移除該 worktree 的 Git 登記，不使用 force 或全域 prune；branch 與 `.cogito/runs/<run-id>` 全部保留。清理前以 `refs/cogito/cleanup/<run-id>/` 保護事件與 evidence 引用的 Git 物件，避免後續 Git GC 破壞稽核內容。
 
-`finalize` 回應的 `cleanup.removed`／`cleanup.retained` 列出移除項目與保留原因；清理故障不會撤回 `accepted`。排除保留原因後，重送原本相同參數與 `--action-id` 的 `finalize` 即可重試，不重做驗收或追加結案事件。已清理的 worktree 直接略過。Run 內的 `cleanup.json` 留存與 accepted 事件綁定的清理憑據，供中斷恢復及後續 RP／DP 辨識已清理的歷史 worktree；不改寫原事件、evidence、Result 或結案報告。沒有額外清理命令、branch 刪除或 runtime 到期刪除政策。
+`finalize` 回應的 `cleanup.removed`／`cleanup.retained` 列出移除項目與保留原因；`cleanup.status` 為 `pending`（有保留或清理錯誤）或 `complete`（本次嘗試沒有保留），並提供 `note` 與 `next_query`。這只涵蓋本次 Run 的受管清理，不代表所有歷史工作樹皆已移除；清理故障不會撤回 `accepted`。排除保留原因後，重送原本相同參數與 `--action-id` 的 `finalize` 即可重試，不重做驗收或追加結案事件。已清理的 worktree 直接略過。Run 內的 `cleanup.json` 留存與 accepted 事件綁定的清理憑據，供中斷恢復及後續 RP／DP 辨識已清理的歷史 worktree；不改寫原事件、evidence、Result 或結案報告。沒有額外清理命令、branch 刪除或 runtime 到期刪除政策。
 
-accepted 後的 `next.cleanup` 重新觀察 `removable`／`retained`，不是清理成功 receipt；查詢不移除資源或建立清理 refs、receipt、registry lock。真正重送 `finalize` 時仍在原鎖定及 executor 保護下重新評估，查詢後新增的使用者資料也會保留。只有 finalization event 能還原的參數與 action ID 精確符合原 request fingerprint，`next.operations` 才提供可執行重送；缺指紋或原字面路徑無法還原時，依 blocker 找回原請求，不改用新 ID 冒充。
+accepted 後的 `next.cleanup` 重新觀察 `removable`／`retained`，不是清理成功 receipt；`status: pending` 表示仍有可移除或保留項目，`no_pending_cleanup` 只表示本次觀察沒有待處理項目。查詢不移除資源或建立清理 refs、receipt、registry lock。真正重送 `finalize` 時仍在原鎖定及 executor 保護下重新評估，查詢後新增的使用者資料也會保留。只有 finalization event 能還原的參數與 action ID 精確符合原 request fingerprint，`next.operations` 才提供可執行重送；缺指紋或原字面路徑無法還原時，依 blocker 找回原請求，不改用新 ID 冒充。
+
+Executor 阻擋列於 `next.cleanup.retained`，提供 `executor_id`、`kind`、`observation`、原因及可確認的 handle 或 PID／PGID，並附 `cleanup.registry_query` 供需要完整登記時查詢。只列出未確認終止者，不複製全體 registry 或原始工具回應。依原因處理：
+
+- `external_receipt_missing`：先從執行工具取得該 handle 實際的完成／中斷回應。若有相符 Worker lease，使用該項 `operations` 的 `replan executor-receipt` 命令，將 `<receipt-path>` 換成真實憑據 JSON 檔案路徑。憑據含 `provider`、`control_tool`、`event_id`、`handle`、`status` 與 `raw_response`；頂層 `handle`／`status` 必須與 `raw_response` 內的 `handle`／`status` 一致，`status` 為 `completed` 或 `interrupted`。不把代理文字說「完成」當成終止回應，不捏造欄位；無法取得時保留並回報。無相符 lease 時不提供補登命令，先查 registry 處理登記不匹配，不偽造 lease。
+- `executor_not_terminated`：`running`／`descendants-running` 等待程序及子程序結束；身分不匹配或共享程序群組無法判定時，查明程序身分／群組，保留工作樹。不能用外部 receipt 消除此類程序阻擋。
+- Registry 損壞或程序觀察失敗：依回傳的原因處理，不能推論已停止。整體觀察失敗時不保證列出其他 executor 的細節。
+
+補登後重新查 `next`，遵守當前路由後才重試清理；active RP／DP、其他 Run 引用與本地資料等保留原因仍可能存在。DP followup accepted 的 `next.cleanup` 同樣提供觀察與補登指引，但不附加頂層 finalize 重試，不覆蓋 `complete-disposition`。
 
 其他 Run 的引用檢查不修復其 state cache。accepted history 優先使用 final commit 的 Package；一般歷史確實沒有該 blob 時，仍可讀取符合原 frozen hash 的 Package 副本。已知 `controlled-check-attempt-resolved` 歷史必須具有 committed artifacts，並通過 replacement、契約/check hash 與 Result receipt 對帳；不恢復舊寫入命令。Task（包含 adoption）、worker 與 carryover 引用均保護；symlink、未知事件、損壞 hash 或缺必要資料回 `reference_unknown`，不能證明無關就保留可能受影響 worktrees。
 

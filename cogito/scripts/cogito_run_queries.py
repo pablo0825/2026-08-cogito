@@ -135,6 +135,12 @@ def build_disposition_receipt(state):
     return output
 
 
+def executor_status_hint(root, run_id):
+    return {'operation': 'executor-status', 'cwd': str(Path(root).resolve()),
+            'argv': ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(root),
+                     'replan', 'executor-status', '--run-id', run_id]}
+
+
 def build_executor_receipt(root, registry, agent_id):
     entry = registry['entries'][agent_id]
     executor = {key: deepcopy(entry[key]) for key in
@@ -142,9 +148,7 @@ def build_executor_receipt(root, registry, agent_id):
     if entry.get('receipt'):
         executor['receipt'] = {key: deepcopy(entry['receipt'][key]) for key in
                                ('provider', 'control_tool', 'event_id', 'handle', 'status')}
-    query = {'operation': 'executor-status', 'cwd': str(Path(root).resolve()),
-             'argv': ['python3', str(Path(__file__).with_name('cogito_gate.py')), '--repo', str(root),
-                      'replan', 'executor-status', '--run-id', registry['run_id']]}
+    query = executor_status_hint(root, registry['run_id'])
     return {'run_id': registry['run_id'], 'executor': executor,
             'stop_requested': registry['stop_requested'], 'stop_request': deepcopy(registry['stop_request']),
             'quiescent': registry['quiescent'],
@@ -176,7 +180,7 @@ def build_check_receipt(
     }
 
 
-def build_finalization_receipt(projection: RunState) -> dict[str, Any]:
+def build_finalization_receipt(projection: RunState, root) -> dict[str, Any]:
     """Return accepted position plus transient cleanup outcome."""
     cleanup = projection["cleanup"]
     bounded_cleanup: dict[str, Any] = {
@@ -185,6 +189,11 @@ def build_finalization_receipt(projection: RunState) -> dict[str, Any]:
     }
     if "error" in cleanup:
         bounded_cleanup["error"] = cleanup["error"]
+    bounded_cleanup['status'] = 'pending' if cleanup.get('retained') or 'error' in cleanup else 'complete'
+    bounded_cleanup['note'] = ('Development is accepted; cleanup remains pending. Query next for blockers and follow-up operations.'
+        if bounded_cleanup['status'] == 'pending' else
+        'Development is accepted; this cleanup attempt has no retained worktrees. This does not cover other Runs or unmanaged worktrees.')
+    bounded_cleanup['next_query'] = operation_hint(root, projection['run_id'], 'next', action_id=None)
     return {**build_mutation_receipt(projection), "cleanup": bounded_cleanup}
 
 

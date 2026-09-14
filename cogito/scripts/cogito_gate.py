@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
             projection = RunStore(repo, args.run_id).finalize(
                 args.result, args.project_graph, args.final_commit, args.action_id,
             )
-            output = build_finalization_receipt(projection)
+            output = build_finalization_receipt(projection, repo)
         elif args.command == "report":
             output = RunStore(repo, args.run_id).completion_report()
         elif args.command == "validate":
